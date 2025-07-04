@@ -80,19 +80,23 @@ exports.handler = async function(event) {
             return { statusCode: 200, body: JSON.stringify(products) };
         }
 
-        // Caso 2: L'app chiede di SINCRONIZZARE un prodotto
+        // Caso 2: L'app chiede di SINCRONIZZARE un pacchetto di prodotti
         if (payload.type === 'sync') {
-            const { inventoryItemId, quantity } = payload;
+            const { items } = payload;
             const locationId = `gid://shopify/Location/${SHOPIFY_LOCATION_ID}`;
+            
+            // Costruisce una singola mutazione per aggiornare più prodotti contemporaneamente
+            const setQuantitiesString = items.map(item => `{
+                inventoryItemId: "${item.inventoryItemId}",
+                locationId: "${locationId}",
+                quantity: ${item.quantity}
+            }`).join(',\n');
+
             const mutation = `
                 mutation inventorySetOnHandQuantities {
                     inventorySetOnHandQuantities(input: {
                         reason: "correction",
-                        setQuantities: [{
-                            inventoryItemId: "${inventoryItemId}",
-                            locationId: "${locationId}",
-                            quantity: ${quantity}
-                        }]
+                        setQuantities: [${setQuantitiesString}]
                     }) {
                         userErrors { field message }
                     }
