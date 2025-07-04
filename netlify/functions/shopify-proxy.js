@@ -95,6 +95,7 @@ exports.handler = async function(event) {
 
             const locationId = `gid://shopify/Location/${SHOPIFY_LOCATION_ID}`;
             
+            // Costruisce una mutazione complessa per aggiornare giacenze e metafields
             let mutations = [];
 
             // 1. Mutazioni per le giacenze
@@ -156,9 +157,11 @@ exports.handler = async function(event) {
     };
 
     try {
+        // "Watchdog" per il timeout di Netlify. La funzione ha 9.5 secondi per completare.
         const watchdog = new Promise((_, reject) => 
             setTimeout(() => reject(new Error("Timeout della funzione superato (10s). Il pacchetto di dati potrebbe essere troppo grande.")), 9500)
         );
+        // Esegue la logica principale e il watchdog in parallelo. Il primo che finisce (o fallisce) determina il risultato.
         return await Promise.race([mainLogic(), watchdog]);
     } catch (error) {
         console.error('Errore nel backend o timeout:', error);
