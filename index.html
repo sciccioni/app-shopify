@@ -503,7 +503,9 @@
                 updateProgressBar(i + 1, itemChunks.length);
             }
             
-            analysisResults.forEach(item => item.selected = false);
+            analysisResults.forEach(item => {
+                if(item.selected) item.selected = false;
+            });
 
             const toUpdateCount = analysisResults.filter(r => r.status === 'to-update').length;
             const notFoundCount = analysisResults.filter(r => r.status === 'not-found').length;
@@ -658,19 +660,20 @@
 
         function updateUIState() {
             const itemsToUpdateSelected = analysisResults.filter(r => r.selected).length > 0;
-            syncButton.disabled = !confirmSyncCheckbox.checked || !itemsToUpdateSelected;
-            confirmSyncCheckbox.disabled = !itemsToUpdateSelected;
-
-            const updatableItemsOnPage = document.querySelectorAll('.row-checkbox');
-            const allOnPageSelected = updatableItemsOnPage.length > 0 && Array.from(updatableItemsOnPage).every(cb => cb.checked);
-            selectAllCheckbox.checked = allOnPageSelected;
-
             const totalToUpdate = analysisResults.filter(r => r.status === 'to-update').length;
+            
+            confirmSyncCheckbox.disabled = !itemsToUpdateSelected;
+            syncButton.disabled = !confirmSyncCheckbox.checked || !itemsToUpdateSelected;
+            
             if (totalToUpdate > 0) {
                 syncActionArea.classList.remove('hidden');
             } else {
                 syncActionArea.classList.add('hidden');
             }
+            
+            const updatableItemsOnPage = document.querySelectorAll('.row-checkbox');
+            const allOnPageSelected = updatableItemsOnPage.length > 0 && Array.from(updatableItemsOnPage).every(cb => cb.checked);
+            selectAllCheckbox.checked = allOnPageSelected;
         }
 
         function getStatusInfo(status) {
