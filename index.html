@@ -389,7 +389,7 @@
                             } else {
                                 noChangeCount++;
                                 resultRow.status = 'no-change';
-                                detailsText.push(`Giacenza e scadenza già corrette.`);
+                                resultRow.details = `Giacenza e scadenza già corrette.`;
                             }
                             resultRow.details = detailsText.join(' ');
                         } else {
