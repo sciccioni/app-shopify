@@ -3,10 +3,7 @@ async function callShopifyApi(query) {
     const storeName = process.env.SHOPIFY_STORE_NAME;
     const adminApiToken = process.env.SHOPIFY_ADMIN_API_TOKEN;
 
-    if (!storeName || !adminApiToken) {
-        throw new Error("Variabili d'ambiente SHOPIFY_STORE_NAME o SHOPIFY_ADMIN_API_TOKEN non trovate.");
-    }
-
+    // Le variabili sono già state controllate all'inizio della funzione handler
     const response = await fetch(`https://${storeName}/admin/api/2024-04/graphql.json`, {
         method: 'POST',
         headers: {
@@ -25,25 +22,36 @@ async function callShopifyApi(query) {
 
 // Funzione principale del backend
 exports.handler = async function(event) {
-    if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: 'Method Not Allowed' };
-    }
+    // Funzione interna che contiene la logica principale
+    const mainLogic = async () => {
+        // Controlla subito le variabili d'ambiente necessarie
+        const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, SHOPIFY_LOCATION_ID } = process.env;
+        if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN || !SHOPIFY_LOCATION_ID) {
+            const missing = [
+                !SHOPIFY_STORE_NAME && "SHOPIFY_STORE_NAME",
+                !SHOPIFY_ADMIN_API_TOKEN && "SHOPIFY_ADMIN_API_TOKEN",
+                !SHOPIFY_LOCATION_ID && "SHOPIFY_LOCATION_ID"
+            ].filter(Boolean).join(', ');
+            // Restituisce un errore specifico se mancano delle variabili
+            throw new Error(`Variabili d'ambiente mancanti su Netlify: ${missing}`);
+        }
 
-    try {
+        if (event.httpMethod !== 'POST') {
+            return { statusCode: 405, body: 'Method Not Allowed' };
+        }
+
         const payload = JSON.parse(event.body);
 
         // Caso 1: L'app chiede di ANALIZZARE i prodotti
         if (payload.type === 'analyze') {
             const { skus } = payload;
             
-            // CORREZIONE #4: Suddivide la lista di SKU in blocchi da 250 per rispettare il limite di Shopify
             const chunkSize = 250;
             const skuChunks = [];
             for (let i = 0; i < skus.length; i += chunkSize) {
                 skuChunks.push(skus.slice(i, i + chunkSize));
             }
 
-            // Esegue una chiamata API per ogni blocco
             const promises = skuChunks.map(chunk => {
                 const skuQueryString = chunk.map(s => `sku:'${s}'`).join(' OR ');
                 const query = `
@@ -68,7 +76,6 @@ exports.handler = async function(event) {
                 return callShopifyApi(query);
             });
 
-            // Attende tutte le risposte e le unisce
             const results = await Promise.all(promises);
             const allProductsData = results.flatMap(result => result.products.edges);
 
@@ -88,11 +95,7 @@ exports.handler = async function(event) {
         // Caso 2: L'app chiede di SINCRONIZZARE un prodotto
         if (payload.type === 'sync') {
             const { inventoryItemId, quantity } = payload;
-            const locationIdRaw = process.env.SHOPIFY_LOCATION_ID;
-            if (!locationIdRaw) {
-                throw new Error("Variabile d'ambiente SHOPIFY_LOCATION_ID non trovata.");
-            }
-            const locationId = `gid://shopify/Location/${locationIdRaw}`;
+            const locationId = `gid://shopify/Location/${SHOPIFY_LOCATION_ID}`;
             const mutation = `
                 mutation inventorySetOnHandQuantities {
                     inventorySetOnHandQuantities(input: {
@@ -113,11 +116,18 @@ exports.handler = async function(event) {
             return { statusCode: 200, body: JSON.stringify({ success: true }) };
         }
 
-        // Se il tipo di richiesta non è valido
         return { statusCode: 400, body: JSON.stringify({ error: 'Tipo di richiesta non valido.' }) };
+    };
 
+    try {
+        // "Watchdog" per il timeout di Netlify. La funzione ha 9.5 secondi per completare.
+        const watchdog = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Timeout della funzione superato (10s). Il file potrebbe essere troppo grande per essere processato in una sola richiesta.")), 9500)
+        );
+        // Esegue la logica principale e il watchdog in parallelo. Il primo che finisce (o fallisce) determina il risultato.
+        return await Promise.race([mainLogic(), watchdog]);
     } catch (error) {
-        console.error('Errore nel backend:', error);
+        console.error('Errore nel backend o timeout:', error);
         return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
     }
 };
