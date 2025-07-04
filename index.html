@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App Sincronizzazione Giacenze Shopify</title>
+    <title>App Sincronizzazione Giacenze Shopify (LIVE)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -31,6 +31,11 @@
             vertical-align: middle;
             margin-right: 8px;
         }
+        .info-box {
+            background-color: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            color: #1e40af;
+        }
         .warning-box {
             background-color: #fffbeb;
             border-left: 4px solid #f59e0b;
@@ -48,18 +53,42 @@
     <div class="container mx-auto p-4 md:p-8 max-w-7xl">
 
         <header class="mb-8">
-            <h1 class="text-3xl font-bold text-gray-900">App di Sincronizzazione Giacenze</h1>
+            <h1 class="text-3xl font-bold text-gray-900">App di Sincronizzazione Giacenze <span class="text-red-600">(LIVE)</span></h1>
             <p class="text-gray-600 mt-1">Carica il file XLSX per aggiornare le quantità dei prodotti su Shopify.</p>
         </header>
 
         <main class="space-y-8">
-             <div id="error-message-box" class="error-box p-4 rounded-md hidden" role="alert">
+             <div class="warning-box p-4 rounded-md">
+                <p class="text-sm font-semibold">
+                    ATTENZIONE: Questa applicazione è attiva e funzionante. Le operazioni di sincronizzazione modificheranno i dati reali del tuo negozio. Procedere con cautela.
+                </p>
+            </div>
+
+            <div id="error-message-box" class="error-box p-4 rounded-md hidden" role="alert">
                 <p id="error-message-text" class="text-sm"></p>
             </div>
 
-            <!-- Sezione di Upload -->
             <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h2 class="text-xl font-semibold mb-4">1. Carica e Analizza</h2>
+                <h2 class="text-xl font-semibold mb-4">1. Credenziali e Sede Shopify</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="store-name" class="block text-sm font-medium text-gray-700">Nome Negozio Shopify</label>
+                        <input type="text" id="store-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="es: tuo-negozio.myshopify.com" value="utophastore.myshopify.com">
+                    </div>
+                    <div>
+                        <label for="admin-api-token" class="block text-sm font-medium text-gray-700">Token di Accesso API di Admin</label>
+                        <input type="password" id="admin-api-token" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="Incolla il tuo token 'shpat_...'">
+                    </div>
+                    <div>
+                        <label for="location-id" class="block text-sm font-medium text-gray-700">ID Sede <span class="text-gray-500 font-normal">(solo il numero)</span></label>
+                        <input type="text" id="location-id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="ID numerico della sede">
+                    </div>
+                </div>
+            </div>
+
+
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <h2 class="text-xl font-semibold mb-4">2. Carica e Analizza</h2>
                 <div id="drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
                     <input type="file" id="file-input" class="hidden" accept=".xlsx, .xls">
                     <div class="flex flex-col items-center">
@@ -73,12 +102,8 @@
                 </button>
             </div>
 
-            <!-- Sezione Risultati -->
             <div id="results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden">
-                <h2 class="text-xl font-semibold mb-4">2. Report di Analisi</h2>
-                <div id="progress-bar-container" class="w-full bg-gray-200 rounded-full h-2.5 mb-4 hidden">
-                    <div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
-                </div>
+                <h2 class="text-xl font-semibold mb-4">3. Report di Analisi</h2>
                 <div id="summary" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"></div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
@@ -105,7 +130,7 @@
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <p id="loader-text" class="mt-2 text-gray-600">Elaborazione in corso...</p>
+                    <p class="mt-2 text-gray-600">Elaborazione in corso...</p>
                 </div>
             </div>
         </main>
@@ -114,6 +139,9 @@
 
     <script>
         // --- ELEMENTI DEL DOM ---
+        const storeNameInput = document.getElementById('store-name');
+        const adminApiTokenInput = document.getElementById('admin-api-token');
+        const locationIdInput = document.getElementById('location-id');
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
         const fileNameDisplay = document.getElementById('file-name');
@@ -122,14 +150,11 @@
         const summaryContainer = document.getElementById('summary');
         const resultsTableBody = document.getElementById('results-table-body');
         const loader = document.getElementById('loader');
-        const loaderText = document.getElementById('loader-text');
         const syncActionArea = document.getElementById('sync-action-area');
         const syncButton = document.getElementById('sync-button');
         const syncStatusMessage = document.getElementById('sync-status-message');
         const errorMessageBox = document.getElementById('error-message-box');
         const errorMessageText = document.getElementById('error-message-text');
-        const progressBarContainer = document.getElementById('progress-bar-container');
-        const progressBar = document.getElementById('progress-bar');
 
         let uploadedFile = null;
         let analysisResults = [];
@@ -157,28 +182,29 @@
             errorMessageBox.classList.add('hidden');
         }
 
-        function updateProgressBar(current, total) {
-            const percentage = Math.round((current / total) * 100);
-            progressBar.style.width = `${percentage}%`;
-        }
-
-        // --- FUNZIONE DI CHIAMATA AL BACKEND ---
-        async function callBackend(payload) {
-            const response = await fetch('/.netlify/functions/shopify-proxy', {
+        // --- FUNZIONE DI CHIAMATA API SHOPIFY ---
+        async function callShopifyApi(query) {
+            const storeName = storeNameInput.value.trim();
+            const adminApiToken = adminApiTokenInput.value.trim();
+            
+            const response = await fetch(`https://${storeName}/admin/api/2024-04/graphql.json`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Shopify-Access-Token': adminApiToken,
+                },
+                body: JSON.stringify({ query }),
             });
 
-            const data = await response.json();
             if (!response.ok) {
-                const errorMessage = data.error || `Errore di comunicazione con il server: ${response.statusText}`;
-                throw new Error(errorMessage);
+                throw new Error(`Errore di rete: ${response.status} ${response.statusText}`);
             }
-            if (data.error) {
-                throw new Error(data.error);
+
+            const jsonResponse = await response.json();
+            if (jsonResponse.errors) {
+                throw new Error(jsonResponse.errors.map(e => e.message).join(', '));
             }
-            return data;
+            return jsonResponse.data;
         }
 
         // --- LOGICA DI ANALISI ---
@@ -186,6 +212,11 @@
 
         async function analyzeFile() {
             hideErrorMessage();
+
+            if (!storeNameInput.value.trim() || !adminApiTokenInput.value.trim()) {
+                showErrorMessage("<strong>Credenziali Mancanti:</strong> Per favore, inserisci il Nome Negozio e il Token API di Admin.");
+                return;
+            }
             if (!uploadedFile) { 
                 showErrorMessage("<strong>File Mancante:</strong> Per favore, carica un file prima di procedere.");
                 return; 
@@ -200,9 +231,6 @@
             resultsTableBody.innerHTML = '';
             summaryContainer.innerHTML = '';
             loader.classList.remove('hidden');
-            loaderText.textContent = 'Elaborazione in corso...';
-            progressBarContainer.classList.add('hidden');
-            updateProgressBar(0, 1);
             analyzeButton.disabled = true;
 
             try {
@@ -213,28 +241,42 @@
                 const worksheet = workbook.Sheets[sheetName];
                 const fileData = XLSX.utils.sheet_to_json(worksheet);
 
-                // 2. Suddividi gli SKU in pacchetti (chunks)
-                const allSkus = fileData.map(row => row.Minsan || row.EAN).filter(Boolean).map(String);
-                if (allSkus.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
+                const skusFromFile = fileData.map(row => row.Minsan || row.EAN).filter(Boolean).map(String);
+                if (skusFromFile.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
 
-                const chunkSize = 250;
-                const skuChunks = [];
-                for (let i = 0; i < allSkus.length; i += chunkSize) {
-                    skuChunks.push(allSkus.slice(i, i + chunkSize));
-                }
+                // 2. Recupera prodotti da Shopify tramite SKU (Minsan)
+                const productQuery = `
+                    query getProductsBySkus {
+                        products(first: ${skusFromFile.length}, query: "sku:(${skusFromFile.join(' OR ')})") {
+                            edges {
+                                node {
+                                    title
+                                    sku
+                                    variants(first: 1) {
+                                        edges {
+                                            node {
+                                                inventoryItem { id }
+                                                inventoryQuantity
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }`;
 
-                // 3. Processa ogni pacchetto in sequenza
-                let allShopifyProducts = [];
-                progressBarContainer.classList.remove('hidden');
-                for (let i = 0; i < skuChunks.length; i++) {
-                    const chunk = skuChunks[i];
-                    loaderText.textContent = `Analisi pacchetto ${i + 1} di ${skuChunks.length}...`;
-                    const shopifyProductsChunk = await callBackend({ type: 'analyze', skus: chunk });
-                    allShopifyProducts = allShopifyProducts.concat(shopifyProductsChunk);
-                    updateProgressBar(i + 1, skuChunks.length);
-                }
+                const shopifyData = await callShopifyApi(productQuery);
+                const shopifyProducts = shopifyData.products.edges.map(edge => {
+                    const variant = edge.node.variants.edges[0]?.node;
+                    return {
+                        minsan: edge.node.sku,
+                        title: edge.node.title,
+                        inventory_quantity: variant?.inventoryQuantity,
+                        inventory_item_id: variant?.inventoryItem.id,
+                    };
+                });
                 
-                // 4. Confronta dati e prepara risultati
+                // 3. Confronta dati e prepara risultati
                 analysisResults = [];
                 let toUpdateCount = 0, notFoundCount = 0, noChangeCount = 0, errorCount = 0;
 
@@ -245,7 +287,7 @@
 
                     if (!minsan || giacenza === undefined) { errorCount++; continue; }
                     
-                    const productOnShopify = allShopifyProducts.find(p => p.minsan === minsan);
+                    const productOnShopify = shopifyProducts.find(p => p.minsan === minsan);
 
                     if (productOnShopify) {
                         const giacenzaFile = parseInt(giacenza, 10);
@@ -272,7 +314,13 @@
 
             } catch (error) {
                 console.error("Errore durante l'analisi:", error);
-                showErrorMessage(`<strong>Errore durante l'analisi:</strong> ${error.message}`);
+                let userMessage = `<strong>Errore durante l'analisi:</strong> ${error.message}`;
+                if (error instanceof TypeError && error.message.includes('fetch')) {
+                    userMessage = `<strong>Errore di Rete (CORS):</strong> Impossibile comunicare con i server di Shopify. Questo è un blocco di sicurezza del browser che si attiva quando si tenta di accedere a dati sensibili da un file locale. <br><br>Consulta la documentazione per maggiori dettagli su questo tipo di errore.`;
+                } else {
+                    userMessage += `<br><br>Controlla che le credenziali (Token e Nome Negozio) siano corrette e che il token abbia i permessi necessari (es. 'read_products', 'read_inventory').`;
+                }
+                showErrorMessage(userMessage);
                 resultsSection.classList.add('hidden');
             } finally {
                 loader.classList.add('hidden');
@@ -285,60 +333,58 @@
 
         async function syncFile() {
             hideErrorMessage();
-            
+            const locationIdRaw = locationIdInput.value.trim();
+            if (!locationIdRaw) { 
+                showErrorMessage("<strong>ID Sede Mancante:</strong> Per favore, inserisci l'ID della Sede (Location ID).");
+                return; 
+            }
+            const locationId = locationIdRaw.split('/').pop(); // Prende solo l'ID numerico se viene incollato l'URL completo
+            const fullLocationId = `gid://shopify/Location/${locationId}`;
+
             syncButton.disabled = true;
             loader.classList.remove('hidden');
-            progressBarContainer.classList.remove('hidden');
-            updateProgressBar(0, 1);
+            syncStatusMessage.classList.remove('hidden');
+            syncStatusMessage.textContent = 'Sincronizzazione in corso...';
+            syncStatusMessage.className = 'mt-4 font-semibold text-blue-700';
 
             const itemsToUpdate = analysisResults.filter(r => r.status === 'to-update');
             let successCount = 0;
             let failureCount = 0;
 
-            const chunkSize = 100; // Aggiorna 100 prodotti alla volta
-            const itemChunks = [];
-            for (let i = 0; i < itemsToUpdate.length; i += chunkSize) {
-                itemChunks.push(itemsToUpdate.slice(i, i + chunkSize));
-            }
-
-            for (let i = 0; i < itemChunks.length; i++) {
-                const chunk = itemChunks[i];
-                loaderText.textContent = `Sincronizzazione pacchetto ${i + 1} di ${itemChunks.length}...`;
-                
+            for (const item of itemsToUpdate) {
                 try {
-                    const payload = {
-                        type: 'sync',
-                        items: chunk.map(item => ({
-                            inventoryItemId: item.inventory_item_id,
-                            quantity: item.giacenzaFile
-                        }))
-                    };
-                    const result = await callBackend(payload);
+                    const mutation = `
+                        mutation inventorySetOnHandQuantities {
+                            inventorySetOnHandQuantities(input: {
+                                reason: "correction",
+                                setQuantities: [{
+                                    inventoryItemId: "${item.inventory_item_id}",
+                                    locationId: "${fullLocationId}",
+                                    quantity: ${item.giacenzaFile}
+                                }]
+                            }) {
+                                userErrors { field message }
+                            }
+                        }`;
                     
-                    if (result.success) {
-                        chunk.forEach(item => {
-                            item.status = 'success';
-                            item.details = `Sincronizzato con successo.`;
-                        });
-                        successCount += chunk.length;
-                    } else {
-                        throw new Error(result.error || "Errore sconosciuto dal server.");
+                    const result = await callShopifyApi(mutation);
+                    if (result.inventorySetOnHandQuantities.userErrors.length > 0) {
+                        throw new Error(result.inventorySetOnHandQuantities.userErrors.map(e => e.message).join(', '));
                     }
+                    
+                    item.status = 'success';
+                    item.details = `Sincronizzato con successo.`;
+                    successCount++;
                 } catch (error) {
-                    chunk.forEach(item => {
-                        item.status = 'error';
-                        item.details = `Errore API: ${error.message}`;
-                    });
-                    failureCount += chunk.length;
-                    console.error(`Errore durante l'aggiornamento del pacchetto ${i + 1}:`, error);
+                    item.status = 'error';
+                    item.details = `Errore API: ${error.message}`;
+                    failureCount++;
+                    console.error(`Errore durante l'aggiornamento di ${item.minsan}:`, error);
                 }
-                
-                updateProgressBar(i + 1, itemChunks.length);
-                displayResults(analysisResults); // Aggiorna la tabella progressivamente
             }
 
             loader.classList.add('hidden');
-            syncStatusMessage.classList.remove('hidden');
+            displayResults(analysisResults); // Ridisegna la tabella con i nuovi stati
             
             if (failureCount > 0) {
                 syncStatusMessage.textContent = `Sincronizzazione completata con ${successCount} successi e ${failureCount} fallimenti. Controlla la tabella per i dettagli.`;
