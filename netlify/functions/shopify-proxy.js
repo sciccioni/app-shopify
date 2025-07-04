@@ -35,11 +35,11 @@ exports.handler = async function(event) {
         // Caso 1: L'app chiede di ANALIZZARE i prodotti
         if (payload.type === 'analyze') {
             const { skus } = payload;
-            // CORREZIONE: La query ora è più specifica, cercando gli SKU come stringhe esatte.
-            const skuQueryString = skus.map(s => `'${s}'`).join(' OR ');
+            // CORREZIONE #3: La query ora costruisce una stringa di ricerca OR valida per Shopify.
+            const skuQueryString = skus.map(s => `sku:'${s}'`).join(' OR ');
             const query = `
                 query getProductsBySkus {
-                    products(first: ${skus.length}, query: "sku:(${skuQueryString})") {
+                    products(first: ${skus.length}, query: "${skuQueryString}") {
                         edges {
                             node {
                                 title
