@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App Sincronizzazione Giacenze Shopify</title>
+    <title>App Sincronizzazione Giacenze e Scadenze</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -73,8 +73,8 @@
     <div id="main-content" class="hidden">
         <div class="container mx-auto p-4 md:p-8 max-w-7xl">
             <header class="mb-8">
-                <h1 class="text-3xl font-bold text-gray-900">App di Sincronizzazione Giacenze</h1>
-                <p class="text-gray-600 mt-1">Carica il file XLSX per aggiornare le quantità dei prodotti su Shopify.</p>
+                <h1 class="text-3xl font-bold text-gray-900">App di Sincronizzazione Giacenze e Scadenze</h1>
+                <p class="text-gray-600 mt-1">Carica il file XLSX per aggiornare quantità e date di scadenza dei prodotti.</p>
             </header>
 
             <main class="space-y-8">
@@ -146,6 +146,8 @@
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrizione Prodotto</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giacenza Shopify</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giacenza File</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scadenza Shopify</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scadenza File</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dettagli</th>
                                     </tr>
@@ -243,7 +245,7 @@
             analyzeButton.disabled = false;
         }
 
-        // --- FUNZIONI DI UTILITY PER L'INTERFACCIA ---
+        // --- FUNZIONI DI UTILITY ---
         function showErrorMessage(message) {
             errorMessageText.innerHTML = message;
             errorMessageBox.classList.remove('hidden');
@@ -256,6 +258,20 @@
         function updateProgressBar(current, total) {
             const percentage = Math.round((current / total) * 100);
             progressBar.style.width = `${percentage}%`;
+        }
+
+        // Converte il numero seriale di Excel in una data YYYY-MM-DD
+        function excelDateToJSDate(serial) {
+            if (!serial || typeof serial !== 'number') return null;
+            const utc_days  = Math.floor(serial - 25569);
+            const utc_value = utc_days * 86400;                                        
+            const date_info = new Date(utc_value * 1000);
+
+            const year = date_info.getUTCFullYear();
+            const month = String(date_info.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(date_info.getUTCDate()).padStart(2, '0');
+
+            return `${year}-${month}-${day}`;
         }
 
         // --- FUNZIONE DI CHIAMATA AL BACKEND ---
@@ -330,36 +346,49 @@
                 
                 analysisResults = [];
                 let toUpdateCount = 0, notFoundCount = 0, noChangeCount = 0, errorCount = 0;
+                let hasNegativeQuantities = false;
 
                 for (const row of fileData) {
                     const minsan = String(row.Minsan || row.EAN);
                     const giacenza = row.Giacenza;
                     const descrizione = row.Descrizione;
+                    const scadenza = row.Scadenza;
+                    
+                    let giacenzaFile = parseInt(giacenza, 10);
+                    let scadenzaFile = typeof scadenza === 'number' ? excelDateToJSDate(scadenza) : scadenza;
 
                     let resultRow = { 
                         minsan: minsan || 'N/D', 
                         descrizione, 
-                        giacenzaFile: giacenza, 
+                        giacenzaFile,
+                        scadenzaFile,
                         selected: false 
                     };
 
-                    if (!minsan || giacenza === undefined) { 
+                    if (!minsan || isNaN(giacenzaFile)) { 
                         errorCount++; 
                         resultRow.status = 'error';
-                        resultRow.details = 'Dati mancanti o non validi (Minsan o Giacenza).';
+                        resultRow.details = 'Dati mancanti o non numerici.';
                     } else {
                         const productOnShopify = allShopifyProducts.find(p => p.minsan === minsan);
                         if (productOnShopify) {
-                            const giacenzaFile = parseInt(giacenza, 10);
                             resultRow = { ...resultRow, ...productOnShopify };
-                            if (giacenzaFile === productOnShopify.inventory_quantity) {
-                                noChangeCount++;
-                                resultRow.status = 'no-change';
-                                resultRow.details = `La giacenza è già corretta.`;
-                            } else {
+                            const quantityChanged = giacenzaFile !== productOnShopify.inventory_quantity;
+                            const expiryChanged = scadenzaFile && (scadenzaFile !== productOnShopify.expiry_date);
+                            
+                            if (giacenzaFile < 0) {
+                                hasNegativeQuantities = true;
+                                resultRow.details = `Giacenza negativa, sarà impostata a 0.`;
+                            }
+
+                            if (quantityChanged || expiryChanged) {
                                 toUpdateCount++;
                                 resultRow.status = 'to-update';
-                                resultRow.details = `Pronto per aggiornare.`;
+                                if(!resultRow.details) resultRow.details = `Pronto per aggiornare.`;
+                            } else {
+                                noChangeCount++;
+                                resultRow.status = 'no-change';
+                                resultRow.details = `Giacenza e scadenza già corrette.`;
                             }
                         } else {
                             notFoundCount++;
@@ -370,6 +399,10 @@
                     analysisResults.push(resultRow);
                 }
                 
+                if (hasNegativeQuantities) {
+                    showErrorMessage("<strong>Attenzione:</strong> Il file contiene giacenze negative. Questi valori verranno automaticamente impostati a 0 durante la sincronizzazione.");
+                }
+
                 displaySummary({ total: fileData.length, toUpdate: toUpdateCount, notFound: notFoundCount, noChange: noChangeCount, errors: errorCount });
                 
                 if (analysisResults.length > 0) {
@@ -420,7 +453,7 @@
             let successCount = 0;
             let failureCount = 0;
 
-            const chunkSize = 100;
+            const chunkSize = 50; 
             const itemChunks = [];
             for (let i = 0; i < itemsToUpdate.length; i += chunkSize) {
                 itemChunks.push(itemsToUpdate.slice(i, i + chunkSize));
@@ -434,8 +467,10 @@
                     const payload = {
                         type: 'sync',
                         items: chunk.map(item => ({
+                            productId: item.product_id,
                             inventoryItemId: item.inventory_item_id,
-                            quantity: item.giacenzaFile
+                            quantity: Math.max(0, item.giacenzaFile),
+                            expiryDate: item.scadenzaFile || null
                         }))
                     };
                     const result = await callBackend(payload);
@@ -446,7 +481,10 @@
                             if (originalItem) {
                                 originalItem.status = 'success';
                                 originalItem.details = `Sincronizzato con successo.`;
-                                originalItem.inventory_quantity = originalItem.giacenzaFile; 
+                                originalItem.inventory_quantity = Math.max(0, originalItem.giacenzaFile); 
+                                if (originalItem.scadenzaFile) {
+                                    originalItem.expiry_date = originalItem.scadenzaFile;
+                                }
                             }
                         });
                         successCount += chunk.length;
@@ -490,7 +528,7 @@
         function downloadCSV() {
             if (analysisResults.length === 0) return;
 
-            const headers = ['Minsan_SKU', 'Descrizione_Prodotto', 'Giacenza_Shopify', 'Giacenza_File', 'Stato_Analisi', 'Dettagli'];
+            const headers = ['Minsan_SKU', 'Descrizione_Prodotto', 'Giacenza_Shopify', 'Giacenza_File', 'Scadenza_Shopify', 'Scadenza_File', 'Stato_Analisi', 'Dettagli'];
             const csvRows = [headers.join(';')];
 
             for (const res of analysisResults) {
@@ -499,6 +537,8 @@
                     `"${(res.title || res.descrizione || '').replace(/"/g, '""')}"`,
                     res.inventory_quantity !== undefined ? res.inventory_quantity : 'N/D',
                     res.giacenzaFile,
+                    res.expiry_date || 'N/D',
+                    res.scadenzaFile || 'N/D',
                     res.status,
                     `"${(res.details || '').replace(/"/g, '""')}"`
                 ];
@@ -561,6 +601,8 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${res.title || res.descrizione}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${res.inventory_quantity !== undefined ? res.inventory_quantity : 'N/D'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">${res.giacenzaFile}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${res.expiry_date || 'N/D'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">${res.scadenzaFile || 'N/D'}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full ${statusInfo.badgeClass}">
                             ${statusInfo.icon} ${statusInfo.label}
