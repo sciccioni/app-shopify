@@ -159,11 +159,16 @@
                 body: JSON.stringify(payload),
             });
 
+            // Legge il corpo della risposta per ottenere il messaggio di errore dettagliato
+            const data = await response.json();
+
             if (!response.ok) {
-                throw new Error(`Errore di comunicazione con il server: ${response.statusText}`);
+                // Se la risposta non è OK, usa il messaggio di errore dal backend se esiste
+                const errorMessage = data.error || `Errore di comunicazione con il server: ${response.statusText}`;
+                throw new Error(errorMessage);
             }
             
-            const data = await response.json();
+            // Se la risposta è OK ma contiene un errore logico
             if (data.error) {
                 throw new Error(data.error);
             }
