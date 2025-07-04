@@ -430,10 +430,7 @@
         }
 
         // --- LOGICA DI SINCRONIZZAZIONE ---
-        confirmSyncCheckbox.addEventListener('change', () => {
-            syncButton.disabled = !confirmSyncCheckbox.checked;
-        });
-
+        confirmSyncCheckbox.addEventListener('change', updateUIState);
         syncButton.addEventListener('click', syncFile);
 
         async function syncFile() {
@@ -508,10 +505,8 @@
                 updateProgressBar(i + 1, itemChunks.length);
             }
             
-            // BUG FIX: Resetta lo stato di selezione dopo la sincronizzazione
             analysisResults.forEach(item => item.selected = false);
 
-            // Aggiorna il riepilogo con i dati finali
             const toUpdateCount = analysisResults.filter(r => r.status === 'to-update').length;
             const notFoundCount = analysisResults.filter(r => r.status === 'not-found').length;
             const noChangeCount = analysisResults.filter(r => r.status === 'no-change').length;
@@ -529,10 +524,7 @@
                 syncStatusMessage.textContent = `Sincronizzazione completata con successo per ${successCount} prodotti!`;
                 syncStatusMessage.className = 'mt-4 text-center font-semibold text-green-700';
             }
-            confirmSyncCheckbox.disabled = false;
-            confirmSyncCheckbox.checked = false;
-            syncButton.disabled = true;
-            selectAllCheckbox.checked = false;
+            updateUIState();
         }
 
         // --- GESTIONE DOWNLOAD CSV ---
@@ -627,31 +619,28 @@
                 resultsTableBody.appendChild(row);
             });
 
-            // Aggiungi event listener ai nuovi checkbox
             document.querySelectorAll('.row-checkbox').forEach(checkbox => {
                 checkbox.addEventListener('change', (e) => {
                     const item = analysisResults.find(r => r.minsan === e.target.dataset.minsan);
                     if (item) item.selected = e.target.checked;
+                    updateUIState();
                 });
             });
 
             pageIndicator.textContent = `Pagina ${page} di ${totalPages || 1}`;
             prevPageButton.disabled = page === 1;
             nextPageButton.disabled = page === totalPages || totalPages === 0;
+            updateUIState();
         }
 
         prevPageButton.addEventListener('click', () => {
-            if (currentPage > 1) {
-                displayTablePage(currentPage - 1);
-            }
+            if (currentPage > 1) displayTablePage(currentPage - 1);
         });
 
         nextPageButton.addEventListener('click', () => {
             const filteredResults = filterToggle.checked ? analysisResults.filter(r => r.status === 'to-update') : analysisResults;
             const totalPages = Math.ceil(filteredResults.length / ROWS_PER_PAGE);
-            if (currentPage < totalPages) {
-                displayTablePage(currentPage + 1);
-            }
+            if (currentPage < totalPages) displayTablePage(currentPage + 1);
         });
 
         filterToggle.addEventListener('change', () => {
@@ -661,17 +650,29 @@
 
         selectAllCheckbox.addEventListener('change', (e) => {
             const isChecked = e.target.checked;
-            const itemsToSelect = filterToggle.checked 
-                ? analysisResults.filter(r => r.status === 'to-update') 
-                : analysisResults;
-
-            itemsToSelect.forEach(res => {
+            analysisResults.forEach(res => {
                 if (res.status === 'to-update') {
                     res.selected = isChecked;
                 }
             });
             displayTablePage(currentPage);
         });
+
+        function updateUIState() {
+            const itemsToUpdateSelected = analysisResults.filter(r => r.selected).length > 0;
+            syncButton.disabled = !confirmSyncCheckbox.checked || !itemsToUpdateSelected;
+
+            const updatableItemsOnPage = document.querySelectorAll('.row-checkbox');
+            const allOnPageSelected = updatableItemsOnPage.length > 0 && Array.from(updatableItemsOnPage).every(cb => cb.checked);
+            selectAllCheckbox.checked = allOnPageSelected;
+
+            const totalToUpdate = analysisResults.filter(r => r.status === 'to-update').length;
+            if (totalToUpdate > 0) {
+                syncActionArea.classList.remove('hidden');
+            } else {
+                syncActionArea.classList.add('hidden');
+            }
+        }
 
         function getStatusInfo(status) {
             const icons = {
