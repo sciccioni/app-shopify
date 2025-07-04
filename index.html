@@ -80,26 +80,51 @@
                     <div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
                 </div>
                 <div id="summary" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"></div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Minsan/SKU</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrizione Prodotto</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giacenza File</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dettagli Operazione</th>
-                            </tr>
-                        </thead>
-                        <tbody id="results-table-body" class="bg-white divide-y divide-gray-200"></tbody>
-                    </table>
+                
+                <div id="sync-action-area" class="mt-6 p-4 border-t border-b border-gray-200 hidden">
+                    <div class="flex flex-col md:flex-row items-center justify-center gap-4">
+                        <div class="flex items-center">
+                            <input id="confirm-sync-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                            <label for="confirm-sync-checkbox" class="ml-2 block text-sm text-gray-900">
+                                Confermo di voler aggiornare i prodotti su Shopify.
+                            </label>
+                        </div>
+                        <button id="sync-button" class="bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed transition-colors">
+                            Sincronizza Prodotti
+                        </button>
+                    </div>
+                    <p id="sync-status-message" class="mt-4 text-center font-semibold hidden"></p>
                 </div>
-                <div id="sync-action-area" class="mt-6 text-center hidden">
-                    <button id="sync-button" class="bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 disabled:bg-green-300 transition-colors">
-                        Sincronizza su Shopify
+                
+                <!-- Tabella con paginazione -->
+                <div id="table-container" class="hidden mt-6">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Minsan/SKU</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrizione Prodotto</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giacenza File</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dettagli Operazione</th>
+                                </tr>
+                            </thead>
+                            <tbody id="results-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                    <div id="pagination-controls" class="mt-4 flex items-center justify-between">
+                        <button id="prev-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed">&larr; Precedente</button>
+                        <span id="page-indicator" class="text-sm font-semibold"></span>
+                        <button id="next-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed">Successivo &rarr;</button>
+                    </div>
+                </div>
+
+                <div id="report-area" class="mt-6 text-center hidden">
+                    <button id="download-csv-button" class="bg-gray-700 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-800 transition-colors">
+                        Scarica Report Dettagliato (CSV)
                     </button>
-                    <p id="sync-status-message" class="mt-4 font-semibold hidden"></p>
                 </div>
+
                  <div id="loader" class="text-center p-8 hidden">
                     <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -120,19 +145,28 @@
         const analyzeButton = document.getElementById('analyze-button');
         const resultsSection = document.getElementById('results-section');
         const summaryContainer = document.getElementById('summary');
-        const resultsTableBody = document.getElementById('results-table-body');
         const loader = document.getElementById('loader');
         const loaderText = document.getElementById('loader-text');
         const syncActionArea = document.getElementById('sync-action-area');
         const syncButton = document.getElementById('sync-button');
+        const confirmSyncCheckbox = document.getElementById('confirm-sync-checkbox');
         const syncStatusMessage = document.getElementById('sync-status-message');
         const errorMessageBox = document.getElementById('error-message-box');
         const errorMessageText = document.getElementById('error-message-text');
         const progressBarContainer = document.getElementById('progress-bar-container');
         const progressBar = document.getElementById('progress-bar');
+        const reportArea = document.getElementById('report-area');
+        const downloadCsvButton = document.getElementById('download-csv-button');
+        const tableContainer = document.getElementById('table-container');
+        const resultsTableBody = document.getElementById('results-table-body');
+        const prevPageButton = document.getElementById('prev-page-button');
+        const nextPageButton = document.getElementById('next-page-button');
+        const pageIndicator = document.getElementById('page-indicator');
 
         let uploadedFile = null;
         let analysisResults = [];
+        let currentPage = 1;
+        const ROWS_PER_PAGE = 100;
 
         // --- GESTIONE UPLOAD FILE ---
         dropZone.addEventListener('click', () => fileInput.click());
@@ -194,10 +228,12 @@
             // Reset UI
             resultsSection.classList.remove('hidden');
             syncActionArea.classList.add('hidden');
+            reportArea.classList.add('hidden');
+            tableContainer.classList.add('hidden');
             if(syncStatusMessage) syncStatusMessage.classList.add('hidden');
             if(syncStatusMessage) syncStatusMessage.textContent = '';
             syncButton.disabled = true;
-            resultsTableBody.innerHTML = '';
+            confirmSyncCheckbox.checked = false;
             summaryContainer.innerHTML = '';
             loader.classList.remove('hidden');
             loaderText.textContent = 'Elaborazione in corso...';
@@ -243,7 +279,11 @@
                     const giacenza = row.Giacenza;
                     const descrizione = row.Descrizione;
 
-                    if (!minsan || giacenza === undefined) { errorCount++; continue; }
+                    if (!minsan || giacenza === undefined) { 
+                        errorCount++; 
+                        analysisResults.push({ minsan: minsan || 'N/D', descrizione, giacenzaFile: giacenza, status: 'error', details: 'Dati mancanti o non validi (Minsan o Giacenza).' });
+                        continue; 
+                    }
                     
                     const productOnShopify = allShopifyProducts.find(p => p.minsan === minsan);
 
@@ -263,11 +303,18 @@
                 }
                 
                 displaySummary({ total: fileData.length, toUpdate: toUpdateCount, notFound: notFoundCount, noChange: noChangeCount, errors: errorCount });
-                displayResults(analysisResults);
-
+                
+                if (analysisResults.length > 0) {
+                    tableContainer.classList.remove('hidden');
+                    currentPage = 1;
+                    displayTablePage(currentPage);
+                }
+                
+                reportArea.classList.remove('hidden');
                 if (toUpdateCount > 0) {
                     syncActionArea.classList.remove('hidden');
-                    syncButton.disabled = false;
+                    syncButton.disabled = true; // Inizialmente disabilitato
+                    confirmSyncCheckbox.checked = false; // Resetta il checkbox
                 }
 
             } catch (error) {
@@ -281,12 +328,17 @@
         }
 
         // --- LOGICA DI SINCRONIZZAZIONE ---
+        confirmSyncCheckbox.addEventListener('change', () => {
+            syncButton.disabled = !confirmSyncCheckbox.checked;
+        });
+
         syncButton.addEventListener('click', syncFile);
 
         async function syncFile() {
             hideErrorMessage();
             
             syncButton.disabled = true;
+            confirmSyncCheckbox.disabled = true;
             loader.classList.remove('hidden');
             progressBarContainer.classList.remove('hidden');
             updateProgressBar(0, 1);
@@ -334,22 +386,54 @@
                 }
                 
                 updateProgressBar(i + 1, itemChunks.length);
-                displayResults(analysisResults); // Aggiorna la tabella progressivamente
             }
-
+            
+            displayTablePage(currentPage); // Ridisegna la pagina corrente della tabella con i nuovi stati
             loader.classList.add('hidden');
             syncStatusMessage.classList.remove('hidden');
             
             if (failureCount > 0) {
-                syncStatusMessage.textContent = `Sincronizzazione completata con ${successCount} successi e ${failureCount} fallimenti. Controlla la tabella per i dettagli.`;
-                syncStatusMessage.className = 'mt-4 font-semibold text-red-700';
+                syncStatusMessage.textContent = `Sincronizzazione completata con ${successCount} successi e ${failureCount} fallimenti. Scarica il report per i dettagli.`;
+                syncStatusMessage.className = 'mt-4 text-center font-semibold text-red-700';
             } else {
                 syncStatusMessage.textContent = `Sincronizzazione completata con successo per ${successCount} prodotti!`;
-                syncStatusMessage.className = 'mt-4 font-semibold text-green-700';
+                syncStatusMessage.className = 'mt-4 text-center font-semibold text-green-700';
             }
+            confirmSyncCheckbox.disabled = false;
+        }
+
+        // --- GESTIONE DOWNLOAD CSV ---
+        downloadCsvButton.addEventListener('click', downloadCSV);
+
+        function downloadCSV() {
+            if (analysisResults.length === 0) return;
+
+            const headers = ['Minsan_SKU', 'Descrizione_Prodotto', 'Giacenza_File', 'Stato_Analisi', 'Dettagli'];
+            const csvRows = [headers.join(';')]; // Usa il punto e virgola come separatore per Excel in italiano
+
+            for (const res of analysisResults) {
+                const row = [
+                    res.minsan || '',
+                    `"${(res.title || res.descrizione || '').replace(/"/g, '""')}"`, // Gestisce le virgolette nel testo
+                    res.giacenzaFile,
+                    res.status,
+                    `"${(res.details || '').replace(/"/g, '""')}"`
+                ];
+                csvRows.push(row.join(';'));
+            }
+
+            const csvString = csvRows.join('\n');
+            const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' }); // Aggiunge il BOM per la compatibilità con Excel
+
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'report_sincronizzazione.csv';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
         
-        // --- FUNZIONI DI VISUALIZZAZIONE ---
+        // --- FUNZIONI DI VISUALIZZAZIONE E PAGINAZIONE ---
         function displaySummary(summary) {
             summaryContainer.innerHTML = `
                 <div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.total}</p><p class="text-sm text-gray-600">Prodotti nel File</p></div>
@@ -359,13 +443,16 @@
             `;
         }
 
-        function displayResults(results) {
+        function displayTablePage(page) {
+            currentPage = page;
             resultsTableBody.innerHTML = '';
-            if (results.length === 0) {
-                 resultsTableBody.innerHTML = `<tr><td colspan="5" class="text-center p-6 text-gray-500">Nessun dato da visualizzare.</td></tr>`;
-                 return;
-            }
-            results.forEach(res => {
+            const totalPages = Math.ceil(analysisResults.length / ROWS_PER_PAGE);
+            
+            const start = (page - 1) * ROWS_PER_PAGE;
+            const end = start + ROWS_PER_PAGE;
+            const paginatedItems = analysisResults.slice(start, end);
+
+            paginatedItems.forEach(res => {
                 const statusInfo = getStatusInfo(res.status);
                 const row = `
                     <tr class="${statusInfo.rowClass}">
@@ -381,7 +468,24 @@
                     </tr>`;
                 resultsTableBody.innerHTML += row;
             });
+
+            pageIndicator.textContent = `Pagina ${page} di ${totalPages}`;
+            prevPageButton.disabled = page === 1;
+            nextPageButton.disabled = page === totalPages;
         }
+
+        prevPageButton.addEventListener('click', () => {
+            if (currentPage > 1) {
+                displayTablePage(currentPage - 1);
+            }
+        });
+
+        nextPageButton.addEventListener('click', () => {
+            const totalPages = Math.ceil(analysisResults.length / ROWS_PER_PAGE);
+            if (currentPage < totalPages) {
+                displayTablePage(currentPage + 1);
+            }
+        });
 
         function getStatusInfo(status) {
             const icons = {
