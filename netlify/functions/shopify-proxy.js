@@ -42,44 +42,32 @@ exports.handler = async function(event) {
 
         const payload = JSON.parse(event.body);
 
-        // Caso 1: L'app chiede di ANALIZZARE i prodotti
+        // Caso 1: L'app chiede di ANALIZZARE un pacchetto di prodotti
         if (payload.type === 'analyze') {
             const { skus } = payload;
             
-            const chunkSize = 250;
-            const skuChunks = [];
-            for (let i = 0; i < skus.length; i += chunkSize) {
-                skuChunks.push(skus.slice(i, i + chunkSize));
-            }
-
-            const promises = skuChunks.map(chunk => {
-                const skuQueryString = chunk.map(s => `sku:'${s}'`).join(' OR ');
-                const query = `
-                    query getProductsBySkus {
-                        products(first: ${chunk.length}, query: "${skuQueryString}") {
-                            edges {
-                                node {
-                                    title
-                                    variants(first: 1) {
-                                        edges { 
-                                            node { 
-                                                sku
-                                                inventoryItem { id } 
-                                                inventoryQuantity 
-                                            } 
-                                        }
+            const skuQueryString = skus.map(s => `sku:'${s}'`).join(' OR ');
+            const query = `
+                query getProductsBySkus {
+                    products(first: ${skus.length}, query: "${skuQueryString}") {
+                        edges {
+                            node {
+                                title
+                                variants(first: 1) {
+                                    edges { 
+                                        node { 
+                                            sku
+                                            inventoryItem { id } 
+                                            inventoryQuantity 
+                                        } 
                                     }
                                 }
                             }
                         }
-                    }`;
-                return callShopifyApi(query);
-            });
-
-            const results = await Promise.all(promises);
-            const allProductsData = results.flatMap(result => result.products.edges);
-
-            const products = allProductsData.map(edge => {
+                    }
+                }`;
+            const shopifyData = await callShopifyApi(query);
+            const products = shopifyData.products.edges.map(edge => {
                 const variant = edge.node.variants.edges[0]?.node;
                 return {
                     minsan: variant?.sku,
@@ -122,7 +110,7 @@ exports.handler = async function(event) {
     try {
         // "Watchdog" per il timeout di Netlify. La funzione ha 9.5 secondi per completare.
         const watchdog = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Timeout della funzione superato (10s). Il file potrebbe essere troppo grande per essere processato in una sola richiesta.")), 9500)
+            setTimeout(() => reject(new Error("Timeout della funzione superato (10s). Il pacchetto di dati potrebbe essere troppo grande.")), 9500)
         );
         // Esegue la logica principale e il watchdog in parallelo. Il primo che finisce (o fallisce) determina il risultato.
         return await Promise.race([mainLogic(), watchdog]);
