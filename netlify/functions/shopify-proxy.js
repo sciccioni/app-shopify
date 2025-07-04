@@ -83,6 +83,10 @@ exports.handler = async function(event) {
         // Caso 2: L'app chiede di SINCRONIZZARE un pacchetto di prodotti
         if (payload.type === 'sync') {
             const { items } = payload;
+            if (!items || !Array.isArray(items) || items.length === 0) {
+                throw new Error("Nessun prodotto da sincronizzare nel pacchetto.");
+            }
+
             const locationId = `gid://shopify/Location/${SHOPIFY_LOCATION_ID}`;
             
             // Costruisce una singola mutazione per aggiornare più prodotti contemporaneamente
