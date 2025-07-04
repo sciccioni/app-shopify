@@ -104,7 +104,7 @@
                     <div id="progress-bar-container" class="w-full bg-gray-200 rounded-full h-2.5 mb-4 hidden">
                         <div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
                     </div>
-                    <div id="summary" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"></div>
+                    <div id="summary" class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6"></div>
                     
                     <div id="sync-action-area" class="mt-6 p-4 border-t border-b border-gray-200 hidden">
                         <div class="flex flex-col md:flex-row items-center justify-center gap-4">
@@ -142,14 +142,14 @@
                                         <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             <input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
                                         </th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Minsan/SKU</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrizione Prodotto</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giacenza Shopify</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giacenza File</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scadenza Shopify</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scadenza File</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dettagli</th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Minsan/SKU</th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">Descrizione Prodotto</th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giac. Shopify</th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giac. File</th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scad. Shopify</th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scad. File</th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dettagli</th>
                                     </tr>
                                 </thead>
                                 <tbody id="results-table-body" class="bg-white divide-y divide-gray-200"></tbody>
@@ -376,20 +376,22 @@
                             const quantityChanged = giacenzaFile !== productOnShopify.inventory_quantity;
                             const expiryChanged = scadenzaFile && (scadenzaFile !== productOnShopify.expiry_date);
                             
+                            let detailsText = [];
                             if (giacenzaFile < 0) {
                                 hasNegativeQuantities = true;
-                                resultRow.details = `Giacenza negativa, sarà impostata a 0.`;
+                                detailsText.push(`Giacenza negativa, sarà impostata a 0.`);
                             }
-
+                            
                             if (quantityChanged || expiryChanged) {
                                 toUpdateCount++;
                                 resultRow.status = 'to-update';
-                                if(!resultRow.details) resultRow.details = `Pronto per aggiornare.`;
+                                if (detailsText.length === 0) detailsText.push(`Pronto per aggiornare.`);
                             } else {
                                 noChangeCount++;
                                 resultRow.status = 'no-change';
-                                resultRow.details = `Giacenza e scadenza già corrette.`;
+                                detailsText.push(`Giacenza e scadenza già corrette.`);
                             }
+                            resultRow.details = detailsText.join(' ');
                         } else {
                             notFoundCount++;
                             resultRow.status = 'not-found';
@@ -403,7 +405,7 @@
                     showErrorMessage("<strong>Attenzione:</strong> Il file contiene giacenze negative. Questi valori verranno automaticamente impostati a 0 durante la sincronizzazione.");
                 }
 
-                displaySummary({ total: fileData.length, toUpdate: toUpdateCount, notFound: notFoundCount, noChange: noChangeCount, errors: errorCount });
+                displaySummary({ total: fileData.length, toUpdate: toUpdateCount, notFound: notFoundCount, noChange: noChangeCount, errors: errorCount, synced: 0 });
                 
                 if (analysisResults.length > 0) {
                     tableContainer.classList.remove('hidden');
@@ -506,6 +508,13 @@
                 updateProgressBar(i + 1, itemChunks.length);
             }
             
+            // Aggiorna il riepilogo con i dati finali
+            const toUpdateCount = analysisResults.filter(r => r.status === 'to-update').length;
+            const notFoundCount = analysisResults.filter(r => r.status === 'not-found').length;
+            const noChangeCount = analysisResults.filter(r => r.status === 'no-change').length;
+            const errorCount = analysisResults.filter(r => r.status === 'error').length;
+            displaySummary({ total: analysisResults.length, toUpdate: toUpdateCount, notFound: notFoundCount, noChange: noChangeCount, errors: errorCount, synced: successCount });
+
             displayTablePage(currentPage);
             loader.classList.add('hidden');
             syncStatusMessage.classList.remove('hidden');
@@ -561,6 +570,7 @@
             summaryContainer.innerHTML = `
                 <div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.total}</p><p class="text-sm text-gray-600">Prodotti nel File</p></div>
                 <div class="bg-blue-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-blue-800">${summary.toUpdate}</p><p class="text-sm text-blue-700">Da Aggiornare</p></div>
+                <div class="bg-green-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-green-800">${summary.synced}</p><p class="text-sm text-green-700">Sincronizzati</p></div>
                 <div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.notFound}</p><p class="text-sm text-yellow-700">Non Trovati</p></div>
                 <div class="bg-red-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-red-800">${summary.errors}</p><p class="text-sm text-red-700">Errori Dati</p></div>
             `;
@@ -585,10 +595,10 @@
                 const row = document.createElement('tr');
                 row.className = statusInfo.rowClass;
 
-                let checkboxHTML = '<td class="px-2 py-4 whitespace-nowrap"></td>';
+                let checkboxHTML = '<td class="px-2 py-4 whitespace-nowrap text-xs"></td>';
                 if (res.status === 'to-update') {
                     checkboxHTML = `
-                        <td class="px-2 py-4 whitespace-nowrap">
+                        <td class="px-2 py-4 whitespace-nowrap text-xs">
                             <input type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded row-checkbox" 
                                    data-minsan="${res.minsan}" ${res.selected ? 'checked' : ''}>
                         </td>
@@ -597,18 +607,18 @@
                 
                 row.innerHTML = `
                     ${checkboxHTML}
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${res.minsan}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${res.title || res.descrizione}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${res.inventory_quantity !== undefined ? res.inventory_quantity : 'N/D'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">${res.giacenzaFile}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${res.expiry_date || 'N/D'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">${res.scadenzaFile || 'N/D'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full ${statusInfo.badgeClass}">
+                    <td class="px-3 py-4 whitespace-nowrap text-xs font-medium text-gray-900">${res.minsan}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.title || res.descrizione}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-500">${res.inventory_quantity !== undefined ? res.inventory_quantity : 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs font-semibold text-gray-900">${res.giacenzaFile}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-500">${res.expiry_date || 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs font-semibold text-gray-900">${res.scadenzaFile || 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs font-medium">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${statusInfo.badgeClass}">
                             ${statusInfo.icon} ${statusInfo.label}
                         </span>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${res.details || ''}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.details || ''}</td>
                 `;
                 resultsTableBody.appendChild(row);
             });
