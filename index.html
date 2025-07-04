@@ -508,6 +508,9 @@
                 updateProgressBar(i + 1, itemChunks.length);
             }
             
+            // BUG FIX: Resetta lo stato di selezione dopo la sincronizzazione
+            analysisResults.forEach(item => item.selected = false);
+
             // Aggiorna il riepilogo con i dati finali
             const toUpdateCount = analysisResults.filter(r => r.status === 'to-update').length;
             const notFoundCount = analysisResults.filter(r => r.status === 'not-found').length;
