@@ -76,6 +76,9 @@
             <!-- Sezione Risultati -->
             <div id="results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden">
                 <h2 class="text-xl font-semibold mb-4">2. Report di Analisi</h2>
+                <div id="progress-bar-container" class="w-full bg-gray-200 rounded-full h-2.5 mb-4 hidden">
+                    <div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
                 <div id="summary" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"></div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200">
@@ -102,7 +105,7 @@
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <p class="mt-2 text-gray-600">Elaborazione in corso...</p>
+                    <p id="loader-text" class="mt-2 text-gray-600">Elaborazione in corso...</p>
                 </div>
             </div>
         </main>
@@ -119,11 +122,14 @@
         const summaryContainer = document.getElementById('summary');
         const resultsTableBody = document.getElementById('results-table-body');
         const loader = document.getElementById('loader');
+        const loaderText = document.getElementById('loader-text');
         const syncActionArea = document.getElementById('sync-action-area');
         const syncButton = document.getElementById('sync-button');
         const syncStatusMessage = document.getElementById('sync-status-message');
         const errorMessageBox = document.getElementById('error-message-box');
         const errorMessageText = document.getElementById('error-message-text');
+        const progressBarContainer = document.getElementById('progress-bar-container');
+        const progressBar = document.getElementById('progress-bar');
 
         let uploadedFile = null;
         let analysisResults = [];
@@ -151,6 +157,11 @@
             errorMessageBox.classList.add('hidden');
         }
 
+        function updateProgressBar(current, total) {
+            const percentage = Math.round((current / total) * 100);
+            progressBar.style.width = `${percentage}%`;
+        }
+
         // --- FUNZIONE DI CHIAMATA AL BACKEND ---
         async function callBackend(payload) {
             const response = await fetch('/.netlify/functions/shopify-proxy', {
@@ -159,16 +170,11 @@
                 body: JSON.stringify(payload),
             });
 
-            // Legge il corpo della risposta per ottenere il messaggio di errore dettagliato
             const data = await response.json();
-
             if (!response.ok) {
-                // Se la risposta non è OK, usa il messaggio di errore dal backend se esiste
                 const errorMessage = data.error || `Errore di comunicazione con il server: ${response.statusText}`;
                 throw new Error(errorMessage);
             }
-            
-            // Se la risposta è OK ma contiene un errore logico
             if (data.error) {
                 throw new Error(data.error);
             }
@@ -194,6 +200,9 @@
             resultsTableBody.innerHTML = '';
             summaryContainer.innerHTML = '';
             loader.classList.remove('hidden');
+            loaderText.textContent = 'Elaborazione in corso...';
+            progressBarContainer.classList.add('hidden');
+            updateProgressBar(0, 1);
             analyzeButton.disabled = true;
 
             try {
@@ -204,13 +213,28 @@
                 const worksheet = workbook.Sheets[sheetName];
                 const fileData = XLSX.utils.sheet_to_json(worksheet);
 
-                // 2. Invia gli SKU al backend per l'analisi
-                const skusFromFile = fileData.map(row => row.Minsan || row.EAN).filter(Boolean).map(String);
-                if (skusFromFile.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
+                // 2. Suddividi gli SKU in pacchetti (chunks)
+                const allSkus = fileData.map(row => row.Minsan || row.EAN).filter(Boolean).map(String);
+                if (allSkus.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
 
-                const shopifyProducts = await callBackend({ type: 'analyze', skus: skusFromFile });
+                const chunkSize = 250;
+                const skuChunks = [];
+                for (let i = 0; i < allSkus.length; i += chunkSize) {
+                    skuChunks.push(allSkus.slice(i, i + chunkSize));
+                }
+
+                // 3. Processa ogni pacchetto in sequenza
+                let allShopifyProducts = [];
+                progressBarContainer.classList.remove('hidden');
+                for (let i = 0; i < skuChunks.length; i++) {
+                    const chunk = skuChunks[i];
+                    loaderText.textContent = `Analisi pacchetto ${i + 1} di ${skuChunks.length}...`;
+                    const shopifyProductsChunk = await callBackend({ type: 'analyze', skus: chunk });
+                    allShopifyProducts = allShopifyProducts.concat(shopifyProductsChunk);
+                    updateProgressBar(i + 1, skuChunks.length);
+                }
                 
-                // 3. Confronta dati e prepara risultati
+                // 4. Confronta dati e prepara risultati
                 analysisResults = [];
                 let toUpdateCount = 0, notFoundCount = 0, noChangeCount = 0, errorCount = 0;
 
@@ -221,7 +245,7 @@
 
                     if (!minsan || giacenza === undefined) { errorCount++; continue; }
                     
-                    const productOnShopify = shopifyProducts.find(p => p.minsan === minsan);
+                    const productOnShopify = allShopifyProducts.find(p => p.minsan === minsan);
 
                     if (productOnShopify) {
                         const giacenzaFile = parseInt(giacenza, 10);
