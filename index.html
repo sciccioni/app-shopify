@@ -323,7 +323,14 @@
                 const worksheet = workbook.Sheets[sheetName];
                 const fileData = XLSX.utils.sheet_to_json(worksheet);
 
-                const allSkus = fileData.map(row => row.Minsan || row.EAN).filter(Boolean).map(String);
+                // Controllo duplicati
+                const allSkus = fileData.map(row => String(row.Minsan || row.EAN).trim()).filter(Boolean);
+                const skuCounts = allSkus.reduce((acc, sku) => { acc[sku] = (acc[sku] || 0) + 1; return acc; }, {});
+                const duplicates = Object.entries(skuCounts).filter(([sku, count]) => count > 1).map(([sku, count]) => sku);
+                if (duplicates.length > 0) {
+                    throw new Error(`File non valido. Trovati Minsan/SKU duplicati: ${duplicates.join(', ')}`);
+                }
+                
                 if (allSkus.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
 
                 const chunkSize = 250;
