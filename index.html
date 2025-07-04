@@ -309,8 +309,6 @@
             tableContainer.classList.add('hidden');
             if(syncStatusMessage) syncStatusMessage.classList.add('hidden');
             if(syncStatusMessage) syncStatusMessage.textContent = '';
-            syncButton.disabled = true;
-            confirmSyncCheckbox.checked = false;
             summaryContainer.innerHTML = '';
             loader.classList.remove('hidden');
             loaderText.textContent = 'Elaborazione in corso...';
@@ -661,6 +659,7 @@
         function updateUIState() {
             const itemsToUpdateSelected = analysisResults.filter(r => r.selected).length > 0;
             syncButton.disabled = !confirmSyncCheckbox.checked || !itemsToUpdateSelected;
+            confirmSyncCheckbox.disabled = !itemsToUpdateSelected;
 
             const updatableItemsOnPage = document.querySelectorAll('.row-checkbox');
             const allOnPageSelected = updatableItemsOnPage.length > 0 && Array.from(updatableItemsOnPage).every(cb => cb.checked);
