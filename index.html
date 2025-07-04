@@ -371,25 +371,32 @@
                         const productOnShopify = allShopifyProducts.find(p => p.minsan === minsan);
                         if (productOnShopify) {
                             resultRow = { ...resultRow, ...productOnShopify };
-                            const quantityChanged = giacenzaFile !== productOnShopify.inventory_quantity;
-                            const expiryChanged = scadenzaFile && (scadenzaFile !== productOnShopify.expiry_date);
                             
-                            let detailsText = [];
-                            if (giacenzaFile < 0) {
-                                hasNegativeQuantities = true;
-                                detailsText.push(`Giacenza negativa, sarà impostata a 0.`);
-                            }
-                            
-                            if (quantityChanged || expiryChanged) {
-                                toUpdateCount++;
-                                resultRow.status = 'to-update';
-                                if (detailsText.length === 0) detailsText.push(`Pronto per aggiornare.`);
+                            if (productOnShopify.inventory_quantity <= 0 && giacenzaFile < 0) {
+                                errorCount++;
+                                resultRow.status = 'error';
+                                resultRow.details = 'Giacenza a zero non può essere decrementata.';
                             } else {
-                                noChangeCount++;
-                                resultRow.status = 'no-change';
-                                resultRow.details = `Giacenza e scadenza già corrette.`;
+                                const quantityChanged = giacenzaFile !== productOnShopify.inventory_quantity;
+                                const expiryChanged = scadenzaFile && (scadenzaFile !== productOnShopify.expiry_date);
+                                
+                                let detailsText = [];
+                                if (giacenzaFile < 0) {
+                                    hasNegativeQuantities = true;
+                                    detailsText.push(`Giacenza negativa, sarà impostata a 0.`);
+                                }
+                                
+                                if (quantityChanged || expiryChanged) {
+                                    toUpdateCount++;
+                                    resultRow.status = 'to-update';
+                                    if (detailsText.length === 0) detailsText.push(`Pronto per aggiornare.`);
+                                } else {
+                                    noChangeCount++;
+                                    resultRow.status = 'no-change';
+                                    resultRow.details = `Giacenza e scadenza già corrette.`;
+                                }
+                                resultRow.details = detailsText.join(' ');
                             }
-                            resultRow.details = detailsText.join(' ');
                         } else {
                             notFoundCount++;
                             resultRow.status = 'not-found';
