@@ -288,40 +288,57 @@
             
             syncButton.disabled = true;
             loader.classList.remove('hidden');
-            syncStatusMessage.classList.remove('hidden');
-            syncStatusMessage.textContent = 'Sincronizzazione in corso...';
-            syncStatusMessage.className = 'mt-4 font-semibold text-blue-700';
+            progressBarContainer.classList.remove('hidden');
+            updateProgressBar(0, 1);
 
             const itemsToUpdate = analysisResults.filter(r => r.status === 'to-update');
             let successCount = 0;
             let failureCount = 0;
 
-            for (const item of itemsToUpdate) {
+            const chunkSize = 100; // Aggiorna 100 prodotti alla volta
+            const itemChunks = [];
+            for (let i = 0; i < itemsToUpdate.length; i += chunkSize) {
+                itemChunks.push(itemsToUpdate.slice(i, i + chunkSize));
+            }
+
+            for (let i = 0; i < itemChunks.length; i++) {
+                const chunk = itemChunks[i];
+                loaderText.textContent = `Sincronizzazione pacchetto ${i + 1} di ${itemChunks.length}...`;
+                
                 try {
                     const payload = {
                         type: 'sync',
-                        inventoryItemId: item.inventory_item_id,
-                        quantity: item.giacenzaFile
+                        items: chunk.map(item => ({
+                            inventoryItemId: item.inventory_item_id,
+                            quantity: item.giacenzaFile
+                        }))
                     };
                     const result = await callBackend(payload);
                     
                     if (result.success) {
-                        item.status = 'success';
-                        item.details = `Sincronizzato con successo.`;
-                        successCount++;
+                        chunk.forEach(item => {
+                            item.status = 'success';
+                            item.details = `Sincronizzato con successo.`;
+                        });
+                        successCount += chunk.length;
                     } else {
                         throw new Error(result.error || "Errore sconosciuto dal server.");
                     }
                 } catch (error) {
-                    item.status = 'error';
-                    item.details = `Errore API: ${error.message}`;
-                    failureCount++;
-                    console.error(`Errore durante l'aggiornamento di ${item.minsan}:`, error);
+                    chunk.forEach(item => {
+                        item.status = 'error';
+                        item.details = `Errore API: ${error.message}`;
+                    });
+                    failureCount += chunk.length;
+                    console.error(`Errore durante l'aggiornamento del pacchetto ${i + 1}:`, error);
                 }
+                
+                updateProgressBar(i + 1, itemChunks.length);
+                displayResults(analysisResults); // Aggiorna la tabella progressivamente
             }
 
             loader.classList.add('hidden');
-            displayResults(analysisResults); // Ridisegna la tabella con i nuovi stati
+            syncStatusMessage.classList.remove('hidden');
             
             if (failureCount > 0) {
                 syncStatusMessage.textContent = `Sincronizzazione completata con ${successCount} successi e ${failureCount} fallimenti. Controlla la tabella per i dettagli.`;
