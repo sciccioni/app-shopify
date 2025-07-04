@@ -52,7 +52,11 @@ exports.handler = async function(event) {
                     products(first: ${skus.length}, query: "${skuQueryString}") {
                         edges {
                             node {
+                                id
                                 title
+                                expireDate: metafield(namespace: "custom", key: "expire_date") {
+                                    value
+                                }
                                 variants(first: 1) {
                                     edges { 
                                         node { 
@@ -70,10 +74,12 @@ exports.handler = async function(event) {
             const products = shopifyData.products.edges.map(edge => {
                 const variant = edge.node.variants.edges[0]?.node;
                 return {
+                    product_id: edge.node.id,
                     minsan: variant?.sku,
                     title: edge.node.title,
                     inventory_quantity: variant?.inventoryQuantity,
                     inventory_item_id: variant?.inventoryItem.id,
+                    expiry_date: edge.node.expireDate?.value
                 };
             });
 
@@ -89,26 +95,61 @@ exports.handler = async function(event) {
 
             const locationId = `gid://shopify/Location/${SHOPIFY_LOCATION_ID}`;
             
-            // Costruisce una singola mutazione per aggiornare più prodotti contemporaneamente
-            const setQuantitiesString = items.map(item => `{
-                inventoryItemId: "${item.inventoryItemId}",
-                locationId: "${locationId}",
-                quantity: ${item.quantity}
-            }`).join(',\n');
+            // Costruisce una mutazione complessa per aggiornare giacenze e metafields
+            let mutations = [];
 
-            const mutation = `
-                mutation inventorySetOnHandQuantities {
-                    inventorySetOnHandQuantities(input: {
+            // 1. Mutazioni per le giacenze
+            const inventoryItems = items.filter(item => item.inventoryItemId && item.quantity !== undefined);
+            if (inventoryItems.length > 0) {
+                const setQuantitiesString = inventoryItems.map(item => `{
+                    inventoryItemId: "${item.inventoryItemId}",
+                    locationId: "${locationId}",
+                    quantity: ${item.quantity}
+                }`).join(',\n');
+                mutations.push(`
+                    inventoryUpdate: inventorySetOnHandQuantities(input: {
                         reason: "correction",
                         setQuantities: [${setQuantitiesString}]
                     }) {
                         userErrors { field message }
                     }
-                }`;
-            const result = await callShopifyApi(mutation);
-            if (result.inventorySetOnHandQuantities.userErrors.length > 0) {
-                throw new Error(result.inventorySetOnHandQuantities.userErrors.map(e => e.message).join(', '));
+                `);
             }
+
+            // 2. Mutazioni per le date di scadenza (metafields)
+            const metafieldItems = items.filter(item => item.productId && item.expiryDate);
+            if (metafieldItems.length > 0) {
+                const metafieldsString = metafieldItems.map(item => `{
+                    ownerId: "${item.productId}",
+                    namespace: "custom",
+                    key: "expire_date",
+                    type: "date",
+                    value: "${item.expiryDate}"
+                }`).join(',\n');
+                mutations.push(`
+                    metafieldsUpdate: metafieldsSet(metafields: [${metafieldsString}]) {
+                        userErrors { field message }
+                    }
+                `);
+            }
+
+            if (mutations.length === 0) {
+                return { statusCode: 200, body: JSON.stringify({ success: true, message: "Nessuna azione da eseguire." }) };
+            }
+
+            const finalMutation = `mutation { ${mutations.join('\n')} }`;
+            
+            const result = await callShopifyApi(finalMutation);
+
+            const userErrors = [
+                ...(result.inventoryUpdate?.userErrors || []),
+                ...(result.metafieldsUpdate?.userErrors || [])
+            ];
+
+            if (userErrors.length > 0) {
+                throw new Error(userErrors.map(e => e.message).join(', '));
+            }
+
             return { statusCode: 200, body: JSON.stringify({ success: true }) };
         }
 
