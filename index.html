@@ -41,6 +41,14 @@
             border-left: 4px solid #ef4444;
             color: #991b1b;
         }
+        /* Stile per l'interruttore del filtro */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #4f46e5;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #4f46e5;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -103,27 +111,42 @@
                             <div class="flex items-center">
                                 <input id="confirm-sync-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
                                 <label for="confirm-sync-checkbox" class="ml-2 block text-sm text-gray-900">
-                                    Confermo di voler aggiornare i prodotti su Shopify.
+                                    Confermo di voler aggiornare i prodotti selezionati.
                                 </label>
                             </div>
                             <button id="sync-button" class="bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed transition-colors">
-                                Sincronizza Prodotti
+                                Sincronizza Selezionati
                             </button>
                         </div>
                         <p id="sync-status-message" class="mt-4 text-center font-semibold hidden"></p>
                     </div>
                     
-                    <!-- Tabella con paginazione -->
+                    <!-- Tabella con paginazione e filtri -->
                     <div id="table-container" class="hidden mt-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <div class="flex items-center space-x-2">
+                                <label for="filter-toggle" class="text-sm font-medium text-gray-700">Mostra solo prodotti da aggiornare:</label>
+                                <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                    <input type="checkbox" name="filter-toggle" id="filter-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                                    <label for="filter-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                                </div>
+                            </div>
+                            <button id="download-csv-button" class="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-800 text-sm transition-colors">
+                                Scarica Report Completo (CSV)
+                            </button>
+                        </div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
                                 <thead class="bg-gray-50">
                                     <tr>
+                                        <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                        </th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Minsan/SKU</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrizione Prodotto</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giacenza Shopify</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giacenza File</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dettagli Operazione</th>
                                     </tr>
                                 </thead>
                                 <tbody id="results-table-body" class="bg-white divide-y divide-gray-200"></tbody>
@@ -134,12 +157,6 @@
                             <span id="page-indicator" class="text-sm font-semibold"></span>
                             <button id="next-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed">Successivo &rarr;</button>
                         </div>
-                    </div>
-
-                    <div id="report-area" class="mt-6 text-center hidden">
-                        <button id="download-csv-button" class="bg-gray-700 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-800 transition-colors">
-                            Scarica Report Dettagliato (CSV)
-                        </button>
                     </div>
 
                      <div id="loader" class="text-center p-8 hidden">
@@ -178,13 +195,14 @@
         const errorMessageText = document.getElementById('error-message-text');
         const progressBarContainer = document.getElementById('progress-bar-container');
         const progressBar = document.getElementById('progress-bar');
-        const reportArea = document.getElementById('report-area');
         const downloadCsvButton = document.getElementById('download-csv-button');
         const tableContainer = document.getElementById('table-container');
         const resultsTableBody = document.getElementById('results-table-body');
         const prevPageButton = document.getElementById('prev-page-button');
         const nextPageButton = document.getElementById('next-page-button');
         const pageIndicator = document.getElementById('page-indicator');
+        const filterToggle = document.getElementById('filter-toggle');
+        const selectAllCheckbox = document.getElementById('select-all-checkbox');
 
         let uploadedFile = null;
         let analysisResults = [];
@@ -192,7 +210,6 @@
         const ROWS_PER_PAGE = 100;
         
         // --- LOGICA DI ACCESSO CON PASSWORD ---
-        // Questa è una protezione semplice. Non è ultra-sicura ma è un deterrente efficace e gratuito.
         const CORRECT_PASSWORD = 'Ut0ph@2025!';
 
         function checkPassword() {
@@ -272,7 +289,6 @@
             // Reset UI
             resultsSection.classList.remove('hidden');
             syncActionArea.classList.add('hidden');
-            reportArea.classList.add('hidden');
             tableContainer.classList.add('hidden');
             if(syncStatusMessage) syncStatusMessage.classList.add('hidden');
             if(syncStatusMessage) syncStatusMessage.textContent = '';
@@ -286,14 +302,12 @@
             analyzeButton.disabled = true;
 
             try {
-                // 1. Leggi file Excel
                 const data = await uploadedFile.arrayBuffer();
                 const workbook = XLSX.read(data);
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
                 const fileData = XLSX.utils.sheet_to_json(worksheet);
 
-                // 2. Suddividi gli SKU in pacchetti (chunks)
                 const allSkus = fileData.map(row => row.Minsan || row.EAN).filter(Boolean).map(String);
                 if (allSkus.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
 
@@ -303,7 +317,6 @@
                     skuChunks.push(allSkus.slice(i, i + chunkSize));
                 }
 
-                // 3. Processa ogni pacchetto in sequenza
                 let allShopifyProducts = [];
                 progressBarContainer.classList.remove('hidden');
                 for (let i = 0; i < skuChunks.length; i++) {
@@ -314,7 +327,6 @@
                     updateProgressBar(i + 1, skuChunks.length);
                 }
                 
-                // 4. Confronta dati e prepara risultati
                 analysisResults = [];
                 let toUpdateCount = 0, notFoundCount = 0, noChangeCount = 0, errorCount = 0;
 
@@ -323,42 +335,52 @@
                     const giacenza = row.Giacenza;
                     const descrizione = row.Descrizione;
 
+                    let resultRow = { 
+                        minsan: minsan || 'N/D', 
+                        descrizione, 
+                        giacenzaFile: giacenza, 
+                        selected: false // Aggiunto per la selezione
+                    };
+
                     if (!minsan || giacenza === undefined) { 
                         errorCount++; 
-                        analysisResults.push({ minsan: minsan || 'N/D', descrizione, giacenzaFile: giacenza, status: 'error', details: 'Dati mancanti o non validi (Minsan o Giacenza).' });
-                        continue; 
-                    }
-                    
-                    const productOnShopify = allShopifyProducts.find(p => p.minsan === minsan);
-
-                    if (productOnShopify) {
-                        const giacenzaFile = parseInt(giacenza, 10);
-                        if (giacenzaFile === productOnShopify.inventory_quantity) {
-                            noChangeCount++;
-                            analysisResults.push({ ...productOnShopify, giacenzaFile, status: 'no-change', details: `La giacenza è già corretta (${giacenzaFile}).` });
-                        } else {
-                            toUpdateCount++;
-                            analysisResults.push({ ...productOnShopify, giacenzaFile, status: 'to-update', details: `Pronto per aggiornare da ${productOnShopify.inventory_quantity} a ${giacenzaFile}.` });
-                        }
+                        resultRow.status = 'error';
+                        resultRow.details = 'Dati mancanti o non validi (Minsan o Giacenza).';
                     } else {
-                        notFoundCount++;
-                        analysisResults.push({ minsan, descrizione, giacenzaFile: giacenza, status: 'not-found', details: 'Prodotto non trovato su Shopify con questo Minsan/SKU.' });
+                        const productOnShopify = allShopifyProducts.find(p => p.minsan === minsan);
+                        if (productOnShopify) {
+                            const giacenzaFile = parseInt(giacenza, 10);
+                            resultRow = { ...resultRow, ...productOnShopify };
+                            if (giacenzaFile === productOnShopify.inventory_quantity) {
+                                noChangeCount++;
+                                resultRow.status = 'no-change';
+                                resultRow.details = `La giacenza è già corretta.`;
+                            } else {
+                                toUpdateCount++;
+                                resultRow.status = 'to-update';
+                                resultRow.details = `Pronto per aggiornare.`;
+                            }
+                        } else {
+                            notFoundCount++;
+                            resultRow.status = 'not-found';
+                            resultRow.details = 'Prodotto non trovato su Shopify.';
+                        }
                     }
+                    analysisResults.push(resultRow);
                 }
                 
                 displaySummary({ total: fileData.length, toUpdate: toUpdateCount, notFound: notFoundCount, noChange: noChangeCount, errors: errorCount });
                 
                 if (analysisResults.length > 0) {
                     tableContainer.classList.remove('hidden');
+                    filterToggle.checked = false; // Resetta il filtro
                     currentPage = 1;
                     displayTablePage(currentPage);
                 }
                 
-                reportArea.classList.remove('hidden');
+                downloadCsvButton.parentElement.classList.remove('hidden');
                 if (toUpdateCount > 0) {
                     syncActionArea.classList.remove('hidden');
-                    syncButton.disabled = true; // Inizialmente disabilitato
-                    confirmSyncCheckbox.checked = false; // Resetta il checkbox
                 }
 
             } catch (error) {
@@ -381,17 +403,23 @@
         async function syncFile() {
             hideErrorMessage();
             
+            const itemsToUpdate = analysisResults.filter(r => r.selected);
+
+            if (itemsToUpdate.length === 0) {
+                showErrorMessage("<strong>Nessun prodotto selezionato:</strong> Seleziona almeno un prodotto da aggiornare.");
+                return;
+            }
+
             syncButton.disabled = true;
             confirmSyncCheckbox.disabled = true;
             loader.classList.remove('hidden');
             progressBarContainer.classList.remove('hidden');
             updateProgressBar(0, 1);
 
-            const itemsToUpdate = analysisResults.filter(r => r.status === 'to-update');
             let successCount = 0;
             let failureCount = 0;
 
-            const chunkSize = 100; // Aggiorna 100 prodotti alla volta
+            const chunkSize = 100;
             const itemChunks = [];
             for (let i = 0; i < itemsToUpdate.length; i += chunkSize) {
                 itemChunks.push(itemsToUpdate.slice(i, i + chunkSize));
@@ -413,8 +441,12 @@
                     
                     if (result.success) {
                         chunk.forEach(item => {
-                            item.status = 'success';
-                            item.details = `Sincronizzato con successo.`;
+                            const originalItem = analysisResults.find(r => r.minsan === item.minsan);
+                            if (originalItem) {
+                                originalItem.status = 'success';
+                                originalItem.details = `Sincronizzato con successo.`;
+                                originalItem.inventory_quantity = originalItem.giacenzaFile; // Aggiorna la giacenza visualizzata
+                            }
                         });
                         successCount += chunk.length;
                     } else {
@@ -422,8 +454,11 @@
                     }
                 } catch (error) {
                     chunk.forEach(item => {
-                        item.status = 'error';
-                        item.details = `Errore API: ${error.message}`;
+                        const originalItem = analysisResults.find(r => r.minsan === item.minsan);
+                        if (originalItem) {
+                            originalItem.status = 'error';
+                            originalItem.details = `Errore API: ${error.message}`;
+                        }
                     });
                     failureCount += chunk.length;
                     console.error(`Errore durante l'aggiornamento del pacchetto ${i + 1}:`, error);
@@ -432,18 +467,20 @@
                 updateProgressBar(i + 1, itemChunks.length);
             }
             
-            displayTablePage(currentPage); // Ridisegna la pagina corrente della tabella con i nuovi stati
+            displayTablePage(currentPage);
             loader.classList.add('hidden');
             syncStatusMessage.classList.remove('hidden');
             
             if (failureCount > 0) {
-                syncStatusMessage.textContent = `Sincronizzazione completata con ${successCount} successi e ${failureCount} fallimenti. Scarica il report per i dettagli.`;
+                syncStatusMessage.textContent = `Sincronizzazione completata con ${successCount} successi e ${failureCount} fallimenti.`;
                 syncStatusMessage.className = 'mt-4 text-center font-semibold text-red-700';
             } else {
                 syncStatusMessage.textContent = `Sincronizzazione completata con successo per ${successCount} prodotti!`;
                 syncStatusMessage.className = 'mt-4 text-center font-semibold text-green-700';
             }
             confirmSyncCheckbox.disabled = false;
+            confirmSyncCheckbox.checked = false;
+            syncButton.disabled = true;
         }
 
         // --- GESTIONE DOWNLOAD CSV ---
@@ -452,13 +489,14 @@
         function downloadCSV() {
             if (analysisResults.length === 0) return;
 
-            const headers = ['Minsan_SKU', 'Descrizione_Prodotto', 'Giacenza_File', 'Stato_Analisi', 'Dettagli'];
-            const csvRows = [headers.join(';')]; // Usa il punto e virgola come separatore per Excel in italiano
+            const headers = ['Minsan_SKU', 'Descrizione_Prodotto', 'Giacenza_Shopify', 'Giacenza_File', 'Stato_Analisi', 'Dettagli'];
+            const csvRows = [headers.join(';')];
 
             for (const res of analysisResults) {
                 const row = [
                     res.minsan || '',
-                    `"${(res.title || res.descrizione || '').replace(/"/g, '""')}"`, // Gestisce le virgolette nel testo
+                    `"${(res.title || res.descrizione || '').replace(/"/g, '""')}"`,
+                    res.inventory_quantity !== undefined ? res.inventory_quantity : 'N/D',
                     res.giacenzaFile,
                     res.status,
                     `"${(res.details || '').replace(/"/g, '""')}"`
@@ -467,7 +505,7 @@
             }
 
             const csvString = csvRows.join('\n');
-            const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' }); // Aggiunge il BOM per la compatibilità con Excel
+            const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
 
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
@@ -490,32 +528,57 @@
         function displayTablePage(page) {
             currentPage = page;
             resultsTableBody.innerHTML = '';
-            const totalPages = Math.ceil(analysisResults.length / ROWS_PER_PAGE);
+            
+            const filteredResults = filterToggle.checked 
+                ? analysisResults.filter(r => r.status === 'to-update') 
+                : analysisResults;
+
+            const totalPages = Math.ceil(filteredResults.length / ROWS_PER_PAGE);
             
             const start = (page - 1) * ROWS_PER_PAGE;
             const end = start + ROWS_PER_PAGE;
-            const paginatedItems = analysisResults.slice(start, end);
+            const paginatedItems = filteredResults.slice(start, end);
 
             paginatedItems.forEach(res => {
                 const statusInfo = getStatusInfo(res.status);
-                const row = `
-                    <tr class="${statusInfo.rowClass}">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${res.minsan}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${res.title || res.descrizione}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">${res.giacenzaFile}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full ${statusInfo.badgeClass}">
-                                ${statusInfo.icon} ${statusInfo.label}
-                            </span>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${res.details}</td>
-                    </tr>`;
-                resultsTableBody.innerHTML += row;
+                const row = document.createElement('tr');
+                row.className = statusInfo.rowClass;
+
+                // Checkbox di selezione
+                const cellCheckbox = document.createElement('td');
+                cellCheckbox.className = 'px-2 py-4 whitespace-nowrap';
+                if (res.status === 'to-update') {
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded row-checkbox';
+                    checkbox.checked = res.selected;
+                    checkbox.dataset.minsan = res.minsan;
+                    checkbox.addEventListener('change', (e) => {
+                        const item = analysisResults.find(r => r.minsan === e.target.dataset.minsan);
+                        if (item) item.selected = e.target.checked;
+                    });
+                    cellCheckbox.appendChild(checkbox);
+                }
+                row.appendChild(cellCheckbox);
+
+                // Altre celle
+                row.innerHTML += `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${res.minsan}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${res.title || res.descrizione}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${res.inventory_quantity !== undefined ? res.inventory_quantity : 'N/D'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">${res.giacenzaFile}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full ${statusInfo.badgeClass}">
+                            ${statusInfo.icon} ${statusInfo.label}
+                        </span>
+                    </td>
+                `;
+                resultsTableBody.appendChild(row);
             });
 
-            pageIndicator.textContent = `Pagina ${page} di ${totalPages}`;
+            pageIndicator.textContent = `Pagina ${page} di ${totalPages || 1}`;
             prevPageButton.disabled = page === 1;
-            nextPageButton.disabled = page === totalPages;
+            nextPageButton.disabled = page === totalPages || totalPages === 0;
         }
 
         prevPageButton.addEventListener('click', () => {
@@ -525,10 +588,30 @@
         });
 
         nextPageButton.addEventListener('click', () => {
-            const totalPages = Math.ceil(analysisResults.length / ROWS_PER_PAGE);
+            const filteredResults = filterToggle.checked ? analysisResults.filter(r => r.status === 'to-update') : analysisResults;
+            const totalPages = Math.ceil(filteredResults.length / ROWS_PER_PAGE);
             if (currentPage < totalPages) {
                 displayTablePage(currentPage + 1);
             }
+        });
+
+        filterToggle.addEventListener('change', () => {
+            currentPage = 1;
+            displayTablePage(currentPage);
+        });
+
+        selectAllCheckbox.addEventListener('change', (e) => {
+            const isChecked = e.target.checked;
+            const filteredResults = filterToggle.checked 
+                ? analysisResults.filter(r => r.status === 'to-update') 
+                : analysisResults;
+
+            filteredResults.forEach(res => {
+                if (res.status === 'to-update') {
+                    res.selected = isChecked;
+                }
+            });
+            displayTablePage(currentPage);
         });
 
         function getStatusInfo(status) {
