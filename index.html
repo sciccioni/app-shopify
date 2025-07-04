@@ -321,16 +321,52 @@
                 const workbook = XLSX.read(data);
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
-                const fileData = XLSX.utils.sheet_to_json(worksheet);
+                const fileDataRaw = XLSX.utils.sheet_to_json(worksheet);
 
-                // Controllo duplicati
-                const allSkus = fileData.map(row => String(row.Minsan || row.EAN).trim()).filter(Boolean);
-                const skuCounts = allSkus.reduce((acc, sku) => { acc[sku] = (acc[sku] || 0) + 1; return acc; }, {});
-                const duplicates = Object.entries(skuCounts).filter(([sku, count]) => count > 1).map(([sku, count]) => sku);
-                if (duplicates.length > 0) {
-                    throw new Error(`File non valido. Trovati Minsan/SKU duplicati: ${duplicates.join(', ')}`);
+                // --- GESTIONE DUPLICATI ---
+                const skuMap = new Map();
+                fileDataRaw.forEach(row => {
+                    const sku = String(row.Minsan || row.EAN).trim();
+                    if (sku) {
+                        if (!skuMap.has(sku)) {
+                            skuMap.set(sku, []);
+                        }
+                        skuMap.get(sku).push(row);
+                    }
+                });
+
+                const fileData = [];
+                let duplicateInfo = [];
+                skuMap.forEach((rows, sku) => {
+                    if (rows.length > 1) {
+                        const giacenze = rows.map(r => parseInt(r.Giacenza, 10) || 0);
+                        const giacenzeCorrette = giacenze.map(g => g < 0 ? 0 : g);
+                        const totalGiacenza = giacenzeCorrette.reduce((sum, g) => sum + g, 0);
+                        
+                        const scadenze = rows.map(r => r.Scadenza).filter(Boolean);
+                        const firstExpiry = scadenze.length > 0 ? scadenze[0] : null;
+                        const allSameExpiry = scadenze.every(s => s === firstExpiry);
+                        const finalExpiry = allSameExpiry ? firstExpiry : null;
+
+                        const consolidatedRow = { ...rows[0], Giacenza: totalGiacenza, Scadenza: finalExpiry };
+                        fileData.push(consolidatedRow);
+
+                        let details = `SKU ${sku}: Trovati ${rows.length} duplicati. Giacenze (${giacenze.join(', ')}) corrette in (${giacenzeCorrette.join(', ')}) e sommate a ${totalGiacenza}.`;
+                        if (!allSameExpiry && scadenze.length > 0) {
+                            details += ` Scadenze diverse trovate: [${scadenze.map(s => excelDateToJSDate(s)).join(', ')}], non verrà aggiornata.`;
+                        }
+                        duplicateInfo.push(details);
+                    } else {
+                        fileData.push(rows[0]);
+                    }
+                });
+
+                if (duplicateInfo.length > 0) {
+                    showErrorMessage(`<strong>Attenzione, trovati duplicati:</strong><br>${duplicateInfo.join('<br>')}`);
                 }
-                
+                // --- FINE GESTIONE DUPLICATI ---
+
+                const allSkus = fileData.map(row => row.Minsan || row.EAN).filter(Boolean).map(String);
                 if (allSkus.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
 
                 const chunkSize = 250;
@@ -351,7 +387,6 @@
                 
                 analysisResults = [];
                 let toUpdateCount = 0, notFoundCount = 0, noChangeCount = 0, errorCount = 0;
-                let hasNegativeQuantities = false;
 
                 for (const row of fileData) {
                     const minsan = String(row.Minsan || row.EAN);
@@ -379,30 +414,25 @@
                         if (productOnShopify) {
                             resultRow = { ...resultRow, ...productOnShopify };
                             
+                            const finalGiacenza = Math.max(0, giacenzaFile);
+                            const quantityChanged = finalGiacenza !== productOnShopify.inventory_quantity;
+                            const expiryChanged = scadenzaFile && (scadenzaFile !== productOnShopify.expiry_date);
+                            
                             if (productOnShopify.inventory_quantity <= 0 && giacenzaFile < 0) {
                                 errorCount++;
                                 resultRow.status = 'error';
                                 resultRow.details = 'Giacenza a zero non può essere decrementata.';
-                            } else {
-                                const quantityChanged = giacenzaFile !== productOnShopify.inventory_quantity;
-                                const expiryChanged = scadenzaFile && (scadenzaFile !== productOnShopify.expiry_date);
-                                
-                                let detailsText = [];
+                            } else if (quantityChanged || expiryChanged) {
+                                toUpdateCount++;
+                                resultRow.status = 'to-update';
+                                resultRow.details = `Pronto per aggiornare.`;
                                 if (giacenzaFile < 0) {
-                                    hasNegativeQuantities = true;
-                                    detailsText.push(`Giacenza negativa, sarà impostata a 0.`);
+                                    resultRow.details += ` Giacenza negativa (${giacenzaFile}) sarà impostata a 0.`;
                                 }
-                                
-                                if (quantityChanged || expiryChanged) {
-                                    toUpdateCount++;
-                                    resultRow.status = 'to-update';
-                                    if (detailsText.length === 0) detailsText.push(`Pronto per aggiornare.`);
-                                } else {
-                                    noChangeCount++;
-                                    resultRow.status = 'no-change';
-                                    resultRow.details = `Giacenza e scadenza già corrette.`;
-                                }
-                                resultRow.details = detailsText.join(' ');
+                            } else {
+                                noChangeCount++;
+                                resultRow.status = 'no-change';
+                                resultRow.details = `Giacenza e scadenza già corrette.`;
                             }
                         } else {
                             notFoundCount++;
@@ -411,10 +441,6 @@
                         }
                     }
                     analysisResults.push(resultRow);
-                }
-                
-                if (hasNegativeQuantities) {
-                    showErrorMessage("<strong>Attenzione:</strong> Il file contiene giacenze negative. Questi valori verranno automaticamente impostati a 0 durante la sincronizzazione.");
                 }
 
                 displaySummary({ total: fileData.length, toUpdate: toUpdateCount, notFound: notFoundCount, noChange: noChangeCount, errors: errorCount, synced: 0 });
@@ -710,3 +736,4 @@
     </script>
 </body>
 </html>
+```
