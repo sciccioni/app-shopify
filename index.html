@@ -147,6 +147,7 @@
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giacenza Shopify</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giacenza File</th>
                                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dettagli</th>
                                     </tr>
                                 </thead>
                                 <tbody id="results-table-body" class="bg-white divide-y divide-gray-200"></tbody>
@@ -339,7 +340,7 @@
                         minsan: minsan || 'N/D', 
                         descrizione, 
                         giacenzaFile: giacenza, 
-                        selected: false // Aggiunto per la selezione
+                        selected: false 
                     };
 
                     if (!minsan || giacenza === undefined) { 
@@ -373,7 +374,7 @@
                 
                 if (analysisResults.length > 0) {
                     tableContainer.classList.remove('hidden');
-                    filterToggle.checked = false; // Resetta il filtro
+                    filterToggle.checked = false; 
                     currentPage = 1;
                     displayTablePage(currentPage);
                 }
@@ -445,7 +446,7 @@
                             if (originalItem) {
                                 originalItem.status = 'success';
                                 originalItem.details = `Sincronizzato con successo.`;
-                                originalItem.inventory_quantity = originalItem.giacenzaFile; // Aggiorna la giacenza visualizzata
+                                originalItem.inventory_quantity = originalItem.giacenzaFile; 
                             }
                         });
                         successCount += chunk.length;
@@ -544,25 +545,18 @@
                 const row = document.createElement('tr');
                 row.className = statusInfo.rowClass;
 
-                // Checkbox di selezione
-                const cellCheckbox = document.createElement('td');
-                cellCheckbox.className = 'px-2 py-4 whitespace-nowrap';
+                let checkboxHTML = '<td class="px-2 py-4 whitespace-nowrap"></td>';
                 if (res.status === 'to-update') {
-                    const checkbox = document.createElement('input');
-                    checkbox.type = 'checkbox';
-                    checkbox.className = 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded row-checkbox';
-                    checkbox.checked = res.selected;
-                    checkbox.dataset.minsan = res.minsan;
-                    checkbox.addEventListener('change', (e) => {
-                        const item = analysisResults.find(r => r.minsan === e.target.dataset.minsan);
-                        if (item) item.selected = e.target.checked;
-                    });
-                    cellCheckbox.appendChild(checkbox);
+                    checkboxHTML = `
+                        <td class="px-2 py-4 whitespace-nowrap">
+                            <input type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded row-checkbox" 
+                                   data-minsan="${res.minsan}" ${res.selected ? 'checked' : ''}>
+                        </td>
+                    `;
                 }
-                row.appendChild(cellCheckbox);
-
-                // Altre celle
-                row.innerHTML += `
+                
+                row.innerHTML = `
+                    ${checkboxHTML}
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${res.minsan}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${res.title || res.descrizione}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${res.inventory_quantity !== undefined ? res.inventory_quantity : 'N/D'}</td>
@@ -572,8 +566,17 @@
                             ${statusInfo.icon} ${statusInfo.label}
                         </span>
                     </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${res.details || ''}</td>
                 `;
                 resultsTableBody.appendChild(row);
+            });
+
+            // Aggiungi event listener ai nuovi checkbox
+            document.querySelectorAll('.row-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', (e) => {
+                    const item = analysisResults.find(r => r.minsan === e.target.dataset.minsan);
+                    if (item) item.selected = e.target.checked;
+                });
             });
 
             pageIndicator.textContent = `Pagina ${page} di ${totalPages || 1}`;
@@ -602,11 +605,11 @@
 
         selectAllCheckbox.addEventListener('change', (e) => {
             const isChecked = e.target.checked;
-            const filteredResults = filterToggle.checked 
+            const itemsToSelect = filterToggle.checked 
                 ? analysisResults.filter(r => r.status === 'to-update') 
                 : analysisResults;
 
-            filteredResults.forEach(res => {
+            itemsToSelect.forEach(res => {
                 if (res.status === 'to-update') {
                     res.selected = isChecked;
                 }
