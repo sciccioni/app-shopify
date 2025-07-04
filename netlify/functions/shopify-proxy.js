@@ -35,29 +35,44 @@ exports.handler = async function(event) {
         // Caso 1: L'app chiede di ANALIZZARE i prodotti
         if (payload.type === 'analyze') {
             const { skus } = payload;
-            // CORREZIONE #3: La query ora costruisce una stringa di ricerca OR valida per Shopify.
-            const skuQueryString = skus.map(s => `sku:'${s}'`).join(' OR ');
-            const query = `
-                query getProductsBySkus {
-                    products(first: ${skus.length}, query: "${skuQueryString}") {
-                        edges {
-                            node {
-                                title
-                                variants(first: 1) {
-                                    edges { 
-                                        node { 
-                                            sku
-                                            inventoryItem { id } 
-                                            inventoryQuantity 
-                                        } 
+            
+            // CORREZIONE #4: Suddivide la lista di SKU in blocchi da 250 per rispettare il limite di Shopify
+            const chunkSize = 250;
+            const skuChunks = [];
+            for (let i = 0; i < skus.length; i += chunkSize) {
+                skuChunks.push(skus.slice(i, i + chunkSize));
+            }
+
+            // Esegue una chiamata API per ogni blocco
+            const promises = skuChunks.map(chunk => {
+                const skuQueryString = chunk.map(s => `sku:'${s}'`).join(' OR ');
+                const query = `
+                    query getProductsBySkus {
+                        products(first: ${chunk.length}, query: "${skuQueryString}") {
+                            edges {
+                                node {
+                                    title
+                                    variants(first: 1) {
+                                        edges { 
+                                            node { 
+                                                sku
+                                                inventoryItem { id } 
+                                                inventoryQuantity 
+                                            } 
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                }`;
-            const shopifyData = await callShopifyApi(query);
-            const products = shopifyData.products.edges.map(edge => {
+                    }`;
+                return callShopifyApi(query);
+            });
+
+            // Attende tutte le risposte e le unisce
+            const results = await Promise.all(promises);
+            const allProductsData = results.flatMap(result => result.products.edges);
+
+            const products = allProductsData.map(edge => {
                 const variant = edge.node.variants.edges[0]?.node;
                 return {
                     minsan: variant?.sku,
@@ -66,6 +81,7 @@ exports.handler = async function(event) {
                     inventory_item_id: variant?.inventoryItem.id,
                 };
             });
+
             return { statusCode: 200, body: JSON.stringify(products) };
         }
 
