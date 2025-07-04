@@ -1,8 +1,11 @@
 // Funzione per eseguire chiamate API a Shopify
 async function callShopifyApi(query) {
-    // Prende le credenziali segrete dalle variabili d'ambiente di Netlify
     const storeName = process.env.SHOPIFY_STORE_NAME;
     const adminApiToken = process.env.SHOPIFY_ADMIN_API_TOKEN;
+
+    if (!storeName || !adminApiToken) {
+        throw new Error("Variabili d'ambiente SHOPIFY_STORE_NAME o SHOPIFY_ADMIN_API_TOKEN non trovate.");
+    }
 
     const response = await fetch(`https://${storeName}/admin/api/2024-04/graphql.json`, {
         method: 'POST',
@@ -20,9 +23,8 @@ async function callShopifyApi(query) {
     return data.data;
 }
 
-// Funzione principale del backend che viene eseguita da Netlify
+// Funzione principale del backend
 exports.handler = async function(event) {
-    // Accetta solo richieste di tipo POST
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
@@ -39,20 +41,24 @@ exports.handler = async function(event) {
                         edges {
                             node {
                                 title
-                                sku
                                 variants(first: 1) {
-                                    edges { node { inventoryItem { id } inventoryQuantity } }
+                                    edges { 
+                                        node { 
+                                            sku
+                                            inventoryItem { id } 
+                                            inventoryQuantity 
+                                        } 
+                                    }
                                 }
                             }
                         }
                     }
                 }`;
             const shopifyData = await callShopifyApi(query);
-            // Formatta i dati per l'app frontend
             const products = shopifyData.products.edges.map(edge => {
                 const variant = edge.node.variants.edges[0]?.node;
                 return {
-                    minsan: edge.node.sku,
+                    minsan: variant?.sku,
                     title: edge.node.title,
                     inventory_quantity: variant?.inventoryQuantity,
                     inventory_item_id: variant?.inventoryItem.id,
@@ -64,8 +70,11 @@ exports.handler = async function(event) {
         // Caso 2: L'app chiede di SINCRONIZZARE un prodotto
         if (payload.type === 'sync') {
             const { inventoryItemId, quantity } = payload;
-            // Prende l'ID della sede dalle variabili d'ambiente
-            const locationId = `gid://shopify/Location/${process.env.SHOPIFY_LOCATION_ID}`;
+            const locationIdRaw = process.env.SHOPIFY_LOCATION_ID;
+            if (!locationIdRaw) {
+                throw new Error("Variabile d'ambiente SHOPIFY_LOCATION_ID non trovata.");
+            }
+            const locationId = `gid://shopify/Location/${locationIdRaw}`;
             const mutation = `
                 mutation inventorySetOnHandQuantities {
                     inventorySetOnHandQuantities(input: {
