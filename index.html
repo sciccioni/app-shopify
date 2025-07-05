@@ -41,6 +41,14 @@
             border-left: 4px solid #ef4444;
             color: #991b1b;
         }
+        /* Stile per l'interruttore del filtro */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #4f46e5;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #4f46e5;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -199,8 +207,7 @@
         const pageIndicator = document.getElementById('page-indicator');
         const filterRadios = document.querySelectorAll('input[name="filter-type"]');
         const duplicateFilterContainer = document.getElementById('duplicate-filter-container');
-        const selectAllCheckbox = document.getElementById('select-all-checkbox');
-
+        
         let uploadedFile = null;
         let analysisResults = [];
         let duplicateRows = [];
@@ -255,7 +262,7 @@
             progressBar.style.width = `${percentage}%`;
         }
 
-        // Converte il numero seriale di Excel in una data YYYY-MM-DD
+        // Converte il numero seriale di Excel in una data
         function excelDateToJSDate(serial) {
             if (!serial || typeof serial !== 'number') return null;
             const utc_days  = Math.floor(serial - 25569);
@@ -665,6 +672,8 @@
 
         function renderTable(items, isDuplicateView) {
             resultsTableBody.innerHTML = '';
+            const selectAll = document.getElementById('select-all-checkbox');
+            
             if (isDuplicateView) {
                 resultsTableHead.innerHTML = `
                     <tr>
@@ -766,14 +775,16 @@
             });
         });
 
-        document.getElementById('select-all-checkbox').addEventListener('change', (e) => {
-            const isChecked = e.target.checked;
-            analysisResults.forEach(res => {
-                if (res.status === 'to-update') {
-                    res.selected = isChecked;
-                }
-            });
-            displayTablePage(currentPage);
+        resultsTableHead.addEventListener('change', (e) => {
+            if (e.target.id === 'select-all-checkbox') {
+                 const isChecked = e.target.checked;
+                analysisResults.forEach(res => {
+                    if (res.status === 'to-update') {
+                        res.selected = isChecked;
+                    }
+                });
+                displayTablePage(currentPage);
+            }
         });
 
         function updateUIState() {
@@ -791,7 +802,11 @@
             
             const updatableItemsOnPage = document.querySelectorAll('.row-checkbox');
             const allOnPageSelected = updatableItemsOnPage.length > 0 && Array.from(updatableItemsOnPage).every(cb => cb.checked);
-            selectAllCheckbox.checked = allOnPageSelected;
+            
+            const selectAll = document.getElementById('select-all-checkbox');
+            if (selectAll) {
+                selectAll.checked = allOnPageSelected;
+            }
         }
 
         function getStatusInfo(status) {
