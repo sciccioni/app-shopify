@@ -41,14 +41,6 @@
             border-left: 4px solid #ef4444;
             color: #991b1b;
         }
-        /* Stile per l'interruttore del filtro */
-        .toggle-checkbox:checked {
-            right: 0;
-            border-color: #4f46e5;
-        }
-        .toggle-checkbox:checked + .toggle-label {
-            background-color: #4f46e5;
-        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -124,13 +116,21 @@
                     <!-- Tabella con paginazione e filtri -->
                     <div id="table-container" class="hidden mt-6">
                         <div class="flex justify-between items-center mb-4">
-                            <div class="flex items-center space-x-2">
-                                <label for="filter-toggle" class="text-sm font-medium text-gray-700">Mostra solo prodotti da aggiornare:</label>
-                                <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                                    <input type="checkbox" name="filter-toggle" id="filter-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
-                                    <label for="filter-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                            <fieldset class="flex items-center space-x-4">
+                                <legend class="sr-only">Filtri di visualizzazione</legend>
+                                <div class="flex items-center">
+                                    <input id="filter-all" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" name="filter-type" type="radio" value="all" checked>
+                                    <label for="filter-all" class="ml-2 block text-sm font-medium text-gray-700">Tutti</label>
                                 </div>
-                            </div>
+                                <div class="flex items-center">
+                                    <input id="filter-toupdate" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" name="filter-type" type="radio" value="to-update">
+                                    <label for="filter-toupdate" class="ml-2 block text-sm font-medium text-gray-700">Da Aggiornare</label>
+                                </div>
+                                <div class="flex items-center">
+                                    <input id="filter-errors" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" name="filter-type" type="radio" value="error">
+                                    <label for="filter-errors" class="ml-2 block text-sm font-medium text-gray-700">Solo Errori</label>
+                                </div>
+                            </fieldset>
                             <button id="download-csv-button" class="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-800 text-sm transition-colors">
                                 Scarica Report Completo (CSV)
                             </button>
@@ -204,7 +204,7 @@
         const prevPageButton = document.getElementById('prev-page-button');
         const nextPageButton = document.getElementById('next-page-button');
         const pageIndicator = document.getElementById('page-indicator');
-        const filterToggle = document.getElementById('filter-toggle');
+        const filterRadios = document.querySelectorAll('input[name="filter-type"]');
         const selectAllCheckbox = document.getElementById('select-all-checkbox');
 
         let uploadedFile = null;
@@ -447,7 +447,7 @@
                 
                 if (analysisResults.length > 0) {
                     tableContainer.classList.remove('hidden');
-                    filterToggle.checked = false; 
+                    document.getElementById('filter-all').checked = true;
                     currentPage = 1;
                     displayTablePage(currentPage);
                 }
@@ -616,9 +616,13 @@
             currentPage = page;
             resultsTableBody.innerHTML = '';
             
-            const filteredResults = filterToggle.checked 
-                ? analysisResults.filter(r => r.status === 'to-update') 
-                : analysisResults;
+            const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
+            let filteredResults = analysisResults;
+            if (filterValue === 'to-update') {
+                filteredResults = analysisResults.filter(r => r.status === 'to-update');
+            } else if (filterValue === 'error') {
+                filteredResults = analysisResults.filter(r => r.status === 'error');
+            }
 
             const totalPages = Math.ceil(filteredResults.length / ROWS_PER_PAGE);
             
@@ -659,33 +663,44 @@
                 resultsTableBody.appendChild(row);
             });
 
-            document.querySelectorAll('.row-checkbox').forEach(checkbox => {
-                checkbox.addEventListener('change', (e) => {
-                    const item = analysisResults.find(r => r.minsan === e.target.dataset.minsan);
-                    if (item) item.selected = e.target.checked;
-                    updateUIState();
-                });
-            });
-
             pageIndicator.textContent = `Pagina ${page} di ${totalPages || 1}`;
             prevPageButton.disabled = page === 1;
             nextPageButton.disabled = page === totalPages || totalPages === 0;
             updateUIState();
         }
+        
+        resultsTableBody.addEventListener('change', (e) => {
+            if (e.target.classList.contains('row-checkbox')) {
+                const minsan = e.target.dataset.minsan;
+                const item = analysisResults.find(r => r.minsan === minsan);
+                if (item) {
+                    item.selected = e.target.checked;
+                }
+                updateUIState();
+            }
+        });
 
         prevPageButton.addEventListener('click', () => {
             if (currentPage > 1) displayTablePage(currentPage - 1);
         });
 
         nextPageButton.addEventListener('click', () => {
-            const filteredResults = filterToggle.checked ? analysisResults.filter(r => r.status === 'to-update') : analysisResults;
+            const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
+            let filteredResults = analysisResults;
+            if (filterValue === 'to-update') {
+                filteredResults = analysisResults.filter(r => r.status === 'to-update');
+            } else if (filterValue === 'error') {
+                filteredResults = analysisResults.filter(r => r.status === 'error');
+            }
             const totalPages = Math.ceil(filteredResults.length / ROWS_PER_PAGE);
             if (currentPage < totalPages) displayTablePage(currentPage + 1);
         });
 
-        filterToggle.addEventListener('change', () => {
-            currentPage = 1;
-            displayTablePage(currentPage);
+        filterRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                currentPage = 1;
+                displayTablePage(currentPage);
+            });
         });
 
         selectAllCheckbox.addEventListener('change', (e) => {
@@ -729,11 +744,10 @@
                 case 'to-update': return { label: 'Da Aggiornare', badgeClass: 'bg-blue-100 text-blue-800', icon: icons['to-update'], rowClass: 'bg-blue-50' };
                 case 'no-change': return { label: 'Nessuna Modifica', badgeClass: 'bg-gray-100 text-gray-800', icon: icons['no-change'], rowClass: '' };
                 case 'not-found': return { label: 'Non Trovato', badgeClass: 'bg-yellow-100 text-yellow-800', icon: icons['not-found'], rowClass: 'bg-yellow-50' };
-                case 'error': return { label: 'Errore API', badgeClass: 'bg-red-100 text-red-800', icon: icons.error, rowClass: 'bg-red-50' };
+                case 'error': return { label: 'Errore', badgeClass: 'bg-red-100 text-red-800', icon: icons.error, rowClass: 'bg-red-50' };
                 default: return { label: 'Sconosciuto', badgeClass: 'bg-gray-100 text-gray-800', icon: '', rowClass: '' };
             }
         }
     </script>
 </body>
 </html>
-```
