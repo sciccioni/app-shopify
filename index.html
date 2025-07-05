@@ -130,6 +130,10 @@
                                     <input id="filter-errors" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" name="filter-type" type="radio" value="error">
                                     <label for="filter-errors" class="ml-2 block text-sm font-medium text-gray-700">Solo Errori</label>
                                 </div>
+                                <div id="synced-filter-container" class="flex items-center hidden">
+                                    <input id="filter-synced" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" name="filter-type" type="radio" value="synced">
+                                    <label for="filter-synced" class="ml-2 block text-sm font-medium text-gray-700">Solo Sincronizzati</label>
+                                </div>
                                 <div id="duplicate-filter-container" class="flex items-center hidden">
                                     <input id="filter-duplicates" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" name="filter-type" type="radio" value="duplicates">
                                     <label for="filter-duplicates" class="ml-2 block text-sm font-medium text-gray-700">Solo Duplicati</label>
@@ -199,10 +203,12 @@
         const pageIndicator = document.getElementById('page-indicator');
         const filterRadios = document.querySelectorAll('input[name="filter-type"]');
         const duplicateFilterContainer = document.getElementById('duplicate-filter-container');
+        const syncedFilterContainer = document.getElementById('synced-filter-container');
         
         let uploadedFile = null;
         let analysisResults = [];
         let duplicateRows = [];
+        let fileDataRaw = [];
         let currentPage = 1;
         const ROWS_PER_PAGE = 100;
         
@@ -302,6 +308,7 @@
             syncActionArea.classList.add('hidden');
             tableContainer.classList.add('hidden');
             duplicateFilterContainer.classList.add('hidden');
+            if(syncedFilterContainer) syncedFilterContainer.classList.add('hidden');
             if(syncStatusMessage) syncStatusMessage.classList.add('hidden');
             if(syncStatusMessage) syncStatusMessage.textContent = '';
             summaryContainer.innerHTML = '';
@@ -316,7 +323,7 @@
                 const workbook = XLSX.read(data);
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
-                const fileDataRaw = XLSX.utils.sheet_to_json(worksheet);
+                fileDataRaw = XLSX.utils.sheet_to_json(worksheet);
 
                 // --- GESTIONE DUPLICATI ---
                 const skuMap = new Map();
@@ -444,16 +451,7 @@
                     analysisResults.push(resultRow);
                 }
 
-                displaySummary({ 
-                    rawTotal: fileDataRaw.length,
-                    total: analysisResults.length, 
-                    duplicates: duplicateRows.length,
-                    toUpdate: toUpdateCount, 
-                    notFound: notFoundCount, 
-                    noChange: noChangeCount, 
-                    errors: errorCount, 
-                    synced: 0 
-                });
+                displaySummary();
                 
                 if (analysisResults.length > 0) {
                     tableContainer.classList.remove('hidden');
@@ -556,12 +554,7 @@
                 if(item.selected) item.selected = false;
             });
 
-            const toUpdateCount = analysisResults.filter(r => r.status === 'to-update').length;
-            const notFoundCount = analysisResults.filter(r => r.status === 'not-found').length;
-            const noChangeCount = analysisResults.filter(r => r.status === 'no-change').length;
-            const errorCount = analysisResults.filter(r => r.status === 'error').length;
-            displaySummary({ total: analysisResults.length, toUpdate: toUpdateCount, notFound: notFoundCount, noChange: noChangeCount, errors: errorCount, synced: successCount, duplicates: duplicateRows.length, rawTotal: (fileDataRaw || []).length });
-
+            displaySummary();
             displayTablePage(currentPage);
             loader.classList.add('hidden');
             syncStatusMessage.classList.remove('hidden');
@@ -572,6 +565,9 @@
             } else {
                 syncStatusMessage.textContent = `Sincronizzazione completata con successo per ${successCount} prodotti!`;
                 syncStatusMessage.className = 'mt-4 text-center font-semibold text-green-700';
+            }
+            if (syncedFilterContainer && successCount > 0) {
+                syncedFilterContainer.classList.remove('hidden');
             }
             updateUIState();
         }
@@ -631,9 +627,19 @@
         }
         
         // --- FUNZIONI DI VISUALIZZAZIONE E PAGINAZIONE ---
-        function displaySummary(summary) {
+        function displaySummary() {
+            const summary = {
+                rawTotal: fileDataRaw.length,
+                total: analysisResults.length,
+                duplicates: duplicateRows.length,
+                toUpdate: analysisResults.filter(r => r.status === 'to-update').length,
+                synced: analysisResults.filter(r => r.status === 'success').length,
+                notFound: analysisResults.filter(r => r.status === 'not-found').length,
+                errors: analysisResults.filter(r => r.status === 'error').length
+            };
+
             summaryContainer.innerHTML = `
-                <div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.rawTotal}</p><p class="text-sm text-gray-600">Righe Totali nel File</p></div>
+                <div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.rawTotal}</p><p class="text-sm text-gray-600">Righe Totali</p></div>
                 <div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.total}</p><p class="text-sm text-gray-600">Prodotti Unici</p></div>
                 <div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.duplicates}</p><p class="text-sm text-yellow-700">Righe Duplicate</p></div>
                 <div class="bg-blue-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-blue-800">${summary.toUpdate}</p><p class="text-sm text-blue-700">Da Aggiornare</p></div>
@@ -645,7 +651,6 @@
 
         function displayTablePage(page) {
             currentPage = page;
-            resultsTableBody.innerHTML = '';
             
             const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
             let dataToDisplay = analysisResults;
@@ -658,6 +663,8 @@
             } else if (filterValue === 'duplicates') {
                 dataToDisplay = duplicateRows;
                 isDuplicateView = true;
+            } else if (filterValue === 'synced') {
+                dataToDisplay = analysisResults.filter(r => r.status === 'success');
             }
 
             const totalPages = Math.ceil(dataToDisplay.length / ROWS_PER_PAGE);
