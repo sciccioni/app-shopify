@@ -41,14 +41,6 @@
             border-left: 4px solid #ef4444;
             color: #991b1b;
         }
-        /* Stile per l'interruttore del filtro */
-        .toggle-checkbox:checked {
-            right: 0;
-            border-color: #4f46e5;
-        }
-        .toggle-checkbox:checked + .toggle-label {
-            background-color: #4f46e5;
-        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -104,7 +96,7 @@
                     <div id="progress-bar-container" class="w-full bg-gray-200 rounded-full h-2.5 mb-4 hidden">
                         <div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
                     </div>
-                    <div id="summary" class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6"></div>
+                    <div id="summary" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6"></div>
                     
                     <div id="sync-action-area" class="mt-6 p-4 border-t border-b border-gray-200 hidden">
                         <div class="flex flex-col md:flex-row items-center justify-center gap-4">
@@ -452,7 +444,16 @@
                     analysisResults.push(resultRow);
                 }
 
-                displaySummary({ total: analysisResults.length, toUpdate: toUpdateCount, notFound: notFoundCount, noChange: noChangeCount, errors: errorCount, synced: 0 });
+                displaySummary({ 
+                    rawTotal: fileDataRaw.length,
+                    total: analysisResults.length, 
+                    duplicates: duplicateRows.length,
+                    toUpdate: toUpdateCount, 
+                    notFound: notFoundCount, 
+                    noChange: noChangeCount, 
+                    errors: errorCount, 
+                    synced: 0 
+                });
                 
                 if (analysisResults.length > 0) {
                     tableContainer.classList.remove('hidden');
@@ -559,7 +560,7 @@
             const notFoundCount = analysisResults.filter(r => r.status === 'not-found').length;
             const noChangeCount = analysisResults.filter(r => r.status === 'no-change').length;
             const errorCount = analysisResults.filter(r => r.status === 'error').length;
-            displaySummary({ total: analysisResults.length, toUpdate: toUpdateCount, notFound: notFoundCount, noChange: noChangeCount, errors: errorCount, synced: successCount });
+            displaySummary({ total: analysisResults.length, toUpdate: toUpdateCount, notFound: notFoundCount, noChange: noChangeCount, errors: errorCount, synced: successCount, duplicates: duplicateRows.length, rawTotal: (fileDataRaw || []).length });
 
             displayTablePage(currentPage);
             loader.classList.add('hidden');
@@ -632,7 +633,9 @@
         // --- FUNZIONI DI VISUALIZZAZIONE E PAGINAZIONE ---
         function displaySummary(summary) {
             summaryContainer.innerHTML = `
-                <div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.total}</p><p class="text-sm text-gray-600">Prodotti nel File</p></div>
+                <div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.rawTotal}</p><p class="text-sm text-gray-600">Righe Totali nel File</p></div>
+                <div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.total}</p><p class="text-sm text-gray-600">Prodotti Unici</p></div>
+                <div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.duplicates}</p><p class="text-sm text-yellow-700">Righe Duplicate</p></div>
                 <div class="bg-blue-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-blue-800">${summary.toUpdate}</p><p class="text-sm text-blue-700">Da Aggiornare</p></div>
                 <div class="bg-green-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-green-800">${summary.synced}</p><p class="text-sm text-green-700">Sincronizzati</p></div>
                 <div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.notFound}</p><p class="text-sm text-yellow-700">Non Trovati</p></div>
