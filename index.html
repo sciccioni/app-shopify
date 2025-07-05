@@ -130,27 +130,19 @@
                                     <input id="filter-errors" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" name="filter-type" type="radio" value="error">
                                     <label for="filter-errors" class="ml-2 block text-sm font-medium text-gray-700">Solo Errori</label>
                                 </div>
+                                <div id="duplicate-filter-container" class="flex items-center hidden">
+                                    <input id="filter-duplicates" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" name="filter-type" type="radio" value="duplicates">
+                                    <label for="filter-duplicates" class="ml-2 block text-sm font-medium text-gray-700">Solo Duplicati</label>
+                                </div>
                             </fieldset>
                             <button id="download-csv-button" class="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-800 text-sm transition-colors">
-                                Scarica Report Completo (CSV)
+                                Scarica Report
                             </button>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            <input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
-                                        </th>
-                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Minsan/SKU</th>
-                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">Descrizione Prodotto</th>
-                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giac. Shopify</th>
-                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giac. File</th>
-                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scad. Shopify</th>
-                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scad. File</th>
-                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th>
-                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dettagli</th>
-                                    </tr>
+                                <thead id="results-table-head" class="bg-gray-50">
+                                    <!-- Headers generati da JS -->
                                 </thead>
                                 <tbody id="results-table-body" class="bg-white divide-y divide-gray-200"></tbody>
                             </table>
@@ -200,15 +192,18 @@
         const progressBar = document.getElementById('progress-bar');
         const downloadCsvButton = document.getElementById('download-csv-button');
         const tableContainer = document.getElementById('table-container');
+        const resultsTableHead = document.getElementById('results-table-head');
         const resultsTableBody = document.getElementById('results-table-body');
         const prevPageButton = document.getElementById('prev-page-button');
         const nextPageButton = document.getElementById('next-page-button');
         const pageIndicator = document.getElementById('page-indicator');
         const filterRadios = document.querySelectorAll('input[name="filter-type"]');
+        const duplicateFilterContainer = document.getElementById('duplicate-filter-container');
         const selectAllCheckbox = document.getElementById('select-all-checkbox');
 
         let uploadedFile = null;
         let analysisResults = [];
+        let duplicateRows = [];
         let currentPage = 1;
         const ROWS_PER_PAGE = 100;
         
@@ -307,6 +302,7 @@
             resultsSection.classList.remove('hidden');
             syncActionArea.classList.add('hidden');
             tableContainer.classList.add('hidden');
+            duplicateFilterContainer.classList.add('hidden');
             if(syncStatusMessage) syncStatusMessage.classList.add('hidden');
             if(syncStatusMessage) syncStatusMessage.textContent = '';
             summaryContainer.innerHTML = '';
@@ -336,33 +332,29 @@
                 });
 
                 const fileData = [];
-                let duplicateInfo = [];
+                duplicateRows = [];
                 skuMap.forEach((rows, sku) => {
                     if (rows.length > 1) {
+                        duplicateRows.push(...rows.map(r => ({...r, Minsan: sku}))); 
+
                         const giacenze = rows.map(r => parseInt(r.Giacenza, 10) || 0);
                         const giacenzeCorrette = giacenze.map(g => g < 0 ? 0 : g);
                         const totalGiacenza = giacenzeCorrette.reduce((sum, g) => sum + g, 0);
                         
-                        const scadenze = rows.map(r => r.Scadenza).filter(Boolean);
+                        const scadenze = rows.map(r => excelDateToJSDate(r.Scadenza)).filter(Boolean);
                         const firstExpiry = scadenze.length > 0 ? scadenze[0] : null;
                         const allSameExpiry = scadenze.every(s => s === firstExpiry);
                         const finalExpiry = allSameExpiry ? firstExpiry : null;
 
-                        const consolidatedRow = { ...rows[0], Giacenza: totalGiacenza, Scadenza: finalExpiry };
+                        const consolidatedRow = { ...rows[0], Giacenza: totalGiacenza, Scadenza: finalExpiry, isDuplicate: true, duplicateDetails: { giacenze, scadenze } };
                         fileData.push(consolidatedRow);
-
-                        let details = `SKU ${sku}: Trovati ${rows.length} duplicati. Giacenze (${giacenze.join(', ')}) corrette in (${giacenzeCorrette.join(', ')}) e sommate a ${totalGiacenza}.`;
-                        if (!allSameExpiry && scadenze.length > 0) {
-                            details += ` Scadenze diverse trovate: [${scadenze.map(s => excelDateToJSDate(s)).join(', ')}], non verrà aggiornata.`;
-                        }
-                        duplicateInfo.push(details);
                     } else {
                         fileData.push(rows[0]);
                     }
                 });
 
-                if (duplicateInfo.length > 0) {
-                    showErrorMessage(`<strong>Attenzione, trovati duplicati:</strong><br>${duplicateInfo.join('<br>')}`);
+                if (duplicateRows.length > 0) {
+                    duplicateFilterContainer.classList.remove('hidden');
                 }
                 // --- FINE GESTIONE DUPLICATI ---
 
@@ -414,25 +406,35 @@
                         if (productOnShopify) {
                             resultRow = { ...resultRow, ...productOnShopify };
                             
-                            const finalGiacenza = Math.max(0, giacenzaFile);
-                            const quantityChanged = finalGiacenza !== productOnShopify.inventory_quantity;
-                            const expiryChanged = scadenzaFile && (scadenzaFile !== productOnShopify.expiry_date);
-                            
                             if (productOnShopify.inventory_quantity <= 0 && giacenzaFile < 0) {
                                 errorCount++;
                                 resultRow.status = 'error';
                                 resultRow.details = 'Giacenza a zero non può essere decrementata.';
-                            } else if (quantityChanged || expiryChanged) {
-                                toUpdateCount++;
-                                resultRow.status = 'to-update';
-                                resultRow.details = `Pronto per aggiornare.`;
-                                if (giacenzaFile < 0) {
-                                    resultRow.details += ` Giacenza negativa (${giacenzaFile}) sarà impostata a 0.`;
-                                }
+                            } else if (row.isDuplicate && !scadenzaFile) {
+                                errorCount++;
+                                resultRow.status = 'error';
+                                resultRow.details = `Scadenze diverse per SKU duplicato: [${row.duplicateDetails.scadenze.join(', ')}]`;
                             } else {
-                                noChangeCount++;
-                                resultRow.status = 'no-change';
-                                resultRow.details = `Giacenza e scadenza già corrette.`;
+                                const finalGiacenza = Math.max(0, giacenzaFile);
+                                const quantityChanged = finalGiacenza !== productOnShopify.inventory_quantity;
+                                const expiryChanged = scadenzaFile && (scadenzaFile !== productOnShopify.expiry_date);
+                                
+                                if (quantityChanged || expiryChanged) {
+                                    toUpdateCount++;
+                                    resultRow.status = 'to-update';
+                                    let detailsText = ['Pronto per aggiornare.'];
+                                    if(row.isDuplicate) {
+                                        detailsText.push(`Giacenze (${row.duplicateDetails.giacenze.join(', ')}) corrette e sommate.`);
+                                    }
+                                    if (giacenzaFile < 0) {
+                                        detailsText.push(`Giacenza negativa (${giacenzaFile}) sarà impostata a 0.`);
+                                    }
+                                    resultRow.details = detailsText.join(' ');
+                                } else {
+                                    noChangeCount++;
+                                    resultRow.status = 'no-change';
+                                    resultRow.details = `Giacenza e scadenza già corrette.`;
+                                }
                             }
                         } else {
                             notFoundCount++;
@@ -443,7 +445,7 @@
                     analysisResults.push(resultRow);
                 }
 
-                displaySummary({ total: fileData.length, toUpdate: toUpdateCount, notFound: notFoundCount, noChange: noChangeCount, errors: errorCount, synced: 0 });
+                displaySummary({ total: analysisResults.length, toUpdate: toUpdateCount, notFound: notFoundCount, noChange: noChangeCount, errors: errorCount, synced: 0 });
                 
                 if (analysisResults.length > 0) {
                     tableContainer.classList.remove('hidden');
@@ -452,7 +454,6 @@
                     displayTablePage(currentPage);
                 }
                 
-                downloadCsvButton.parentElement.classList.remove('hidden');
                 if (toUpdateCount > 0) {
                     syncActionArea.classList.remove('hidden');
                 }
@@ -571,22 +572,42 @@
         downloadCsvButton.addEventListener('click', downloadCSV);
 
         function downloadCSV() {
-            if (analysisResults.length === 0) return;
+            const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
+            let dataToExport = analysisResults;
+            let headers = ['Minsan_SKU', 'Descrizione_Prodotto', 'Giacenza_Shopify', 'Giacenza_File', 'Scadenza_Shopify', 'Scadenza_File', 'Stato_Analisi', 'Dettagli'];
+            let filename = 'report_completo.csv';
 
-            const headers = ['Minsan_SKU', 'Descrizione_Prodotto', 'Giacenza_Shopify', 'Giacenza_File', 'Scadenza_Shopify', 'Scadenza_File', 'Stato_Analisi', 'Dettagli'];
+            if (filterValue === 'duplicates') {
+                dataToExport = duplicateRows;
+                headers = ['Minsan_SKU', 'Descrizione', 'Giacenza', 'Scadenza'];
+                filename = 'report_duplicati.csv';
+            }
+            
+            if (dataToExport.length === 0) return;
+
             const csvRows = [headers.join(';')];
 
-            for (const res of analysisResults) {
-                const row = [
-                    res.minsan || '',
-                    `"${(res.title || res.descrizione || '').replace(/"/g, '""')}"`,
-                    res.inventory_quantity !== undefined ? res.inventory_quantity : 'N/D',
-                    res.giacenzaFile,
-                    res.expiry_date || 'N/D',
-                    res.scadenzaFile || 'N/D',
-                    res.status,
-                    `"${(res.details || '').replace(/"/g, '""')}"`
-                ];
+            for (const res of dataToExport) {
+                let row;
+                if(filterValue === 'duplicates') {
+                     row = [
+                        res.Minsan || '',
+                        `"${(res.Descrizione || '').replace(/"/g, '""')}"`,
+                        res.Giacenza,
+                        excelDateToJSDate(res.Scadenza) || 'N/D'
+                    ];
+                } else {
+                     row = [
+                        res.minsan || '',
+                        `"${(res.title || res.descrizione || '').replace(/"/g, '""')}"`,
+                        res.inventory_quantity !== undefined ? res.inventory_quantity : 'N/D',
+                        res.giacenzaFile,
+                        res.expiry_date || 'N/D',
+                        res.scadenzaFile || 'N/D',
+                        res.status,
+                        `"${(res.details || '').replace(/"/g, '""')}"`
+                    ];
+                }
                 csvRows.push(row.join(';'));
             }
 
@@ -595,7 +616,7 @@
 
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = 'report_sincronizzazione.csv';
+            link.download = filename;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -617,56 +638,99 @@
             resultsTableBody.innerHTML = '';
             
             const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
-            let filteredResults = analysisResults;
+            let dataToDisplay = analysisResults;
+            let isDuplicateView = false;
+
             if (filterValue === 'to-update') {
-                filteredResults = analysisResults.filter(r => r.status === 'to-update');
+                dataToDisplay = analysisResults.filter(r => r.status === 'to-update');
             } else if (filterValue === 'error') {
-                filteredResults = analysisResults.filter(r => r.status === 'error');
+                dataToDisplay = analysisResults.filter(r => r.status === 'error');
+            } else if (filterValue === 'duplicates') {
+                dataToDisplay = duplicateRows;
+                isDuplicateView = true;
             }
 
-            const totalPages = Math.ceil(filteredResults.length / ROWS_PER_PAGE);
-            
+            const totalPages = Math.ceil(dataToDisplay.length / ROWS_PER_PAGE);
             const start = (page - 1) * ROWS_PER_PAGE;
             const end = start + ROWS_PER_PAGE;
-            const paginatedItems = filteredResults.slice(start, end);
+            const paginatedItems = dataToDisplay.slice(start, end);
 
-            paginatedItems.forEach(res => {
-                const statusInfo = getStatusInfo(res.status);
-                const row = document.createElement('tr');
-                row.className = statusInfo.rowClass;
-
-                let checkboxHTML = '<td class="px-2 py-4 whitespace-nowrap text-xs"></td>';
-                if (res.status === 'to-update') {
-                    checkboxHTML = `
-                        <td class="px-2 py-4 whitespace-nowrap text-xs">
-                            <input type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded row-checkbox" 
-                                   data-minsan="${res.minsan}" ${res.selected ? 'checked' : ''}>
-                        </td>
-                    `;
-                }
-                
-                row.innerHTML = `
-                    ${checkboxHTML}
-                    <td class="px-3 py-4 whitespace-nowrap text-xs font-medium text-gray-900">${res.minsan}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.title || res.descrizione}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-500">${res.inventory_quantity !== undefined ? res.inventory_quantity : 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs font-semibold text-gray-900">${res.giacenzaFile}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-500">${res.expiry_date || 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs font-semibold text-gray-900">${res.scadenzaFile || 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs font-medium">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${statusInfo.badgeClass}">
-                            ${statusInfo.icon} ${statusInfo.label}
-                        </span>
-                    </td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.details || ''}</td>
-                `;
-                resultsTableBody.appendChild(row);
-            });
+            renderTable(paginatedItems, isDuplicateView);
 
             pageIndicator.textContent = `Pagina ${page} di ${totalPages || 1}`;
             prevPageButton.disabled = page === 1;
             nextPageButton.disabled = page === totalPages || totalPages === 0;
             updateUIState();
+        }
+
+        function renderTable(items, isDuplicateView) {
+            resultsTableBody.innerHTML = '';
+            if (isDuplicateView) {
+                resultsTableHead.innerHTML = `
+                    <tr>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Minsan/SKU</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrizione</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giacenza</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scadenza</th>
+                    </tr>`;
+                items.forEach(res => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-3 py-4 whitespace-nowrap text-xs font-medium text-gray-900">${res.Minsan || res.EAN}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.Descrizione}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs font-semibold text-gray-900">${res.Giacenza}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-500">${excelDateToJSDate(res.Scadenza) || 'N/D'}</td>
+                    `;
+                    resultsTableBody.appendChild(row);
+                });
+            } else {
+                 resultsTableHead.innerHTML = `
+                    <tr>
+                        <th class="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                        </th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Minsan/SKU</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">Descrizione Prodotto</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giac. Shopify</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Giac. File</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scad. Shopify</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scad. File</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th>
+                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dettagli</th>
+                    </tr>`;
+                items.forEach(res => {
+                    const statusInfo = getStatusInfo(res.status);
+                    const row = document.createElement('tr');
+                    row.className = statusInfo.rowClass;
+
+                    let checkboxHTML = '<td class="px-2 py-4 whitespace-nowrap text-xs"></td>';
+                    if (res.status === 'to-update') {
+                        checkboxHTML = `
+                            <td class="px-2 py-4 whitespace-nowrap text-xs">
+                                <input type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded row-checkbox" 
+                                       data-minsan="${res.minsan}" ${res.selected ? 'checked' : ''}>
+                            </td>
+                        `;
+                    }
+                    
+                    row.innerHTML = `
+                        ${checkboxHTML}
+                        <td class="px-3 py-4 whitespace-nowrap text-xs font-medium text-gray-900">${res.minsan}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.title || res.descrizione}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-500">${res.inventory_quantity !== undefined ? res.inventory_quantity : 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs font-semibold text-gray-900">${res.giacenzaFile}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-500">${res.expiry_date || 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs font-semibold text-gray-900">${res.scadenzaFile || 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs font-medium">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${statusInfo.badgeClass}">
+                                ${statusInfo.icon} ${statusInfo.label}
+                            </span>
+                        </td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.details || ''}</td>
+                    `;
+                    resultsTableBody.appendChild(row);
+                });
+            }
         }
         
         resultsTableBody.addEventListener('change', (e) => {
@@ -686,13 +750,12 @@
 
         nextPageButton.addEventListener('click', () => {
             const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
-            let filteredResults = analysisResults;
-            if (filterValue === 'to-update') {
-                filteredResults = analysisResults.filter(r => r.status === 'to-update');
-            } else if (filterValue === 'error') {
-                filteredResults = analysisResults.filter(r => r.status === 'error');
-            }
-            const totalPages = Math.ceil(filteredResults.length / ROWS_PER_PAGE);
+            let dataToPaginate = analysisResults;
+            if (filterValue === 'to-update') dataToPaginate = analysisResults.filter(r => r.status === 'to-update');
+            else if (filterValue === 'error') dataToPaginate = analysisResults.filter(r => r.status === 'error');
+            else if (filterValue === 'duplicates') dataToPaginate = duplicateRows;
+            
+            const totalPages = Math.ceil(dataToPaginate.length / ROWS_PER_PAGE);
             if (currentPage < totalPages) displayTablePage(currentPage + 1);
         });
 
@@ -703,7 +766,7 @@
             });
         });
 
-        selectAllCheckbox.addEventListener('change', (e) => {
+        document.getElementById('select-all-checkbox').addEventListener('change', (e) => {
             const isChecked = e.target.checked;
             analysisResults.forEach(res => {
                 if (res.status === 'to-update') {
