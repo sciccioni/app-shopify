@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -8,22 +9,34 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s; }
+        .dark body { background-color: #111827; color: #d1d5db; }
+        .dark .bg-white { background-color: #1f2937; border-color: #374151; }
+        .dark .bg-gray-50 { background-color: #374151; }
+        .dark .text-gray-900 { color: #f9fafb; }
+        .dark .text-gray-600 { color: #9ca3af; }
+        .dark .text-gray-800 { color: #e5e7eb; }
+        .dark .border-gray-200 { border-color: #374151; }
+        .dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #374151; }
+        .dark input, .dark select { background-color: #374151; color: #f9fafb; border-color: #4b5563; }
+        .dark .price-shopify { background-color: #374151; }
+        .dark .price-calculated { background-color: #312e81; color: #e0e7ff; }
+        .dark .status-success { background-color: #14532d !important; }
+        .dark .status-error { background-color: #7f1d1d !important; }
+        .dark .status-to-update { background-color: #1e3a8a !important; }
+        .dark .status-not-found { background-color: #713f12 !important; }
+
         .drop-zone { border: 2px dashed #cbd5e1; transition: all 0.2s; }
-        .drop-zone.drag-over { background-color: #e2e8f0; border-color: #94a3b8; }
+        .dark .drop-zone { border-color: #4b5563; }
+        .drop-zone.drag-over { background-color: #e2e8f0; }
+        .dark .drop-zone.drag-over { background-color: #374151; }
         .loader { border-top-color: #4f46e5; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .tab-button { padding: 0.75rem 1.5rem; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
         .tab-button.active { color: #4f46e5; border-bottom-color: #4f46e5; font-weight: 600; }
-        .price-calculated { background-color: #e0e7ff; font-weight: 600; color: #3730a3; }
-        .price-shopify { background-color: #f3f4f6; }
-        .status-success { background-color: #dcfce7 !important; }
-        .status-error { background-color: #fee2e2 !important; }
-        .status-to-update { background-color: #d0e1fd !important; }
-        .status-not-found { background-color: #fef9c3 !important; }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800">
+<body>
 
     <!-- Schermata di Login -->
     <div id="password-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50">
@@ -42,7 +55,13 @@
                 <h1 class="text-4xl font-bold text-gray-900">App Gestione Shopify</h1>
                 <p class="text-gray-600 mt-2">Un unico strumento per gestire prezzi e giacenze.</p>
             </div>
-            <button id="logout-button" class="bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600">Logout</button>
+            <div class="flex items-center gap-4">
+                 <button id="theme-toggle" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700">
+                    <svg id="theme-toggle-dark-icon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                    <svg id="theme-toggle-light-icon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm-.707 10.607a1 1 0 011.414 0l.707-.707a1 1 0 111.414 1.414l-.707.707a1 1 0 01-1.414 0zM17 17a1 1 0 11-1.414 1.414l-.707-.707a1 1 0 111.414-1.414l.707.707zM3 11a1 1 0 100-2H2a1 1 0 100 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+                </button>
+                <button id="logout-button" class="bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600">Logout</button>
+            </div>
         </header>
 
         <!-- Navigazione a Schede -->
@@ -55,7 +74,6 @@
 
         <!-- Contenuto Principale -->
         <main class="space-y-8">
-            <!-- Sezione Caricamento File (Condivisa) -->
             <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <h2 class="text-xl font-semibold mb-4 text-gray-800">1. Carica il File Dati</h2>
                 <div id="drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
@@ -75,7 +93,6 @@
                 <p id="general-error-text"></p>
             </div>
 
-            <!-- Contenuto Scheda GESTIONE PREZZI -->
             <div id="prices-tab-content">
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -103,7 +120,6 @@
                 </div>
             </div>
 
-            <!-- Contenuto Scheda SINC. GIACENZE -->
             <div id="inventory-tab-content" class="hidden">
                  <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                     <h2 class="text-xl font-semibold mb-4 text-gray-800">2. Sincronizza Giacenze</h2>
@@ -115,7 +131,6 @@
                 </div>
             </div>
             
-            <!-- Tabella Dati (Condivisa) -->
             <div id="results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden">
                  <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
                     <h2 id="table-title" class="text-xl font-semibold text-gray-800">Elenco Prodotti</h2>
@@ -142,6 +157,7 @@
         const passwordError = document.getElementById('password-error');
         const appContainer = document.getElementById('app-container');
         const logoutButton = document.getElementById('logout-button');
+        const themeToggle = document.getElementById('theme-toggle');
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
         const fileNameDisplay = document.getElementById('file-name');
@@ -183,6 +199,41 @@
             passwordOverlay.classList.add('hidden');
             appContainer.classList.remove('hidden');
         }
+        
+        // Dark Mode
+        const lightIcon = document.getElementById('theme-toggle-light-icon');
+        const darkIcon = document.getElementById('theme-toggle-dark-icon');
+
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+            lightIcon.classList.remove('hidden');
+        } else {
+            document.documentElement.classList.remove('dark');
+            darkIcon.classList.remove('hidden');
+        }
+        
+        themeToggle.addEventListener('click', () => {
+            lightIcon.classList.toggle('hidden');
+            darkIcon.classList.toggle('hidden');
+            if (localStorage.getItem('color-theme')) {
+                if (localStorage.getItem('color-theme') === 'light') {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                }
+            } else {
+                if (document.documentElement.classList.contains('dark')) {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                } else {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                }
+            }
+        });
+
 
         // --- FUNZIONI PRINCIPALI ---
 
@@ -250,7 +301,7 @@
                         });
 
                         const allSkus = Array.from(inventoryMap.keys());
-                        const CHUNK_SIZE = 50; // Pacchetti più piccoli per evitare timeout
+                        const CHUNK_SIZE = 100;
                         let allShopifyData = [];
                         for (let i = 0; i < allSkus.length; i += CHUNK_SIZE) {
                             const chunk = allSkus.slice(i, i + CHUNK_SIZE);
@@ -261,7 +312,7 @@
                             try {
                                 const response = await callBackend({ action: 'get-initial-data', skus: chunk });
                                 allShopifyData = allShopifyData.concat(response.results);
-                                if (totalChunks > 1) await new Promise(resolve => setTimeout(resolve, 500)); // Pausa aumentata
+                                if (totalChunks > 1) await new Promise(resolve => setTimeout(resolve, 500));
                             } catch (error) {
                                 throw new Error(`Timeout o errore durante il recupero del pacchetto ${chunkNumber}. Dettagli: ${error.message}`);
                             }
