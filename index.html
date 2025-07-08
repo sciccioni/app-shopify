@@ -446,14 +446,24 @@
                                         toUpdateCount++;
                                         resultRow.status = 'to-update';
                                         let detailsText = [];
+                                        
+                                        // ===== MODIFICA PER DETTAGLI SCADENZE MULTIPLE =====
                                         if (row.isDuplicate) {
-                                            const giacenzeList = row.duplicateDetails.giacenze.join(', ');
-                                            const scadenzeList = row.duplicateDetails.scadenze.length > 0 ? row.duplicateDetails.scadenze.join(', ') : 'Nessuna';
-                                            detailsText.push(`Duplicato: Giacenze [${giacenzeList}] - Scadenze [${scadenzeList}].`);
+                                            let duplicateDetailString = `Giacenze sommate [${row.duplicateDetails.giacenze.join(', ')}].`;
+                                            const scadenzeList = row.duplicateDetails.scadenze;
+                                            if (scadenzeList.length > 1) {
+                                                duplicateDetailString += ` Scadenze multiple [${scadenzeList.join(', ')}], selezionata la più corta: ${scadenzaFile}.`;
+                                            } else if (scadenzeList.length === 1) {
+                                                duplicateDetailString += ` Unica scadenza trovata: ${scadenzeList[0]}.`;
+                                            }
+                                            detailsText.push(duplicateDetailString);
                                         }
+                                        // ===== FINE MODIFICA =====
+
                                         if (giacenzaFile < 0) detailsText.push(`Giacenza negativa (${giacenzaFile}) corretta a 0.`);
                                         if (detailsText.length === 0) detailsText.push('Pronto per l\'aggiornamento.');
                                         resultRow.details = detailsText.join(' ');
+
                                     } else {
                                         noChangeCount++;
                                         resultRow.status = 'no-change';
@@ -721,7 +731,7 @@
                         th.className = "px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider";
                         th.textContent = header;
                         headerRow.appendChild(th);
-});
+                    });
                     verifyTableHead.appendChild(headerRow);
 
                     // Crea Righe
