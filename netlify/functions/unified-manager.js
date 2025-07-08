@@ -41,11 +41,12 @@ async function callShopifyApi(query) {
 
 // Handler principale della funzione Netlify
 exports.handler = async (event) => {
-    if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: 'Method Not Allowed' };
-    }
+    // Funzione interna che contiene la logica principale
+    const mainLogic = async () => {
+        if (event.httpMethod !== 'POST') {
+            return { statusCode: 405, body: 'Method Not Allowed' };
+        }
 
-    try {
         const payload = JSON.parse(event.body);
 
         switch (payload.action) {
@@ -72,8 +73,16 @@ exports.handler = async (event) => {
             default:
                 return { statusCode: 400, body: JSON.stringify({ error: 'Azione non riconosciuta' }) };
         }
+    };
+    
+    // Watchdog per il timeout, ispirato al tuo file funzionante
+    try {
+        const watchdog = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Timeout della funzione superato (10s). Il pacchetto di dati potrebbe essere troppo grande.")), 9500)
+        );
+        return await Promise.race([mainLogic(), watchdog]);
     } catch (error) {
-        console.error('Errore nel backend:', error.message);
+        console.error('Errore nel backend o timeout:', error.message);
         return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
     }
 };
