@@ -653,19 +653,26 @@
         }
         async function callBackend(payload) {
             const token = sessionStorage.getItem('authToken');
-            if (!token) {
+            if (payload.action !== 'login' && !token) {
                 showError("Sessione scaduta o non valida. Effettua nuovamente il login.");
                 passwordOverlay.classList.remove('hidden');
                 throw new Error("Token di autenticazione non presente.");
             }
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
             const response = await fetch('/.netlify/functions/unified-manager', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                headers: headers,
                 body: JSON.stringify(payload)
             });
+            
             const data = await response.json();
             if (!response.ok) {
-                if (response.status === 401) handleLogout();
+                if (response.status === 401 && payload.action !== 'login') handleLogout();
                 throw new Error(data.error || `Errore del server: ${response.statusText}`);
             }
             return data;
