@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Gestione Shopify</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .drop-zone { border: 2px dashed #cbd5e1; transition: all 0.2s; }
+        .drop-zone.drag-over { background-color: #e2e8f0; border-color: #94a3b8; }
+        .loader { border-top-color: #4f46e5; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .tab-button { padding: 0.75rem 1.5rem; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
+        .tab-button.active { color: #4f46e5; border-bottom-color: #4f46e5; font-weight: 600; }
+        .price-calculated { background-color: #e0e7ff; font-weight: 600; color: #3730a3; }
+        .price-shopify { background-color: #f3f4f6; }
+        .status-success { background-color: #dcfce7 !important; }
+        .status-error { background-color: #fee2e2 !important; }
+        .status-to-update { background-color: #e0e7ff !important; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <!-- Schermata di Login -->
+    <div id="password-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm text-center">
+            <h2 class="text-2xl font-bold mb-4">Accesso Riservato</h2>
+            <input type="password" id="password-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4" placeholder="Chiave di accesso">
+            <button id="login-button" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700">Accedi</button>
+            <p id="password-error" class="text-red-500 text-sm mt-4 hidden"></p>
+        </div>
+    </div>
+
+    <!-- Contenitore Principale App -->
+    <div id="app-container" class="hidden container mx-auto p-4 md:p-8 max-w-full">
+        <header class="mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">App Gestione Shopify</h1>
+            <p class="text-gray-600 mt-2">Un unico strumento per gestire prezzi e giacenze.</p>
+        </header>
+
+        <!-- Navigazione a Schede -->
+        <div class="border-b border-gray-200 mb-6">
+            <nav class="flex -mb-px">
+                <button id="prices-tab-button" class="tab-button active">Gestione Prezzi</button>
+                <button id="inventory-tab-button" class="tab-button">Sincronizzazione Giacenze</button>
+            </nav>
+        </div>
+
+        <!-- Contenuto Principale -->
+        <main class="space-y-8">
+            <!-- Sezione Caricamento File (Condivisa) -->
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">1. Carica il File Dati</h2>
+                <div id="drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
+                    <input type="file" id="file-input" class="hidden" accept=".xlsx, .xls, .csv">
+                    <p id="drop-zone-text">Trascina qui il file o <span class="font-semibold text-indigo-600">clicca per selezionarlo</span>.</p>
+                    <p id="file-name" class="text-sm text-gray-500 mt-2 font-medium"></p>
+                </div>
+            </div>
+
+            <div id="loader" class="text-center p-8 hidden">
+                <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto"></div>
+                <p id="loader-text" class="mt-4 text-gray-600">Elaborazione in corso...</p>
+            </div>
+            
+            <div id="general-error-box" class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
+                <p class="font-bold">Errore</p>
+                <p id="general-error-text"></p>
+            </div>
+
+            <!-- Contenuto Scheda GESTIONE PREZZI -->
+            <div id="prices-tab-content">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-800">2. Imposta Ricarica</h2>
+                        <div class="space-y-4">
+                            <input type="number" id="markup-percentage" value="30" class="mt-1 block w-full px-3 py-2 border rounded-md">
+                            <fieldset class="space-y-2">
+                                <input id="calc-all-filtered" name="calculation_scope" type="radio" value="all" checked>
+                                <label for="calc-all-filtered">Tutti i prodotti filtrati</label><br>
+                                <input id="calc-only-selected" name="calculation_scope" type="radio" value="selected">
+                                <label for="calc-only-selected">Solo i prodotti selezionati</label>
+                            </fieldset>
+                            <button id="calculate-prices-button" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg" disabled>Calcola Prezzi</button>
+                            <button id="clear-prices-button" class="w-full bg-red-100 text-red-700 font-bold py-2 px-4 rounded-lg" disabled>Azzera Prezzi Calcolati</button>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-800">3. Aggiorna su Shopify</h2>
+                        <div class="space-y-4">
+                            <input id="confirm-update-prices-checkbox" type="checkbox" disabled>
+                            <label for="confirm-update-prices-checkbox">Confermo di voler aggiornare i prezzi.</label>
+                            <button id="update-prices-button" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg" disabled>Aggiorna Prezzi</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contenuto Scheda SINC. GIACENZE -->
+            <div id="inventory-tab-content" class="hidden">
+                 <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">2. Sincronizza Giacenze</h2>
+                    <div class="space-y-4">
+                        <input id="confirm-sync-inventory-checkbox" type="checkbox" disabled>
+                        <label for="confirm-sync-inventory-checkbox">Confermo di voler aggiornare giacenze e scadenze.</label>
+                        <button id="sync-inventory-button" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg" disabled>Sincronizza Selezionati</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tabella Dati (Condivisa) -->
+            <div id="results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden">
+                 <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                    <h2 id="table-title" class="text-xl font-semibold text-gray-800">Elenco Prodotti</h2>
+                    <div class="flex items-center gap-4 w-full md:w-auto flex-wrap">
+                        <select id="ditta-filter" class="w-full px-4 py-2 border rounded-lg"></select>
+                        <input type="search" id="search-input" class="w-full px-4 py-2 border rounded-lg" placeholder="Cerca...">
+                        <div id="show-modified-filter-container">
+                            <input id="show-modified-filter" type="checkbox">
+                            <label for="show-modified-filter">Mostra solo con prezzo calcolato</label>
+                        </div>
+                    </div>
+                </div>
+                <div id="summary-section" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4"></div>
+                <div id="table-container" class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead id="results-table-head" class="bg-gray-50"></thead>
+                        <tbody id="results-table-body" class="bg-white divide-y"></tbody>
+                    </table>
+                </div>
+                <div id="pagination-controls" class="mt-4 flex items-center justify-between"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- ELEMENTI DOM ---
+        const passwordOverlay = document.getElementById('password-overlay');
+        const passwordInput = document.getElementById('password-input');
+        const loginButton = document.getElementById('login-button');
+        const passwordError = document.getElementById('password-error');
+        const appContainer = document.getElementById('app-container');
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const fileNameDisplay = document.getElementById('file-name');
+        const dropZoneText = document.getElementById('drop-zone-text');
+        const loader = document.getElementById('loader');
+        const loaderText = document.getElementById('loader-text');
+        const generalErrorBox = document.getElementById('general-error-box');
+        const generalErrorText = document.getElementById('general-error-text');
+        
+        // Tabs
+        const pricesTabButton = document.getElementById('prices-tab-button');
+        const inventoryTabButton = document.getElementById('inventory-tab-button');
+        const pricesTabContent = document.getElementById('prices-tab-content');
+        const inventoryTabContent = document.getElementById('inventory-tab-content');
+
+        // Controlli
+        const markupInput = document.getElementById('markup-percentage');
+        const calculatePricesButton = document.getElementById('calculate-prices-button');
+        const clearPricesButton = document.getElementById('clear-prices-button');
+        const confirmUpdatePricesCheckbox = document.getElementById('confirm-update-prices-checkbox');
+        const updatePricesButton = document.getElementById('update-prices-button');
+        const confirmSyncInventoryCheckbox = document.getElementById('confirm-sync-inventory-checkbox');
+        const syncInventoryButton = document.getElementById('sync-inventory-button');
+        
+        // Tabella e filtri
+        const resultsSection = document.getElementById('results-section');
+        const tableTitle = document.getElementById('table-title');
+        const searchInput = document.getElementById('search-input');
+        const dittaFilter = document.getElementById('ditta-filter');
+        const showModifiedFilter = document.getElementById('show-modified-filter');
+        const showModifiedFilterContainer = document.getElementById('show-modified-filter-container');
+        const summarySection = document.getElementById('summary-section');
+        const tableHead = document.getElementById('results-table-head');
+        const tableBody = document.getElementById('results-table-body');
+        const paginationControls = document.getElementById('pagination-controls');
+
+        // --- STATO APP ---
+        let authToken = null;
+        let processedData = [];
+        let currentPage = 1;
+        let activeTab = 'prices';
+        const ROWS_PER_PAGE = 50;
+
+        // --- FUNZIONI PRINCIPALI ---
+
+        // LOGIN
+        async function handleLogin() {
+            passwordError.classList.add('hidden');
+            loginButton.disabled = true;
+            loginButton.textContent = 'Verifica...';
+            
+            try {
+                const response = await fetch('/.netlify/functions/unified-manager', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'login', password: passwordInput.value }),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                authToken = data.token;
+                passwordOverlay.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+            } catch (error) {
+                passwordError.textContent = error.message;
+                passwordError.classList.remove('hidden');
+            } finally {
+                loginButton.disabled = false;
+                loginButton.textContent = 'Accedi';
+            }
+        }
+
+        // GESTIONE FILE
+        async function handleFile(file) {
+            if (!file) return;
+            showLoader(true, "Leggendo il file...");
+            fileNameDisplay.textContent = file.name;
+
+            try {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const rawFileData = XLSX.utils.sheet_to_json(worksheet);
+
+                    const uniqueProductsMap = new Map();
+                    rawFileData.forEach(row => {
+                        const key = getValue(row, ['EAN', 'Minsan']);
+                        if (key && !uniqueProductsMap.has(key)) {
+                            uniqueProductsMap.set(key, row);
+                        }
+                    });
+                    const uniqueData = Array.from(uniqueProductsMap.values());
+                    
+                    showLoader(true, `Recuperando ${uniqueData.length} prodotti da Shopify...`);
+                    const skus = uniqueData.map(row => getValue(row, ['EAN', 'Minsan']));
+                    const shopifyData = await callBackend({ action: 'get-initial-data', skus });
+                    
+                    processedData = uniqueData.map((row, index) => {
+                        const sku = getValue(row, ['EAN', 'Minsan']);
+                        const shopifyProduct = shopifyData.results.find(p => p.sku == sku);
+                        return {
+                            id: index,
+                            sku: sku,
+                            ditta: getValue(row, ['Ditta']),
+                            descrizione: getValue(row, ['Descrizione']),
+                            costoMedio: parseFloat(getValue(row, ['CostoMedio'])) || 0,
+                            iva: parseFloat(getValue(row, ['IVA'])) || 22,
+                            giacenzaFile: parseInt(getValue(row, ['Giacenza'])),
+                            scadenzaFile: excelDateToJSDate(getValue(row, ['Scadenza'])),
+                            prezzoShopify: shopifyProduct ? shopifyProduct.price : null,
+                            giacenzaShopify: shopifyProduct ? shopifyProduct.inventory_quantity : null,
+                            scadenzaShopify: shopifyProduct ? shopifyProduct.expiry_date : null,
+                            inventory_item_id: shopifyProduct ? shopifyProduct.inventory_item_id : null,
+                            product_id: shopifyProduct ? shopifyProduct.product_id : null,
+                            prezzoVendita: null,
+                            selected: false,
+                            status: 'idle'
+                        };
+                    });
+                    
+                    currentPage = 1;
+                    populateDittaFilter();
+                    resultsSection.classList.remove('hidden');
+                    calculatePricesButton.disabled = false;
+                    renderUIForActiveTab();
+                    showLoader(false);
+                };
+                reader.readAsArrayBuffer(file);
+            } catch (error) {
+                showError(error.message);
+                showLoader(false);
+            }
+        }
+        
+        // CAMBIO TAB
+        function switchTab(tabName) {
+            activeTab = tabName;
+            pricesTabButton.classList.toggle('active', tabName === 'prices');
+            inventoryTabButton.classList.toggle('active', tabName === 'inventory');
+            pricesTabContent.classList.toggle('hidden', tabName !== 'prices');
+            inventoryTabContent.classList.toggle('hidden', tabName !== 'inventory');
+            showModifiedFilterContainer.style.display = tabName === 'prices' ? 'flex' : 'none';
+            if (processedData.length > 0) {
+                renderUIForActiveTab();
+            }
+        }
+        
+        // --- LOGICHE SPECIFICHE PER TAB ---
+        
+        // PREZZI
+        function calculatePrices() {
+            const markup = parseFloat(markupInput.value);
+            if (isNaN(markup)) return alert("Percentuale di ricarica non valida.");
+            
+            const scope = document.querySelector('input[name="calculation_scope"]:checked').value;
+            const dataToProcess = (scope === 'all') ? getFilteredData() : processedData.filter(item => item.selected);
+
+            dataToProcess.forEach(row => {
+                if (row.costoMedio > 0) {
+                    const finalPrice = (row.costoMedio * (1 + markup / 100)) * (1 + row.iva / 100);
+                    processedData[row.id].prezzoVendita = parseFloat(finalPrice.toFixed(2));
+                }
+            });
+            renderUIForActiveTab();
+        }
+
+        function clearPrices() {
+            processedData.forEach(item => item.prezzoVendita = null);
+            renderUIForActiveTab();
+        }
+
+        async function updatePrices() {
+            const items = processedData.filter(i => i.selected && i.prezzoVendita !== null).map(i => ({ sku: i.sku, price: i.prezzoVendita }));
+            if (items.length === 0) return alert("Nessun prodotto selezionato con prezzo calcolato.");
+            
+            showLoader(true, `Aggiornando ${items.length} prezzi...`);
+            try {
+                const response = await callBackend({ action: 'update-prices', items });
+                response.results.forEach(result => {
+                    const item = processedData.find(p => p.sku == result.sku);
+                    if (item) {
+                        item.status = result.success ? 'success' : 'error';
+                        if (result.success) item.prezzoShopify = item.prezzoVendita;
+                    }
+                });
+                alert(`Aggiornamento completato! Successi: ${response.summary.success}, Fallimenti: ${response.summary.failure}.`);
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                showLoader(false);
+                renderUIForActiveTab();
+            }
+        }
+        
+        // GIACENZE
+        async function syncInventory() {
+            const items = processedData.filter(i => i.selected).map(i => ({
+                productId: i.product_id,
+                inventoryItemId: i.inventory_item_id,
+                quantity: i.giacenzaFile,
+                expiryDate: i.scadenzaFile
+            }));
+            if (items.length === 0) return alert("Nessun prodotto selezionato.");
+
+            showLoader(true, `Sincronizzando ${items.length} prodotti...`);
+            try {
+                await callBackend({ action: 'sync-inventory', items });
+                alert("Sincronizzazione completata con successo!");
+                items.forEach(item => {
+                    const p = processedData.find(p => p.product_id === item.productId);
+                    if(p) {
+                       p.giacenzaShopify = p.giacenzaFile;
+                       p.scadenzaShopify = p.scadenzaFile;
+                       p.status = 'success';
+                    }
+                });
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                showLoader(false);
+                renderUIForActiveTab();
+            }
+        }
+
+
+        // --- RENDERING E UI ---
+        
+        function renderUIForActiveTab() {
+            updateSummary();
+            renderTable();
+            updateControlsState();
+        }
+
+        function updateSummary() {
+            const uniqueCount = processedData.length;
+            const calculatedCount = processedData.filter(p => p.prezzoVendita !== null).length;
+            const toUpdateCount = processedData.filter(p => {
+                const qtyChanged = p.giacenzaFile !== p.giacenzaShopify;
+                const expiryChanged = p.scadenzaFile !== p.scadenzaShopify;
+                return qtyChanged || expiryChanged;
+            }).length;
+
+            let summaryHtml = `<div class="bg-white p-4 rounded-lg shadow-sm border text-center"><p class="text-2xl font-bold text-indigo-600">${uniqueCount}</p><p class="text-sm text-gray-600">Prodotti Unici</p></div>`;
+            if (activeTab === 'prices') {
+                summaryHtml += `<div class="bg-white p-4 rounded-lg shadow-sm border text-center"><p class="text-2xl font-bold text-indigo-600">${calculatedCount}</p><p class="text-sm text-gray-600">Prezzi Calcolati</p></div>`;
+            } else {
+                summaryHtml += `<div class="bg-white p-4 rounded-lg shadow-sm border text-center"><p class="text-2xl font-bold text-blue-600">${toUpdateCount}</p><p class="text-sm text-gray-600">Da Sincronizzare</p></div>`;
+            }
+            summarySection.innerHTML = summaryHtml;
+        }
+        
+        function renderTable() {
+            const filteredData = getFilteredData();
+            const totalPages = Math.ceil(filteredData.length / ROWS_PER_PAGE);
+            currentPage = Math.min(currentPage, totalPages || 1);
+            const paginatedData = filteredData.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE);
+
+            tableHead.innerHTML = activeTab === 'prices' ? getPricesTableHeader() : getInventoryTableHeader();
+            tableBody.innerHTML = '';
+            paginatedData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.dataset.id = row.id;
+                tr.className = row.status === 'success' ? 'status-success' : row.status === 'error' ? 'status-error' : getInventoryRowClass(row);
+                tr.innerHTML = activeTab === 'prices' ? getPricesTableRow(row) : getInventoryTableRow(row);
+                tableBody.appendChild(tr);
+            });
+            
+            renderPagination(totalPages);
+            updateSelectAllCheckboxState();
+        }
+        
+        function getPricesTableHeader() {
+            return `<tr>
+                <th><input type="checkbox" id="select-all-checkbox"></th>
+                <th>Minsan/EAN</th><th>Descrizione</th><th>Costo Medio</th>
+                <th>Prezzo Shopify</th><th>Prezzo Calcolato</th><th>Variazione</th><th>Stato</th>
+            </tr>`;
+        }
+        
+        function getPricesTableRow(row) {
+            let variazioneHtml = '<td></td>';
+            if (row.prezzoVendita !== null && row.prezzoShopify !== null) {
+                const diff = row.prezzoVendita - row.prezzoShopify;
+                const percentageDiff = row.prezzoShopify > 0 ? (diff / row.prezzoShopify) * 100 : 0;
+                const colorClass = diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-gray-500';
+                const sign = diff > 0 ? '+' : '';
+                variazioneHtml = `<td class="font-medium ${colorClass}"><span>${sign}${diff.toFixed(2)} €</span><span class="text-xs">(${sign}${percentageDiff.toFixed(1)}%)</span></td>`;
+            }
+            return `<td><input type="checkbox" class="row-checkbox" ${row.selected ? 'checked' : ''}></td>
+                    <td>${row.sku}</td><td>${row.descrizione || ''}</td><td>€ ${row.costoMedio.toFixed(2)}</td>
+                    <td class="price-shopify">${row.prezzoShopify ? `€ ${row.prezzoShopify.toFixed(2)}` : 'N/D'}</td>
+                    <td class="${row.prezzoVendita ? 'price-calculated' : ''}">${row.prezzoVendita ? `€ ${row.prezzoVendita.toFixed(2)}` : 'N/D'}</td>
+                    ${variazioneHtml}
+                    <td>${row.status === 'success' ? '✓' : row.status === 'error' ? '✗' : ''}</td>`;
+        }
+        
+        function getInventoryTableHeader() {
+             return `<tr>
+                <th><input type="checkbox" id="select-all-checkbox"></th>
+                <th>Minsan/EAN</th><th>Descrizione</th>
+                <th>Giacenza File</th><th>Giacenza Shopify</th>
+                <th>Scadenza File</th><th>Scadenza Shopify</th>
+            </tr>`;
+        }
+
+        function getInventoryTableRow(row) {
+             return `<td><input type="checkbox" class="row-checkbox" ${row.selected ? 'checked' : ''}></td>
+                    <td>${row.sku}</td><td>${row.descrizione || ''}</td>
+                    <td>${row.giacenzaFile}</td><td>${row.giacenzaShopify ?? 'N/D'}</td>
+                    <td>${row.scadenzaFile || 'N/D'}</td><td>${row.scadenzaShopify || 'N/D'}</td>`;
+        }
+
+        function getInventoryRowClass(row) {
+            const qtyChanged = row.giacenzaFile !== row.giacenzaShopify;
+            const expiryChanged = row.scadenzaFile !== row.scadenzaShopify;
+            return (qtyChanged || expiryChanged) ? 'status-to-update' : '';
+        }
+        
+        function renderPagination(totalPages) {
+            if (totalPages > 1) {
+                paginationControls.innerHTML = `
+                    <button id="prev-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg">&larr; Precedente</button>
+                    <span id="page-indicator">Pagina ${currentPage} di ${totalPages}</span>
+                    <button id="next-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg">Successivo &rarr;</button>`;
+                document.getElementById('prev-page-button').disabled = currentPage === 1;
+                document.getElementById('next-page-button').disabled = currentPage === totalPages;
+                document.getElementById('prev-page-button').addEventListener('click', () => { if(currentPage > 1) { currentPage--; renderTable(); } });
+                document.getElementById('next-page-button').addEventListener('click', () => { if(currentPage < totalPages) { currentPage++; renderTable(); } });
+            } else {
+                paginationControls.innerHTML = '';
+            }
+        }
+
+        function updateControlsState() {
+            const hasCalculations = processedData.some(p => p.prezzoVendita !== null);
+            const hasSelections = processedData.some(p => p.selected);
+            
+            clearPricesButton.disabled = !hasCalculations;
+            confirmUpdatePricesCheckbox.disabled = !hasSelections || !hasCalculations;
+            updatePricesButton.disabled = !confirmUpdatePricesCheckbox.checked || !hasSelections || !hasCalculations;
+
+            const inventoryToSync = processedData.filter(p => p.selected && (p.giacenzaFile !== p.giacenzaShopify || p.scadenzaFile !== p.scadenzaShopify)).length > 0;
+            confirmSyncInventoryCheckbox.disabled = !inventoryToSync;
+            syncInventoryButton.disabled = !confirmSyncInventoryCheckbox.checked || !inventoryToSync;
+        }
+        
+        function updateSelectAllCheckboxState() {
+            const selectAllCheckbox = document.getElementById('select-all-checkbox');
+            if (!selectAllCheckbox) return;
+            const filteredData = getFilteredData();
+            selectAllCheckbox.checked = filteredData.length > 0 && filteredData.every(item => item.selected);
+        }
+
+        // --- GESTIONE EVENTI ---
+        loginButton.addEventListener('click', handleLogin);
+        passwordInput.addEventListener('keypress', (e) => e.key === 'Enter' && handleLogin());
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+        pricesTabButton.addEventListener('click', () => switchTab('prices'));
+        inventoryTabButton.addEventListener('click', () => switchTab('inventory'));
+        calculatePricesButton.addEventListener('click', calculatePrices);
+        clearPricesButton.addEventListener('click', clearPrices);
+        updatePricesButton.addEventListener('click', updatePrices);
+        syncInventoryButton.addEventListener('click', syncInventory);
+        confirmUpdatePricesCheckbox.addEventListener('change', updateControlsState);
+        confirmSyncInventoryCheckbox.addEventListener('change', updateControlsState);
+
+        const handleFilterChange = () => { currentPage = 1; renderTable(); };
+        searchInput.addEventListener('input', handleFilterChange);
+        dittaFilter.addEventListener('change', handleFilterChange);
+        showModifiedFilter.addEventListener('change', handleFilterChange);
+
+        tableBody.addEventListener('change', (e) => {
+            if (e.target.classList.contains('row-checkbox')) {
+                const rowId = parseInt(e.target.closest('tr').dataset.id);
+                processedData.find(p => p.id === rowId).selected = e.target.checked;
+                updateControlsState();
+                updateSelectAllCheckboxState();
+            }
+        });
+
+        tableHead.addEventListener('change', (e) => {
+            if (e.target.id === 'select-all-checkbox') {
+                const isChecked = e.target.checked;
+                getFilteredData().forEach(item => processedData[item.id].selected = isChecked);
+                renderTable();
+                updateControlsState();
+            }
+        });
+        
+        // --- HELPERS ---
+        function showLoader(show, text = 'Elaborazione...') {
+            loader.classList.toggle('hidden', !show);
+            loaderText.textContent = text;
+        }
+        function showError(message) {
+            generalErrorText.textContent = message;
+            generalErrorBox.classList.remove('hidden');
+        }
+        function getValue(obj, keys) {
+            if (!obj) return undefined;
+            for (const key of keys) {
+                const lowerKey = key.toLowerCase();
+                for (const objKey in obj) {
+                    if (objKey.toLowerCase() === lowerKey) return obj[objKey];
+                }
+            }
+            return undefined;
+        }
+        function excelDateToJSDate(serial) {
+            if (typeof serial !== 'number' || serial < 1) return null;
+            const utc_days  = Math.floor(serial - 25569);
+            const utc_value = utc_days * 86400;                                     
+            const date_info = new Date(utc_value * 1000);
+            const year = date_info.getUTCFullYear();
+            const month = String(date_info.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(date_info.getUTCDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+        async function callBackend(payload) {
+            if (!authToken) throw new Error("Token di autenticazione non presente.");
+            const response = await fetch('/.netlify/functions/unified-manager', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || `Errore del server: ${response.statusText}`);
+            return data;
+        }
+    });
+    </script>
+</body>
+</html>
