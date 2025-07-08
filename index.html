@@ -223,82 +223,95 @@
             if (!file) return;
             showLoader(true, "Leggendo il file...");
             fileNameDisplay.textContent = file.name;
+            generalErrorBox.classList.add('hidden');
 
             try {
                 const reader = new FileReader();
                 reader.onload = async (e) => {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[sheetName];
-                    const rawFileData = XLSX.utils.sheet_to_json(worksheet);
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const sheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[sheetName];
+                        const rawFileData = XLSX.utils.sheet_to_json(worksheet);
 
-                    const inventoryMap = new Map();
-                    rawFileData.forEach(row => {
-                        const sku = getValue(row, ['EAN', 'Minsan']);
-                        if (!sku) return;
-                        if (!inventoryMap.has(sku)) {
-                            inventoryMap.set(sku, { rows: [], giacenze: [], scadenze: [] });
+                        const inventoryMap = new Map();
+                        rawFileData.forEach(row => {
+                            const sku = getValue(row, ['EAN', 'Minsan']);
+                            if (!sku) return;
+                            if (!inventoryMap.has(sku)) {
+                                inventoryMap.set(sku, { rows: [], giacenze: [], scadenze: [] });
+                            }
+                            const entry = inventoryMap.get(sku);
+                            entry.rows.push(row);
+                            entry.giacenze.push(parseInt(getValue(row, ['Giacenza']), 10) || 0);
+                            const scadenza = excelDateToJSDate(getValue(row, ['Scadenza']));
+                            if (scadenza) entry.scadenze.push(scadenza);
+                        });
+
+                        const allSkus = Array.from(inventoryMap.keys());
+                        const CHUNK_SIZE = 100; // Ridotto per evitare timeout
+                        let allShopifyData = [];
+                        for (let i = 0; i < allSkus.length; i += CHUNK_SIZE) {
+                            const chunk = allSkus.slice(i, i + CHUNK_SIZE);
+                            const chunkNumber = i / CHUNK_SIZE + 1;
+                            const totalChunks = Math.ceil(allSkus.length / CHUNK_SIZE);
+                            showLoader(true, `Recuperando pacchetto ${chunkNumber} di ${totalChunks} da Shopify...`);
+                            
+                            try {
+                                const response = await callBackend({ action: 'get-initial-data', skus: chunk });
+                                allShopifyData = allShopifyData.concat(response.results);
+                                await new Promise(resolve => setTimeout(resolve, 250)); // Pausa per non sovraccaricare API
+                            } catch (error) {
+                                throw new Error(`Timeout o errore durante il recupero del pacchetto ${chunkNumber}. Dettagli: ${error.message}`);
+                            }
                         }
-                        const entry = inventoryMap.get(sku);
-                        entry.rows.push(row);
-                        entry.giacenze.push(parseInt(getValue(row, ['Giacenza']), 10) || 0);
-                        const scadenza = excelDateToJSDate(getValue(row, ['Scadenza']));
-                        if (scadenza) entry.scadenze.push(scadenza);
-                    });
-
-                    // Recupera dati da Shopify in pacchetti
-                    const allSkus = Array.from(inventoryMap.keys());
-                    const CHUNK_SIZE = 250;
-                    let allShopifyData = [];
-                    for (let i = 0; i < allSkus.length; i += CHUNK_SIZE) {
-                        const chunk = allSkus.slice(i, i + CHUNK_SIZE);
-                        showLoader(true, `Recuperando pacchetto ${i/CHUNK_SIZE + 1} di ${Math.ceil(allSkus.length/CHUNK_SIZE)} da Shopify...`);
-                        const response = await callBackend({ action: 'get-initial-data', skus: chunk });
-                        allShopifyData = allShopifyData.concat(response.results);
-                    }
-                    
-                    inventoryData = [];
-                    priceData = [];
-                    let idCounter = 0;
-
-                    inventoryMap.forEach((data, sku) => {
-                        const shopifyProduct = allShopifyData.find(p => p.sku == sku);
-                        let finalRow;
-
-                        if (data.rows.length > 1) {
-                            const totalGiacenza = data.giacenze.reduce((sum, g) => sum + Math.max(0, g), 0);
-                            const finalExpiry = data.scadenze.length > 0 ? data.scadenze.reduce((a, b) => a < b ? a : b) : null;
-                            finalRow = { ...data.rows[0], Giacenza: totalGiacenza, Scadenza: finalExpiry };
-                        } else {
-                            finalRow = data.rows[0];
-                        }
-
-                        const baseData = {
-                            id: idCounter++, sku: sku,
-                            ditta: getValue(finalRow, ['Ditta']),
-                            descrizione: getValue(finalRow, ['Descrizione']),
-                            costoMedio: parseFloat(getValue(finalRow, ['CostoMedio'])) || 0,
-                            iva: parseFloat(getValue(finalRow, ['IVA'])) || 22,
-                            giacenzaFile: parseInt(getValue(finalRow, ['Giacenza'])),
-                            scadenzaFile: excelDateToJSDate(getValue(finalRow, ['Scadenza'])),
-                            prezzoShopify: shopifyProduct ? shopifyProduct.price : null,
-                            giacenzaShopify: shopifyProduct ? shopifyProduct.inventory_quantity : null,
-                            scadenzaShopify: shopifyProduct ? shopifyProduct.expiry_date : null,
-                            inventory_item_id: shopifyProduct ? shopifyProduct.inventory_item_id : null,
-                            product_id: shopifyProduct ? shopifyProduct.product_id : null,
-                            prezzoVendita: null, selected: false, status: 'idle'
-                        };
                         
-                        inventoryData.push(baseData);
-                        if (shopifyProduct) priceData.push(baseData);
-                    });
+                        inventoryData = [];
+                        priceData = [];
+                        let idCounter = 0;
 
-                    currentPage = 1;
-                    resultsSection.classList.remove('hidden');
-                    calculatePricesButton.disabled = false;
-                    renderUIForActiveTab();
-                    showLoader(false);
+                        inventoryMap.forEach((data, sku) => {
+                            const shopifyProduct = allShopifyData.find(p => p.sku == sku);
+                            let finalRow;
+
+                            if (data.rows.length > 1) {
+                                const totalGiacenza = data.giacenze.reduce((sum, g) => sum + Math.max(0, g), 0);
+                                const finalExpiry = data.scadenze.length > 0 ? data.scadenze.reduce((a, b) => a < b ? a : b) : null;
+                                finalRow = { ...data.rows[0], Giacenza: totalGiacenza, Scadenza: finalExpiry };
+                            } else {
+                                finalRow = data.rows[0];
+                            }
+
+                            const baseData = {
+                                id: idCounter++, sku: sku,
+                                ditta: getValue(finalRow, ['Ditta']),
+                                descrizione: getValue(finalRow, ['Descrizione']),
+                                costoMedio: parseFloat(getValue(finalRow, ['CostoMedio'])) || 0,
+                                iva: parseFloat(getValue(finalRow, ['IVA'])) || 22,
+                                giacenzaFile: parseInt(getValue(finalRow, ['Giacenza'])),
+                                scadenzaFile: excelDateToJSDate(getValue(finalRow, ['Scadenza'])),
+                                prezzoShopify: shopifyProduct ? shopifyProduct.price : null,
+                                giacenzaShopify: shopifyProduct ? shopifyProduct.inventory_quantity : null,
+                                scadenzaShopify: shopifyProduct ? shopifyProduct.expiry_date : null,
+                                inventory_item_id: shopifyProduct ? shopifyProduct.inventory_item_id : null,
+                                product_id: shopifyProduct ? shopifyProduct.product_id : null,
+                                prezzoVendita: null, selected: false, status: 'idle'
+                            };
+                            
+                            inventoryData.push(baseData);
+                            if (shopifyProduct) priceData.push(baseData);
+                        });
+
+                        currentPage = 1;
+                        resultsSection.classList.remove('hidden');
+                        calculatePricesButton.disabled = false;
+                        renderUIForActiveTab();
+                        showLoader(false);
+                    } catch (error) {
+                        showError(error.message);
+                        showLoader(false);
+                    }
                 };
                 reader.readAsArrayBuffer(file);
             } catch (error) {
@@ -357,7 +370,7 @@
 
         async function performAction(action, items, type) {
             showLoader(true, `Aggiornando ${items.length} ${type}...`);
-            const CHUNK_SIZE = 50; // Pacchetti più piccoli per le operazioni di scrittura
+            const CHUNK_SIZE = 50;
             let allResults = [];
             
             try {
