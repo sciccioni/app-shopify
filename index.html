@@ -87,12 +87,12 @@
                    </div>
    
                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                       <h2 class="text-xl font-semibold mb-4">1. Carica e Analizza</h2>
+                       <h2 class="text-xl font-semibold mb-4">1. Carica File</h2>
                        <div id="drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
                            <input type="file" id="file-input" class="hidden" accept=".xlsx, .xls">
                            <div class="flex flex-col items-center">
                                <svg class="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h10a4 4 0 014 4v6a4 4 0 01-4 4H7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 16v-4a4 4 0 00-4-4H8a4 4 0 00-4 4v4m16 0l-3-3m-13 3l3-3"></path></svg>
-                               <p class="text-gray-600">Trascina qui il file per la Sincronizzazione o <span class="font-semibold text-indigo-600">clicca per selezionarlo</span>.</p>
+                               <p class="text-gray-600">Trascina qui il file o <span class="font-semibold text-indigo-600">clicca per selezionarlo</span>.</p>
                                <p id="file-name" class="text-sm text-gray-500 mt-2"></p>
                            </div>
                        </div>
@@ -175,31 +175,27 @@
 
             <div id="verify-tab-content" class="hidden">
                  <main class="space-y-8">
-                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h2 class="text-xl font-semibold mb-4">1. Carica File da Verificare</h2>
-                        <div id="verify-drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
-                            <input type="file" id="verify-file-input" class="hidden" accept=".xlsx, .xls">
-                            <div class="flex flex-col items-center">
-                                <svg class="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                                <p class="text-gray-600">Trascina qui il file per la Verifica o <span class="font-semibold text-indigo-600">clicca per selezionarlo</span>.</p>
-                                <p id="verify-file-name" class="text-sm text-gray-500 mt-2"></p>
-                            </div>
-                        </div>
-                    </div>
-                     <div id="verify-results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden">
-                        <h2 class="text-xl font-semibold mb-4">2. Cerca nel File</h2>
-                        <div class="flex gap-4">
-                            <input type="search" id="search-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" placeholder="Scrivi qui per cercare in qualsiasi colonna...">
+                    <div id="verify-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <div id="verify-placeholder">
+                            <h2 class="text-xl font-semibold mb-2">Verifica Contenuto File</h2>
+                            <p class="text-gray-600">Carica un file nella scheda "Sincronizzazione" per attivare la ricerca qui.</p>
                         </div>
 
-                        <div id="verify-table-container" class="mt-6">
-                           <div class="overflow-x-auto">
-                               <table class="min-w-full divide-y divide-gray-200">
-                                   <thead id="verify-table-head" class="bg-gray-50"></thead>
-                                   <tbody id="verify-table-body" class="bg-white divide-y divide-gray-200"></tbody>
-                               </table>
-                           </div>
-                           <p id="verify-no-results" class="text-center text-gray-500 mt-4 hidden">Nessun risultato trovato.</p>
+                        <div id="verify-controls" class="hidden">
+                             <h2 class="text-xl font-semibold mb-4">Cerca nel File Caricato</h2>
+                            <div class="flex gap-4">
+                                <input type="search" id="search-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" placeholder="Scrivi qui per cercare in qualsiasi colonna...">
+                            </div>
+
+                            <div id="verify-table-container" class="mt-6">
+                               <div class="overflow-x-auto">
+                                   <table class="min-w-full divide-y divide-gray-200">
+                                       <thead id="verify-table-head" class="bg-gray-50"></thead>
+                                       <tbody id="verify-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                                   </table>
+                               </div>
+                               <p id="verify-no-results" class="text-center text-gray-500 mt-4 hidden">Nessun risultato trovato.</p>
+                            </div>
                         </div>
                     </div>
                 </main>
@@ -249,6 +245,9 @@
         }
         loginButton.addEventListener('click', checkPassword);
         passwordInput.addEventListener('keypress', (e) => e.key === 'Enter' && checkPassword());
+
+        // --- STATO CONDIVISO ---
+        let verificationData = [];
 
         // ===============================================================
         // SEZIONE SINCRONIZZAZIONE (Funzionalità Originale)
@@ -365,6 +364,11 @@
                     const sheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[sheetName];
                     fileDataRaw = XLSX.utils.sheet_to_json(worksheet);
+
+                    // --- LOGICA CONDIVISIONE DATI CON SCHEDA VERIFICA ---
+                    verificationData = fileDataRaw;
+                    window.dispatchEvent(new CustomEvent('data-loaded-for-verification'));
+                    // --- FINE LOGICA CONDIVISIONE ---
 
                     const skuMap = new Map();
                     fileDataRaw.forEach(row => {
@@ -690,31 +694,18 @@
         // SEZIONE VERIFICA FILE (Nuova Funzionalità)
         // ===============================================================
         {
-            const verifyDropZone = document.getElementById('verify-drop-zone');
-            const verifyFileInput = document.getElementById('verify-file-input');
-            const verifyFileName = document.getElementById('verify-file-name');
-            const verifyResultsSection = document.getElementById('verify-results-section');
+            const verifyPlaceholder = document.getElementById('verify-placeholder');
+            const verifyControls = document.getElementById('verify-controls');
             const searchInput = document.getElementById('search-input');
             const verifyTableHead = document.getElementById('verify-table-head');
             const verifyTableBody = document.getElementById('verify-table-body');
             const verifyNoResults = document.getElementById('verify-no-results');
 
-            let verificationData = [];
-
-            function handleFileVerify(file) {
-                verifyFileName.textContent = file.name;
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, {type: 'array'});
-                    const sheetName = workbook.SheetNames[0];
-                    verificationData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-                    
-                    verifyResultsSection.classList.remove('hidden');
-                    renderVerificationTable(verificationData);
-                };
-                reader.readAsArrayBuffer(file);
-            }
+            window.addEventListener('data-loaded-for-verification', () => {
+                verifyPlaceholder.classList.add('hidden');
+                verifyControls.classList.remove('hidden');
+                renderVerificationTable(verificationData);
+            });
             
             function renderVerificationTable(data) {
                 verifyTableHead.innerHTML = '';
@@ -730,7 +721,7 @@
                         th.className = "px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider";
                         th.textContent = header;
                         headerRow.appendChild(th);
-                    });
+});
                     verifyTableHead.appendChild(headerRow);
 
                     // Crea Righe
@@ -761,11 +752,6 @@
                 renderVerificationTable(filteredData);
             }
 
-            verifyDropZone.addEventListener('click', () => verifyFileInput.click());
-            verifyDropZone.addEventListener('dragover', (e) => { e.preventDefault(); verifyDropZone.classList.add('drag-over'); });
-            verifyDropZone.addEventListener('dragleave', () => verifyDropZone.classList.remove('drag-over'));
-            verifyDropZone.addEventListener('drop', (e) => { e.preventDefault(); verifyDropZone.classList.remove('drag-over'); if (e.dataTransfer.files.length) handleFileVerify(e.dataTransfer.files[0]); });
-            verifyFileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFileVerify(e.target.files[0]); });
             searchInput.addEventListener('input', performSearch);
         }
     </script>
