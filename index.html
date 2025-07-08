@@ -387,7 +387,7 @@
                             let finalExpiry = null;
 
                             if (scadenze.length > 0) {
-                                // MODIFICA: Ripristinata logica per trovare la data PIÙ CORTA (min)
+                                // ===== MODIFICA FINALE: Usa Math.min per la data più CORTA (la più vicina) =====
                                 const earliestTimestamp = Math.min.apply(null, scadenze.map(date => new Date(`${date}T00:00:00Z`).getTime()));
                                 const earliestDate = new Date(earliestTimestamp);
                                 
@@ -456,7 +456,7 @@
                                             let duplicateDetailString = `Giacenze sommate [${row.duplicateDetails.giacenze.join(', ')}].`;
                                             const scadenzeList = row.duplicateDetails.scadenze;
                                             if (scadenzeList.length > 1) {
-                                                // MODIFICA: Ripristinato testo per indicare la data "più corta"
+                                                // MODIFICA FINALE: Testo corretto per indicare la data "più corta"
                                                 duplicateDetailString += ` Scadenze multiple [${scadenzeList.join(', ')}], selezionata la più corta: ${scadenzaFile}.`;
                                             } else if (scadenzeList.length === 1) {
                                                 duplicateDetailString += ` Unica scadenza trovata: ${scadenzeList[0]}.`;
@@ -501,6 +501,8 @@
                 }
             }
 
+            // ... le altre funzioni di sincronizzazione, visualizzazione, etc. rimangono invariate ...
+            
             confirmSyncCheckbox.addEventListener('change', updateUIState);
             syncButton.addEventListener('click', syncFile);
 
