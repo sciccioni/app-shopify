@@ -355,12 +355,14 @@
             async function analyzeFile() {
                 hideErrorMessage();
                 loader.classList.remove('hidden');
+                loaderText.textContent = 'Elaborazione in corso...';
+                resultsSection.classList.add('hidden');
 
                 try {
                     const data = await uploadedFile.arrayBuffer();
                     const workbook = XLSX.read(data);
                     const sheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[sheetName]; // RIGA CORRETTA
+                    const worksheet = workbook.Sheets[sheetName];
                     fileDataRaw = XLSX.utils.sheet_to_json(worksheet);
 
                     window.dispatchEvent(new CustomEvent('data-loaded-for-verification', { detail: fileDataRaw }));
@@ -495,6 +497,7 @@
                         analysisResults.push(resultRow);
                     }
                     
+                    resultsSection.classList.remove('hidden');
                     displaySummary();
                     if (analysisResults.length > 0) {
                         tableContainer.classList.remove('hidden');
@@ -514,6 +517,7 @@
                 }
             }
             
+            // ===== BLOCCO FUNZIONI RIPRISTINATO =====
             confirmSyncCheckbox.addEventListener('change', updateUIState);
             syncButton.addEventListener('click', syncFile);
 
