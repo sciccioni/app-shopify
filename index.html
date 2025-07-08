@@ -359,6 +359,7 @@
                 resultsSection.classList.add('hidden');
                 loader.classList.remove('hidden');
                 loaderText.textContent = 'Elaborazione in corso...';
+                analyzeButton.disabled = true;
 
                 try {
                     const data = await uploadedFile.arrayBuffer();
@@ -693,6 +694,36 @@
                     default: return { label: 'Sconosciuto', badgeClass: 'bg-gray-100 text-gray-800', icon: '', rowClass: '' };
                 }
             }
+            
+            // ===== CODICE RIPRISTINATO: Event listener per filtri e download =====
+            confirmSyncCheckbox.addEventListener('change', updateUIState);
+            syncButton.addEventListener('click', syncFile);
+            downloadCsvButton.addEventListener('click', downloadCSV);
+            resultsTableBody.addEventListener('change', (e) => {
+                if (e.target.classList.contains('row-checkbox')) {
+                    const item = analysisResults.find(r => r.minsan === e.target.dataset.minsan);
+                    if (item) item.selected = e.target.checked;
+                    updateUIState();
+                }
+            });
+            prevPageButton.addEventListener('click', () => { if (currentPage > 1) displayTablePage(currentPage - 1); });
+            nextPageButton.addEventListener('click', () => {
+                const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
+                let dataToPaginate = analysisResults;
+                if (filterValue === 'to-update') dataToPaginate = analysisResults.filter(r => r.status === 'to-update');
+                else if (filterValue === 'error') dataToPaginate = analysisResults.filter(r => r.status === 'error');
+                else if (filterValue === 'duplicates') dataToPaginate = duplicateRows;
+                const totalPages = Math.ceil(dataToPaginate.length / ROWS_PER_PAGE);
+                if (currentPage < totalPages) displayTablePage(currentPage + 1);
+            });
+            filterRadios.forEach(radio => radio.addEventListener('change', () => { currentPage = 1; displayTablePage(currentPage); }));
+            resultsTableHead.addEventListener('change', (e) => {
+                if (e.target.id === 'select-all-checkbox') {
+                    const isChecked = e.target.checked;
+                    analysisResults.forEach(res => { if (res.status === 'to-update') res.selected = isChecked; });
+                    displayTablePage(currentPage);
+                }
+            });
         }
 
         // ===============================================================
