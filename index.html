@@ -250,7 +250,7 @@
                         });
 
                         const allSkus = Array.from(inventoryMap.keys());
-                        const CHUNK_SIZE = 100;
+                        const CHUNK_SIZE = 50; // Pacchetti più piccoli per evitare timeout
                         let allShopifyData = [];
                         for (let i = 0; i < allSkus.length; i += CHUNK_SIZE) {
                             const chunk = allSkus.slice(i, i + CHUNK_SIZE);
@@ -261,7 +261,7 @@
                             try {
                                 const response = await callBackend({ action: 'get-initial-data', skus: chunk });
                                 allShopifyData = allShopifyData.concat(response.results);
-                                if (totalChunks > 1) await new Promise(resolve => setTimeout(resolve, 300));
+                                if (totalChunks > 1) await new Promise(resolve => setTimeout(resolve, 500)); // Pausa aumentata
                             } catch (error) {
                                 throw new Error(`Timeout o errore durante il recupero del pacchetto ${chunkNumber}. Dettagli: ${error.message}`);
                             }
