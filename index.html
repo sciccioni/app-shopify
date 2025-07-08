@@ -45,7 +45,6 @@
 </head>
 <body class="bg-gray-50 text-gray-800">
 
-    <!-- Schermata di Accesso con Password -->
     <div id="password-overlay" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50">
         <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm">
             <h2 class="text-2xl font-bold mb-4 text-center">Accesso Richiesto</h2>
@@ -61,7 +60,6 @@
         </div>
     </div>
 
-    <!-- Contenuto Principale dell'App (nascosto di default) -->
     <div id="main-content" class="hidden">
         <div class="container mx-auto p-4 md:p-8 max-w-7xl">
             <header class="mb-8">
@@ -74,7 +72,6 @@
                     <p id="error-message-text" class="text-sm"></p>
                 </div>
 
-                <!-- Sezione di Upload -->
                 <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                     <h2 class="text-xl font-semibold mb-4">1. Carica e Analizza</h2>
                     <div id="drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
@@ -90,7 +87,6 @@
                     </button>
                 </div>
 
-                <!-- Sezione Risultati -->
                 <div id="results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden">
                     <h2 class="text-xl font-semibold mb-4">2. Report di Analisi</h2>
                     <div id="progress-bar-container" class="w-full bg-gray-200 rounded-full h-2.5 mb-4 hidden">
@@ -113,7 +109,6 @@
                         <p id="sync-status-message" class="mt-4 text-center font-semibold hidden"></p>
                     </div>
                     
-                    <!-- Tabella con paginazione e filtri -->
                     <div id="table-container" class="hidden mt-6">
                         <div class="flex justify-between items-center mb-4">
                             <fieldset class="flex items-center space-x-4">
@@ -146,8 +141,7 @@
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
                                 <thead id="results-table-head" class="bg-gray-50">
-                                    <!-- Headers generati da JS -->
-                                </thead>
+                                    </thead>
                                 <tbody id="results-table-body" class="bg-white divide-y divide-gray-200"></tbody>
                             </table>
                         </div>
@@ -264,7 +258,7 @@
         function excelDateToJSDate(serial) {
             if (!serial || typeof serial !== 'number') return null;
             const utc_days  = Math.floor(serial - 25569);
-            const utc_value = utc_days * 86400;                                        
+            const utc_value = utc_days * 86400;                                     
             const date_info = new Date(utc_value * 1000);
 
             const year = date_info.getUTCFullYear();
@@ -347,10 +341,22 @@
                         const giacenzeCorrette = giacenze.map(g => g < 0 ? 0 : g);
                         const totalGiacenza = giacenzeCorrette.reduce((sum, g) => sum + g, 0);
                         
+                        // ===== MODIFICA PER SCADENZA PIÙ CORTA =====
                         const scadenze = rows.map(r => excelDateToJSDate(r.Scadenza)).filter(Boolean);
-                        const firstExpiry = scadenze.length > 0 ? scadenze[0] : null;
-                        const allSameExpiry = scadenze.every(s => s === firstExpiry);
-                        const finalExpiry = allSameExpiry ? firstExpiry : null;
+                        let finalExpiry = null;
+
+                        if (scadenze.length > 0) {
+                            // Trova la data minima (la più corta)
+                            const earliestDate = new Date(
+                                Math.min.apply(null, scadenze.map(date => new Date(date)))
+                            );
+                            // Formatta di nuovo la data in 'YYYY-MM-DD'
+                            const year = earliestDate.getFullYear();
+                            const month = String(earliestDate.getMonth() + 1).padStart(2, '0');
+                            const day = String(earliestDate.getDate()).padStart(2, '0');
+                            finalExpiry = `${year}-${month}-${day}`;
+                        }
+                        // ===== FINE MODIFICA =====
 
                         const consolidatedRow = { ...rows[0], Giacenza: totalGiacenza, Scadenza: finalExpiry, isDuplicate: true, duplicateDetails: { giacenze, scadenze } };
                         fileData.push(consolidatedRow);
@@ -393,6 +399,7 @@
                     const scadenza = row.Scadenza;
                     
                     let giacenzaFile = parseInt(giacenza, 10);
+                    // La scadenza potrebbe essere già una stringa se è stata consolidata, altrimenti è un numero da convertire
                     let scadenzaFile = typeof scadenza === 'number' ? excelDateToJSDate(scadenza) : scadenza;
 
                     let resultRow = { 
@@ -416,10 +423,6 @@
                                 errorCount++;
                                 resultRow.status = 'error';
                                 resultRow.details = 'Giacenza a zero non può essere decrementata.';
-                            } else if (row.isDuplicate && !scadenzaFile) {
-                                errorCount++;
-                                resultRow.status = 'error';
-                                resultRow.details = `Scadenze diverse per SKU duplicato: [${row.duplicateDetails.scadenze.join(', ')}]`;
                             } else {
                                 const finalGiacenza = Math.max(0, giacenzaFile);
                                 const quantityChanged = finalGiacenza !== productOnShopify.inventory_quantity;
@@ -431,6 +434,9 @@
                                     let detailsText = ['Pronto per aggiornare.'];
                                     if(row.isDuplicate) {
                                         detailsText.push(`Giacenze (${row.duplicateDetails.giacenze.join(', ')}) corrette e sommate.`);
+                                        if (scadenzaFile) {
+                                             detailsText.push(`Scadenza più corta (${scadenzaFile}) selezionata tra [${row.duplicateDetails.scadenze.join(', ')}].`);
+                                        }
                                     }
                                     if (giacenzaFile < 0) {
                                         detailsText.push(`Giacenza negativa (${giacenzaFile}) sarà impostata a 0.`);
@@ -787,7 +793,7 @@
 
         resultsTableHead.addEventListener('change', (e) => {
             if (e.target.id === 'select-all-checkbox') {
-                 const isChecked = e.target.checked;
+                const isChecked = e.target.checked;
                 analysisResults.forEach(res => {
                     if (res.status === 'to-update') {
                         res.selected = isChecked;
