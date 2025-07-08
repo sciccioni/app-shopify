@@ -337,16 +337,64 @@
                 progressBar.style.width = `${percentage}%`;
             }
 
-            function excelDateToJSDate(serial) {
-                if (!serial || typeof serial !== 'number') return null;
-                const utc_days  = Math.floor(serial - 25569);
-                const utc_value = utc_days * 86400;                                     
-                const date_info = new Date(utc_value * 1000);
-                const year = date_info.getUTCFullYear();
-                const month = String(date_info.getUTCMonth() + 1).padStart(2, '0');
-                const day = String(date_info.getUTCDate()).padStart(2, '0');
-                return `${year}-${month}-${day}`;
+          function excelDateToJSDate(value) {
+    // 1. Prova a gestire i numeri (comportamento originale)
+    if (typeof value === 'number') {
+        if (!value) return null;
+        // La soglia 25569 corrisponde al 1/1/1970 (inizio dell'epoca Unix)
+        // Excel conta i giorni dal 1/1/1900, quindi dobbiamo correggere
+        if (value < 60) { // Excel ha un bug storico che considera il 1900 un anno bisestile
+             value--;
+        }
+        const utc_days  = Math.floor(value - 25569);
+        const utc_value = utc_days * 86400;                                     
+        const date_info = new Date(utc_value * 1000);
+        
+        const year = date_info.getUTCFullYear();
+        const month = String(date_info.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date_info.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    // 2. Prova a gestire le stringhe (nuova logica)
+    if (typeof value === 'string' && value.trim()) {
+        let parts = [];
+        // Riconosce sia il formato con '/' sia quello con '-'
+        if (value.includes('/')) {
+            parts = value.split('/');
+        } else if (value.includes('-')) {
+            parts = value.split('-');
+        }
+
+        // Se la data è divisa in 3 parti (giorno, mese, anno)
+        if (parts.length === 3) {
+            let day, month, year;
+            // Indovina il formato in base alla lunghezza dell'anno
+            if (parts[2].length === 4) { // Formato: GG/MM/AAAA
+                day = parts[0];
+                month = parts[1];
+                year = parts[2];
+            } else if (parts[0].length === 4) { // Formato: AAAA/MM/GG
+                year = parts[0];
+                month = parts[1];
+                day = parts[2];
             }
+
+            if (year && month && day) {
+                // Crea una stringa di data standard (ISO 8601)
+                const isoDateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                const d = new Date(isoDateString);
+                // Controlla che la data sia valida (es. non 31/02/2025)
+                if (d && !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === isoDateString) {
+                     return isoDateString;
+                }
+            }
+        }
+    }
+    
+    // 3. Se l'interpretazione fallisce, ritorna null
+    return null;
+}
 
             async function callBackend(payload) {
                 const response = await fetch('/.netlify/functions/shopify-proxy', {
