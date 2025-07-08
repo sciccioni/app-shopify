@@ -152,18 +152,16 @@ async function syncInventory(items) {
         `);
     }
 
-    if (mutations.length === 0) {
-        return { statusCode: 200, body: JSON.stringify({ success: true, message: "Nessuna azione da eseguire." }) };
+    if (mutations.length > 0) {
+        const finalMutation = `mutation { ${mutations.join('\n')} }`;
+        const result = await callShopifyApi(finalMutation);
+        const userErrors = [...(result.inventoryUpdate?.userErrors || []), ...(result.metafieldsUpdate?.userErrors || [])];
+        if (userErrors.length > 0) {
+            throw new Error(userErrors.map(e => e.message).join(', '));
+        }
     }
 
-    const finalMutation = `mutation { ${mutations.join('\n')} }`;
-    const result = await callShopifyApi(finalMutation);
-    const userErrors = [...(result.inventoryUpdate?.userErrors || []), ...(result.metafieldsUpdate?.userErrors || [])];
-
-    if (userErrors.length > 0) {
-        throw new Error(userErrors.map(e => e.message).join(', '));
-    }
-
+    // Ritorna un successo generico, il frontend gestisce lo stato per riga
     return { statusCode: 200, body: JSON.stringify({ success: true }) };
 }
 
