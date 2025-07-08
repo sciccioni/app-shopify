@@ -37,9 +37,12 @@
 
     <!-- Contenitore Principale App -->
     <div id="app-container" class="hidden container mx-auto p-4 md:p-8 max-w-full">
-        <header class="mb-8">
-            <h1 class="text-4xl font-bold text-gray-900">App Gestione Shopify</h1>
-            <p class="text-gray-600 mt-2">Un unico strumento per gestire prezzi e giacenze.</p>
+        <header class="mb-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-4xl font-bold text-gray-900">App Gestione Shopify</h1>
+                <p class="text-gray-600 mt-2">Un unico strumento per gestire prezzi e giacenze.</p>
+            </div>
+            <button id="logout-button" class="bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600">Logout</button>
         </header>
 
         <!-- Navigazione a Schede -->
@@ -138,6 +141,7 @@
         const loginButton = document.getElementById('login-button');
         const passwordError = document.getElementById('password-error');
         const appContainer = document.getElementById('app-container');
+        const logoutButton = document.getElementById('logout-button');
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
         const fileNameDisplay = document.getElementById('file-name');
@@ -167,12 +171,18 @@
         const paginationControls = document.getElementById('pagination-controls');
 
         // --- STATO APP ---
-        let authToken = null;
+        let authToken = sessionStorage.getItem('authToken');
         let inventoryData = [];
         let priceData = [];
         let currentPage = 1;
         let activeTab = 'prices';
         const ROWS_PER_PAGE = 50;
+        
+        // --- INIZIALIZZAZIONE ---
+        if (authToken) {
+            passwordOverlay.classList.add('hidden');
+            appContainer.classList.remove('hidden');
+        }
 
         // --- FUNZIONI PRINCIPALI ---
 
@@ -181,8 +191,17 @@
             loginButton.disabled = true;
             loginButton.textContent = 'Verifica...';
             try {
-                const response = await callBackend({ action: 'login', password: passwordInput.value });
-                authToken = response.token;
+                const response = await fetch('/.netlify/functions/unified-manager', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'login', password: passwordInput.value }),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || "Errore di autenticazione");
+                if (!data.token) throw new Error("Risposta di login non valida dal server.");
+
+                authToken = data.token;
+                sessionStorage.setItem('authToken', authToken);
                 passwordOverlay.classList.add('hidden');
                 appContainer.classList.remove('hidden');
             } catch (error) {
@@ -192,6 +211,12 @@
                 loginButton.disabled = false;
                 loginButton.textContent = 'Accedi';
             }
+        }
+        
+        function handleLogout() {
+            authToken = null;
+            sessionStorage.removeItem('authToken');
+            window.location.reload();
         }
 
         async function handleFile(file) {
@@ -208,7 +233,6 @@
                     const worksheet = workbook.Sheets[sheetName];
                     const rawFileData = XLSX.utils.sheet_to_json(worksheet);
 
-                    // 1. Prepara dati per INVENTORY (con duplicati consolidati)
                     const inventoryMap = new Map();
                     rawFileData.forEach(row => {
                         const sku = getValue(row, ['EAN', 'Minsan']);
@@ -223,12 +247,10 @@
                         if (scadenza) entry.scadenze.push(scadenza);
                     });
 
-                    // 2. Recupera dati da Shopify per tutti gli SKU unici
                     showLoader(true, `Recuperando ${inventoryMap.size} prodotti da Shopify...`);
                     const allSkus = Array.from(inventoryMap.keys());
                     const shopifyData = await callBackend({ action: 'get-initial-data', skus: allSkus });
                     
-                    // 3. Crea i dataset finali
                     inventoryData = [];
                     priceData = [];
                     let idCounter = 0;
@@ -237,17 +259,16 @@
                         const shopifyProduct = shopifyData.results.find(p => p.sku == sku);
                         let finalRow;
 
-                        if (data.rows.length > 1) { // Consolidamento duplicati
+                        if (data.rows.length > 1) {
                             const totalGiacenza = data.giacenze.reduce((sum, g) => sum + Math.max(0, g), 0);
                             const finalExpiry = data.scadenze.length > 0 ? data.scadenze.reduce((a, b) => a < b ? a : b) : null;
-                            finalRow = { ...data.rows[0], Giacenza: totalGiacenza, Scadenza: finalExpiry, isDuplicate: true, duplicateDetails: { giacenze: data.giacenze, scadenze: data.scadenze } };
+                            finalRow = { ...data.rows[0], Giacenza: totalGiacenza, Scadenza: finalExpiry };
                         } else {
                             finalRow = data.rows[0];
                         }
 
                         const baseData = {
-                            id: idCounter++,
-                            sku: sku,
+                            id: idCounter++, sku: sku,
                             ditta: getValue(finalRow, ['Ditta']),
                             descrizione: getValue(finalRow, ['Descrizione']),
                             costoMedio: parseFloat(getValue(finalRow, ['CostoMedio'])) || 0,
@@ -259,16 +280,11 @@
                             scadenzaShopify: shopifyProduct ? shopifyProduct.expiry_date : null,
                             inventory_item_id: shopifyProduct ? shopifyProduct.inventory_item_id : null,
                             product_id: shopifyProduct ? shopifyProduct.product_id : null,
-                            prezzoVendita: null,
-                            selected: false,
-                            status: 'idle'
+                            prezzoVendita: null, selected: false, status: 'idle'
                         };
                         
                         inventoryData.push(baseData);
-
-                        if (shopifyProduct) {
-                            priceData.push(baseData);
-                        }
+                        if (shopifyProduct) priceData.push(baseData);
                     });
 
                     currentPage = 1;
@@ -290,7 +306,7 @@
             inventoryTabButton.classList.toggle('active', tabName === 'inventory');
             pricesTabContent.classList.toggle('hidden', tabName !== 'prices');
             inventoryTabContent.classList.toggle('hidden', tabName !== 'inventory');
-            if (processedData.length > 0 || inventoryData.length > 0) {
+            if (inventoryData.length > 0) {
                 currentPage = 1;
                 renderUIForActiveTab();
             }
@@ -322,13 +338,13 @@
         }
         
         async function syncInventory() {
-            const items = inventoryData.filter(i => i.selected).map(i => ({
+            const items = inventoryData.filter(i => i.selected && getInventoryStatus(i) === 'to-update').map(i => ({
                 productId: i.product_id,
                 inventoryItemId: i.inventory_item_id,
                 quantity: i.giacenzaFile,
                 expiryDate: i.scadenzaFile
             }));
-            if (items.length === 0) return alert("Nessun prodotto selezionato.");
+            if (items.length === 0) return alert("Nessun prodotto selezionato da sincronizzare.");
             await performAction('sync-inventory', items, 'giacenze');
         }
 
@@ -337,8 +353,8 @@
             try {
                 const response = await callBackend({ action, items });
                 alert(`Operazione completata! Successi: ${response.summary?.success || 0}, Fallimenti: ${response.summary?.failure || 0}.`);
-                // Aggiorna i dati locali dopo il successo
-                (type === 'prezzi' ? priceData : inventoryData).forEach(p => {
+                const dataSet = type === 'prezzi' ? priceData : inventoryData;
+                dataSet.forEach(p => {
                     const res = response.results?.find(r => r.sku == p.sku);
                     if (res) p.status = res.success ? 'success' : 'error';
                 });
@@ -382,7 +398,6 @@
                     <label for="show-modified-filter">Mostra solo calcolati</label>
                 </div>`;
 
-            // Ricollega gli event listener
             document.getElementById('ditta-filter').addEventListener('change', handleFilterChange);
             document.getElementById('search-input').addEventListener('input', handleFilterChange);
             if(activeTab === 'inventory') document.getElementById('status-filter').addEventListener('change', handleFilterChange);
@@ -396,14 +411,13 @@
                     <div class="p-4 text-center"><p class="text-2xl font-bold">${priceData.filter(p => p.prezzoVendita).length}</p><p>Prezzi Calcolati</p></div>`;
             } else {
                 const summary = inventoryData.reduce((acc, item) => {
-                    acc.total++;
                     const status = getInventoryStatus(item);
                     if (!acc[status]) acc[status] = 0;
                     acc[status]++;
                     return acc;
-                }, { total: 0, 'to-update': 0, 'not-found': 0, 'error': 0 });
+                }, { 'to-update': 0, 'not-found': 0, 'error': 0 });
                 summarySection.innerHTML = `
-                    <div class="p-4 text-center"><p class="text-2xl font-bold">${summary.total}</p><p>Prodotti Totali</p></div>
+                    <div class="p-4 text-center"><p class="text-2xl font-bold">${inventoryData.length}</p><p>Prodotti Totali</p></div>
                     <div class="p-4 text-center"><p class="text-2xl font-bold">${summary['to-update']}</p><p>Da Aggiornare</p></div>
                     <div class="p-4 text-center"><p class="text-2xl font-bold">${summary['not-found']}</p><p>Non Trovati</p></div>
                     <div class="p-4 text-center"><p class="text-2xl font-bold">${summary['error']}</p><p>Errori</p></div>`;
@@ -488,7 +502,8 @@
         }
 
         function updateControlsState() {
-            const hasSelections = (activeTab === 'prices' ? priceData : inventoryData).some(p => p.selected);
+            const dataSet = activeTab === 'prices' ? priceData : inventoryData;
+            const hasSelections = dataSet.some(p => p.selected);
             if (activeTab === 'prices') {
                 const hasCalculations = priceData.some(p => p.prezzoVendita !== null);
                 clearPricesButton.disabled = !hasCalculations;
@@ -510,6 +525,7 @@
 
         // --- GESTIONE EVENTI ---
         loginButton.addEventListener('click', handleLogin);
+        logoutButton.addEventListener('click', handleLogout);
         passwordInput.addEventListener('keypress', (e) => e.key === 'Enter' && handleLogin());
         dropZone.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
@@ -542,6 +558,8 @@
                 updateControlsState();
             }
         });
+        
+        const handleFilterChange = () => { currentPage = 1; renderTable(); };
         
         function showLoader(show, text = 'Elaborazione...') { loader.classList.toggle('hidden', !show); loaderText.textContent = text; }
         function showError(message) { generalErrorText.textContent = message; generalErrorBox.classList.remove('hidden'); }
