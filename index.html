@@ -353,12 +353,6 @@
                 analyzeButton.disabled = false;
             }
 
-            dropZone.addEventListener('click', () => fileInput.click());
-            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-            dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files.length) handleFileSync(e.dataTransfer.files[0]); });
-            fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFileSync(e.target.files[0]); });
-
             function showErrorMessage(message) {
                 errorMessageText.innerHTML = message;
                 errorMessageBox.classList.remove('hidden');
@@ -384,8 +378,6 @@
                 if (data.error) throw new Error(data.error);
                 return data;
             }
-
-            analyzeButton.addEventListener('click', analyzeFile);
 
             async function analyzeFile() {
                 hideErrorMessage();
@@ -728,6 +720,7 @@
                 }
             }
             
+            // ===== EVENT LISTENERS RIPRISTINATI =====
             confirmSyncCheckbox.addEventListener('change', updateUIState);
             syncButton.addEventListener('click', syncFile);
             downloadCsvButton.addEventListener('click', downloadCSV);
