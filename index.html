@@ -247,16 +247,23 @@
                         if (scadenza) entry.scadenze.push(scadenza);
                     });
 
-                    showLoader(true, `Recuperando ${inventoryMap.size} prodotti da Shopify...`);
+                    // Recupera dati da Shopify in pacchetti
                     const allSkus = Array.from(inventoryMap.keys());
-                    const shopifyData = await callBackend({ action: 'get-initial-data', skus: allSkus });
+                    const CHUNK_SIZE = 250;
+                    let allShopifyData = [];
+                    for (let i = 0; i < allSkus.length; i += CHUNK_SIZE) {
+                        const chunk = allSkus.slice(i, i + CHUNK_SIZE);
+                        showLoader(true, `Recuperando pacchetto ${i/CHUNK_SIZE + 1} di ${Math.ceil(allSkus.length/CHUNK_SIZE)} da Shopify...`);
+                        const response = await callBackend({ action: 'get-initial-data', skus: chunk });
+                        allShopifyData = allShopifyData.concat(response.results);
+                    }
                     
                     inventoryData = [];
                     priceData = [];
                     let idCounter = 0;
 
                     inventoryMap.forEach((data, sku) => {
-                        const shopifyProduct = shopifyData.results.find(p => p.sku == sku);
+                        const shopifyProduct = allShopifyData.find(p => p.sku == sku);
                         let finalRow;
 
                         if (data.rows.length > 1) {
@@ -350,14 +357,31 @@
 
         async function performAction(action, items, type) {
             showLoader(true, `Aggiornando ${items.length} ${type}...`);
+            const CHUNK_SIZE = 50; // Pacchetti più piccoli per le operazioni di scrittura
+            let allResults = [];
+            
             try {
-                const response = await callBackend({ action, items });
-                alert(`Operazione completata! Successi: ${response.summary?.success || 0}, Fallimenti: ${response.summary?.failure || 0}.`);
+                for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+                    const chunk = items.slice(i, i + CHUNK_SIZE);
+                    showLoader(true, `Elaborando pacchetto ${i/CHUNK_SIZE + 1} di ${Math.ceil(items.length/CHUNK_SIZE)}...`);
+                    const response = await callBackend({ action, items: chunk });
+                    if (response.results) {
+                        allResults = allResults.concat(response.results);
+                    }
+                }
+
+                const successCount = allResults.filter(r => r.success).length;
+                const failureCount = allResults.length - successCount;
+                alert(`Operazione completata! Successi: ${successCount}, Fallimenti: ${failureCount}.`);
+
                 const dataSet = type === 'prezzi' ? priceData : inventoryData;
-                dataSet.forEach(p => {
-                    const res = response.results?.find(r => r.sku == p.sku);
-                    if (res) p.status = res.success ? 'success' : 'error';
+                allResults.forEach(result => {
+                    const itemInDataSet = dataSet.find(p => p.sku == result.sku);
+                    if (itemInDataSet) {
+                        itemInDataSet.status = result.success ? 'success' : 'error';
+                    }
                 });
+
             } catch (error) {
                 showError(error.message);
             } finally {
@@ -415,7 +439,7 @@
                     if (!acc[status]) acc[status] = 0;
                     acc[status]++;
                     return acc;
-                }, { 'to-update': 0, 'not-found': 0, 'error': 0 });
+                }, { 'to-update': 0, 'not-found': 0, 'error': 0, 'ok': 0 });
                 summarySection.innerHTML = `
                     <div class="p-4 text-center"><p class="text-2xl font-bold">${inventoryData.length}</p><p>Prodotti Totali</p></div>
                     <div class="p-4 text-center"><p class="text-2xl font-bold">${summary['to-update']}</p><p>Da Aggiornare</p></div>
