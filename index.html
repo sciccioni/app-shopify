@@ -250,7 +250,7 @@
                         });
 
                         const allSkus = Array.from(inventoryMap.keys());
-                        const CHUNK_SIZE = 100; // Ridotto per evitare timeout
+                        const CHUNK_SIZE = 100;
                         let allShopifyData = [];
                         for (let i = 0; i < allSkus.length; i += CHUNK_SIZE) {
                             const chunk = allSkus.slice(i, i + CHUNK_SIZE);
@@ -261,7 +261,7 @@
                             try {
                                 const response = await callBackend({ action: 'get-initial-data', skus: chunk });
                                 allShopifyData = allShopifyData.concat(response.results);
-                                await new Promise(resolve => setTimeout(resolve, 250)); // Pausa per non sovraccaricare API
+                                if (totalChunks > 1) await new Promise(resolve => setTimeout(resolve, 300));
                             } catch (error) {
                                 throw new Error(`Timeout o errore durante il recupero del pacchetto ${chunkNumber}. Dettagli: ${error.message}`);
                             }
@@ -376,11 +376,12 @@
             try {
                 for (let i = 0; i < items.length; i += CHUNK_SIZE) {
                     const chunk = items.slice(i, i + CHUNK_SIZE);
-                    showLoader(true, `Elaborando pacchetto ${i/CHUNK_SIZE + 1} di ${Math.ceil(items.length/CHUNK_SIZE)}...`);
+                    showLoader(true, `Elaborando pacchetto ${Math.floor(i/CHUNK_SIZE) + 1} di ${Math.ceil(items.length/CHUNK_SIZE)}...`);
                     const response = await callBackend({ action, items: chunk });
                     if (response.results) {
                         allResults = allResults.concat(response.results);
                     }
+                     if (Math.ceil(items.length/CHUNK_SIZE) > 1) await new Promise(resolve => setTimeout(resolve, 300));
                 }
 
                 const successCount = allResults.filter(r => r.success).length;
