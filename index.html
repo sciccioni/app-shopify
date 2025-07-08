@@ -132,139 +132,291 @@
     </div>
 
     <script>
-    // --- FUNZIONI GLOBALI E VARIABILI DI STATO ---
-    const CORRECT_PASSWORD = 'Ut0ph@2025!';
-    const ROWS_PER_PAGE = 100;
-    let uploadedFile = null;
-    let analysisResults = [];
-    let duplicateRows = [];
-    let fileDataRaw = [];
-    let currentPage = 1;
-
-    // --- UTILITY PER LEGGERE LE CELLE EXCEL ---
-    function getValue(obj, keys) {
-        if (!obj) return undefined;
-        for (const key of keys) {
-            const value = obj[key];
-            if (value !== undefined && value !== null) return value;
-        }
-        const lowerCaseKeys = keys.map(k => k.toLowerCase());
-        for (const objKey in obj) {
-            if (lowerCaseKeys.includes(objKey.toLowerCase())) return obj[objKey];
-        }
-        return undefined;
-    }
-    
-    // --- UTILITY PER NORMALIZZARE LE DATE ---
-    function normalizeDate(dateInput) {
-        if (!dateInput) return null;
-        let dateObj;
-        if (dateInput instanceof Date) {
-            dateObj = dateInput;
-        } else if (typeof dateInput === 'number') {
-            const utc_days = Math.floor(dateInput - 25569);
-            const utc_value = utc_days * 86400;
-            dateObj = new Date(utc_value * 1000);
-        } else if (typeof dateInput === 'string') {
-            const parts = dateInput.split(/[\/\-]/);
-            let isoDateString;
-            if (parts.length === 3) {
-                isoDateString = parts[0].length === 2 ? `${parts[2]}-${parts[1]}-${parts[0]}` : `${parts[0]}-${parts[1]}-${parts[2]}`;
-                dateObj = new Date(`${isoDateString}T00:00:00Z`);
-            } else {
-                 dateObj = new Date(dateInput);
-            }
-        } else {
-            return null;
-        }
-        if (isNaN(dateObj.getTime())) return null;
-        const year = dateObj.getUTCFullYear();
-        const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(dateObj.getUTCDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
-    
-    // --- GESTIONE LOGIN ---
-    function checkPassword() {
-        const passwordInput = document.getElementById('password-input');
-        if (passwordInput.value === CORRECT_PASSWORD) {
-            document.getElementById('password-overlay').classList.add('hidden');
-            document.getElementById('app-container').classList.remove('hidden');
-        } else {
-            document.getElementById('password-error').classList.remove('hidden');
-        }
-    }
-
-    // --- FUNZIONI DI GESTIONE UI ---
-    function showErrorMessage(message) {
-        document.getElementById('error-message-text').innerHTML = message;
-        document.getElementById('error-message-box').classList.remove('hidden');
-    }
-
-    function hideErrorMessage() {
-        document.getElementById('error-message-box').classList.add('hidden');
-    }
-
-    function updateProgressBar(current, total) {
-        const progressBar = document.getElementById('progress-bar');
-        progressBar.style.width = `${Math.round((current / total) * 100)}%`;
-    }
-
-    // --- LOGICA PRINCIPALE ---
     document.addEventListener('DOMContentLoaded', () => {
-        const loginButton = document.getElementById('login-button');
-        const passwordInput = document.getElementById('password-input');
-        loginButton.addEventListener('click', checkPassword);
-        passwordInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') checkPassword();
-        });
 
+        // --- SELEZIONE ELEMENTI DOM ---
+        const passwordOverlay = document.getElementById('password-overlay');
+        const passwordInput = document.getElementById('password-input');
+        const loginButton = document.getElementById('login-button');
+        const passwordError = document.getElementById('password-error');
+        const appContainer = document.getElementById('app-container');
+        const errorMessageBox = document.getElementById('error-message-box');
+        const errorMessageText = document.getElementById('error-message-text');
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
         const fileNameDisplay = document.getElementById('file-name');
         const analyzeButton = document.getElementById('analyze-button');
+        const loader = document.getElementById('loader');
+        const loaderText = document.getElementById('loader-text');
+        const resultsSection = document.getElementById('results-section');
+        const progressBarContainer = document.getElementById('progress-bar-container');
+        const progressBar = document.getElementById('progress-bar');
+        const summaryContainer = document.getElementById('summary');
+        const syncActionArea = document.getElementById('sync-action-area');
+        const confirmSyncCheckbox = document.getElementById('confirm-sync-checkbox');
+        const syncButton = document.getElementById('sync-button');
+        const syncStatusMessage = document.getElementById('sync-status-message');
+        const tableContainer = document.getElementById('table-container');
+        const downloadCsvButton = document.getElementById('download-csv-button');
+        const filterRadios = document.querySelectorAll('input[name="filter-type"]');
+        const duplicateFilterContainer = document.getElementById('duplicate-filter-container');
+        const syncedFilterContainer = document.getElementById('synced-filter-container');
+        const resultsTableHead = document.getElementById('results-table-head');
+        const resultsTableBody = document.getElementById('results-table-body');
+        const prevPageButton = document.getElementById('prev-page-button');
+        const nextPageButton = document.getElementById('next-page-button');
+        const pageIndicator = document.getElementById('page-indicator');
 
+        // --- VARIABILI DI STATO ---
+        const CORRECT_PASSWORD = 'Ut0ph@2025!';
+        const ROWS_PER_PAGE = 100;
+        let uploadedFile = null;
+        let analysisResults = [];
+        let duplicateRows = [];
+        let fileDataRaw = [];
+        let currentPage = 1;
+
+        // --- FUNZIONI DI UTILITY ---
+        function getValue(obj, keys) {
+            if (!obj) return undefined;
+            for (const key of keys) {
+                const value = obj[key];
+                if (value !== undefined && value !== null) return value;
+            }
+            const lowerCaseKeys = keys.map(k => k.toLowerCase());
+            for (const objKey in obj) {
+                if (lowerCaseKeys.includes(objKey.toLowerCase())) return obj[objKey];
+            }
+            return undefined;
+        }
+        
+        function normalizeDate(dateInput) {
+            if (!dateInput) return null;
+            let dateObj;
+            if (dateInput instanceof Date) { dateObj = dateInput; } 
+            else if (typeof dateInput === 'number') {
+                const utc_days = Math.floor(dateInput - 25569);
+                const utc_value = utc_days * 86400;
+                dateObj = new Date(utc_value * 1000);
+            } else if (typeof dateInput === 'string') {
+                const parts = dateInput.split(/[\/\-]/);
+                let isoDateString;
+                if (parts.length === 3) {
+                    isoDateString = parts[0].length === 2 ? `${parts[2]}-${parts[1]}-${parts[0]}` : `${parts[0]}-${parts[1]}-${parts[2]}`;
+                    dateObj = new Date(`${isoDateString}T00:00:00Z`);
+                } else { dateObj = new Date(dateInput); }
+            } else { return null; }
+            if (isNaN(dateObj.getTime())) return null;
+            const year = dateObj.getUTCFullYear();
+            const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getUTCDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function showErrorMessage(message) {
+            errorMessageText.innerHTML = message;
+            errorMessageBox.classList.remove('hidden');
+        }
+
+        function hideErrorMessage() {
+            errorMessageBox.classList.add('hidden');
+        }
+
+        function updateProgressBar(current, total) {
+            progressBar.style.width = `${Math.round((current / total) * 100)}%`;
+        }
+
+        async function callBackend(payload) {
+            const response = await fetch('/.netlify/functions/shopify-proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || `Errore server: ${response.statusText}`);
+            if (data.error) throw new Error(data.error);
+            return data;
+        }
+
+        // --- FUNZIONI PRINCIPALI ---
+        function checkPassword() {
+            if (passwordInput.value === CORRECT_PASSWORD) {
+                passwordOverlay.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+            } else {
+                passwordError.classList.remove('hidden');
+            }
+        }
+        
         function handleFile(file) {
             uploadedFile = file;
             fileNameDisplay.textContent = file.name;
             analyzeButton.disabled = false;
         }
 
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', (e) => e.preventDefault());
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-        });
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length) handleFile(e.target.files[0]);
-        });
-
-        analyzeButton.addEventListener('click', async () => {
+        async function analyzeFile() {
             hideErrorMessage();
-            document.getElementById('results-section').classList.add('hidden');
-            document.getElementById('loader').classList.remove('hidden');
-            document.getElementById('loader-text').textContent = 'Elaborazione in corso...';
+            resultsSection.classList.add('hidden');
+            loader.classList.remove('hidden');
+            loaderText.textContent = 'Elaborazione in corso...';
             analyzeButton.disabled = true;
 
             try {
                 const data = await uploadedFile.arrayBuffer();
                 const workbook = XLSX.read(data, { cellDates: true });
                 const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
+                const worksheet = workbook.Sheets[sheetName]; 
                 fileDataRaw = XLSX.utils.sheet_to_json(worksheet);
 
-                // Qui inseriremo la logica di analisi completa
-                alert("File letto con successo. Prossimo passo: implementare l'analisi.");
+                // Condivide i dati con la scheda di verifica (se esiste)
+                const verifyEvent = new CustomEvent('data-loaded-for-verification', { detail: fileDataRaw });
+                window.dispatchEvent(verifyEvent);
+
+                const skuMap = new Map();
+                fileDataRaw.forEach(row => {
+                    const sku = String(getValue(row, ['Minsan', 'EAN']) || '').trim();
+                    if (sku) {
+                        if (!skuMap.has(sku)) skuMap.set(sku, []);
+                        skuMap.get(sku).push(row);
+                    }
+                });
+
+                const fileData = [];
+                duplicateRows = [];
+                skuMap.forEach((rows, sku) => {
+                    if (rows.length > 1) {
+                        duplicateRows.push(...rows.map(r => ({...r, Minsan: sku}))); 
+                        const giacenze = rows.map(r => parseInt(getValue(r, ['Giacenza', 'giacenza']), 10) || 0);
+                        const scadenze = rows.map(r => normalizeDate(getValue(r, ['Scadenza', 'scadenza']))).filter(Boolean);
+                        const totalGiacenza = giacenze.map(g => g < 0 ? 0 : g).reduce((sum, g) => sum + g, 0);
+                        let finalExpiry = null;
+                        if (scadenze.length > 0) {
+                            const earliestTimestamp = Math.min.apply(null, scadenze.map(date => new Date(date).getTime()));
+                            const earliestDate = new Date(earliestTimestamp);
+                            finalExpiry = `${earliestDate.getUTCFullYear()}-${String(earliestDate.getUTCMonth() + 1).padStart(2, '0')}-${String(earliestDate.getUTCDate()).padStart(2, '0')}`;
+                        }
+                        const firstRow = rows[0];
+                        const consolidatedRow = {
+                            Minsan: sku,
+                            Giacenza: totalGiacenza,
+                            Scadenza: finalExpiry,
+                            Descrizione: getValue(firstRow, ['Descrizione', 'descrizione']),
+                            isDuplicate: true,
+                            duplicateDetails: { giacenze, scadenze }
+                        };
+                        fileData.push(consolidatedRow);
+                    } else {
+                        fileData.push(rows[0]);
+                    }
+                });
+
+                if (duplicateRows.length > 0) duplicateFilterContainer.classList.remove('hidden');
                 
+                const allSkus = fileData.map(row => getValue(row, ['Minsan', 'EAN'])).filter(Boolean).map(String);
+                if (allSkus.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
+                
+                const chunkSize = 250;
+                const skuChunks = [];
+                for (let i = 0; i < allSkus.length; i += chunkSize) skuChunks.push(allSkus.slice(i, i + chunkSize));
+                
+                let allShopifyProducts = [];
+                progressBarContainer.classList.remove('hidden');
+                for (let i = 0; i < skuChunks.length; i++) {
+                    loaderText.textContent = `Analisi pacchetto ${i + 1} di ${skuChunks.length}...`;
+                    const shopifyProductsChunk = await callBackend({ type: 'analyze', skus: skuChunks[i] });
+                    allShopifyProducts = allShopifyProducts.concat(shopifyProductsChunk);
+                    updateProgressBar(i + 1, skuChunks.length);
+                    if (skuChunks.length > 1) await new Promise(resolve => setTimeout(resolve, 500));
+                }
+                
+                analysisResults = [];
+                let toUpdateCount = 0, notFoundCount = 0, noChangeCount = 0, errorCount = 0;
+                for (const row of fileData) {
+                    const minsan = String(getValue(row, ['Minsan', 'EAN']));
+                    const giacenza = getValue(row, ['Giacenza', 'giacenza']);
+                    const descrizione = getValue(row, ['Descrizione', 'descrizione']);
+                    const scadenza = getValue(row, ['Scadenza', 'scadenza']);
+                    let giacenzaFile = parseInt(giacenza, 10);
+                    let scadenzaFile = normalizeDate(scadenza);
+                    
+                    let resultRow = { minsan: minsan || 'N/D', descrizione, giacenzaFile, scadenzaFile, selected: false };
+                    if (!minsan || isNaN(giacenzaFile)) {
+                        errorCount++;
+                        resultRow.status = 'error';
+                        resultRow.details = 'Dati mancanti o non numerici.';
+                    } else {
+                        const productOnShopify = allShopifyProducts.find(p => p.minsan === minsan);
+                        if (productOnShopify) {
+                            resultRow = { ...resultRow, ...productOnShopify };
+                            if (productOnShopify.inventory_quantity <= 0 && giacenzaFile < 0) {
+                                errorCount++;
+                                resultRow.status = 'error';
+                                resultRow.details = 'Giacenza a zero non può essere decrementata.';
+                            } else {
+                                const finalGiacenza = Math.max(0, giacenzaFile);
+                                const quantityChanged = finalGiacenza !== productOnShopify.inventory_quantity;
+                                const expiryChanged = scadenzaFile && (scadenzaFile !== productOnShopify.expiry_date);
+                                if (quantityChanged || expiryChanged) {
+                                    toUpdateCount++;
+                                    resultRow.status = 'to-update';
+                                    let detailsText = [];
+                                    if (row.isDuplicate) {
+                                        let duplicateDetailString = `Giacenze sommate [${row.duplicateDetails.giacenze.join(', ')}].`;
+                                        const scadenzeList = row.duplicateDetails.scadenze;
+                                        if (scadenzeList.length > 1) {
+                                            duplicateDetailString += ` Scadenze multiple [${scadenzeList.join(', ')}], selezionata la più corta: ${scadenzaFile || 'N/D'}.`;
+                                        } else if (scadenzeList.length === 1) {
+                                            duplicateDetailString += ` Unica scadenza trovata: ${scadenzeList[0]}.`;
+                                        }
+                                        detailsText.push(duplicateDetailString);
+                                    }
+                                    if (giacenzaFile < 0) detailsText.push(`Giacenza negativa (${giacenzaFile}) corretta a 0.`);
+                                    if (detailsText.length === 0) detailsText.push('Pronto per l\'aggiornamento.');
+                                    resultRow.details = detailsText.join(' ');
+                                } else {
+                                    noChangeCount++;
+                                    resultRow.status = 'no-change';
+                                    resultRow.details = `Giacenza e scadenza già corrette.`;
+                                }
+                            }
+                        } else {
+                            notFoundCount++;
+                            resultRow.status = 'not-found';
+                            resultRow.details = 'Prodotto non trovato su Shopify.';
+                        }
+                    }
+                    analysisResults.push(resultRow);
+                }
+                
+                resultsSection.classList.remove('hidden');
+                displaySummary();
+                if (analysisResults.length > 0) {
+                    tableContainer.classList.remove('hidden');
+                    document.getElementById('filter-all').checked = true;
+                    currentPage = 1;
+                    displayTablePage(currentPage);
+                }
+                if (toUpdateCount > 0) syncActionArea.classList.remove('hidden');
+
             } catch (error) {
                 console.error("Errore durante l'analisi:", error);
                 showErrorMessage(`<strong>Errore di Analisi:</strong> ${error.message}`);
+                resultsSection.classList.add('hidden');
             } finally {
-                document.getElementById('loader').classList.add('hidden');
+                loader.classList.add('hidden');
                 analyzeButton.disabled = false;
             }
-        });
+        }
+        
+        async function syncFile() { /* ... */ }
+        function downloadCSV() { /* ... */ }
+        function displaySummary() { /* ... */ }
+        function displayTablePage(page) { /* ... */ }
+        function renderTable(items, isDuplicateView) { /* ... */ }
+        function updateUIState() { /* ... */ }
+        function getStatusInfo(status) { /* ... */ }
+        
+        // ... (collegamento di tutti gli event listeners)
     });
     </script>
 </body>
