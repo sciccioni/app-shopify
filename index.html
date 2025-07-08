@@ -386,9 +386,8 @@
                             const scadenze = rows.map(r => excelDateToJSDate(r.Scadenza)).filter(Boolean);
                             let finalExpiry = null;
 
-                            // ===== CORREZIONE BUG FUSO ORARIO =====
                             if (scadenze.length > 0) {
-                                // Forza il parsing e la manipolazione delle date in UTC per evitare errori di fuso orario
+                                // MODIFICA: Ripristinata logica per trovare la data PIÙ CORTA (min)
                                 const earliestTimestamp = Math.min.apply(null, scadenze.map(date => new Date(`${date}T00:00:00Z`).getTime()));
                                 const earliestDate = new Date(earliestTimestamp);
                                 
@@ -397,7 +396,6 @@
                                 const day = String(earliestDate.getUTCDate()).padStart(2, '0');
                                 finalExpiry = `${year}-${month}-${day}`;
                             }
-                            // ===== FINE CORREZIONE =====
 
                             fileData.push({ ...rows[0], Giacenza: totalGiacenza, Scadenza: finalExpiry, isDuplicate: true, duplicateDetails: { giacenze, scadenze } });
                         } else {
@@ -458,6 +456,7 @@
                                             let duplicateDetailString = `Giacenze sommate [${row.duplicateDetails.giacenze.join(', ')}].`;
                                             const scadenzeList = row.duplicateDetails.scadenze;
                                             if (scadenzeList.length > 1) {
+                                                // MODIFICA: Ripristinato testo per indicare la data "più corta"
                                                 duplicateDetailString += ` Scadenze multiple [${scadenzeList.join(', ')}], selezionata la più corta: ${scadenzaFile}.`;
                                             } else if (scadenzeList.length === 1) {
                                                 duplicateDetailString += ` Unica scadenza trovata: ${scadenzeList[0]}.`;
