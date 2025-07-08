@@ -20,7 +20,14 @@ async function callShopifyApi(query) {
     if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN) {
         throw new Error("Variabili d'ambiente Shopify mancanti.");
     }
-    const endpoint = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/2024-04/graphql.json`;
+    
+    // CORREZIONE: Assicura che l'URL sia corretto
+    let storeUrl = SHOPIFY_STORE_NAME;
+    if (!storeUrl.includes('.myshopify.com')) {
+        storeUrl = `${storeUrl}.myshopify.com`;
+    }
+
+    const endpoint = `https://${storeUrl}/admin/api/2024-04/graphql.json`;
 
     const response = await fetch(endpoint, {
         method: 'POST',
