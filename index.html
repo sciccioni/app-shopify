@@ -192,7 +192,6 @@
         const paginationControls = document.getElementById('pagination-controls');
 
         // --- STATO APP ---
-        let authToken = sessionStorage.getItem('authToken');
         let inventoryData = [];
         let priceData = [];
         let currentPage = 1;
@@ -201,7 +200,7 @@
         let uploadedFile = null;
         
         // --- INIZIALIZZAZIONE ---
-        if (authToken) {
+        if (sessionStorage.getItem('authToken')) {
             passwordOverlay.classList.add('hidden');
             appContainer.classList.remove('hidden');
         }
@@ -232,8 +231,8 @@
             loginButton.textContent = 'Verifica...';
             try {
                 const response = await callBackend({ action: 'login', password: passwordInput.value });
-                authToken = response.token;
-                sessionStorage.setItem('authToken', authToken);
+                if (!response.token) throw new Error("Risposta di login non valida dal server.");
+                sessionStorage.setItem('authToken', response.token);
                 passwordOverlay.classList.add('hidden');
                 appContainer.classList.remove('hidden');
             } catch (error) {
@@ -653,14 +652,22 @@
             return date.toISOString().split('T')[0];
         }
         async function callBackend(payload) {
-            if (!authToken) throw new Error("Token di autenticazione non presente.");
+            const token = sessionStorage.getItem('authToken');
+            if (!token) {
+                showError("Sessione scaduta o non valida. Effettua nuovamente il login.");
+                passwordOverlay.classList.remove('hidden');
+                throw new Error("Token di autenticazione non presente.");
+            }
             const response = await fetch('/.netlify/functions/unified-manager', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(payload)
             });
             const data = await response.json();
-            if (!response.ok) throw new Error(data.error || `Errore del server: ${response.statusText}`);
+            if (!response.ok) {
+                if (response.status === 401) handleLogout();
+                throw new Error(data.error || `Errore del server: ${response.statusText}`);
+            }
             return data;
         }
     });
