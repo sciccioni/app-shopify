@@ -17,6 +17,9 @@ function verifyToken(authHeader) {
 // Funzione per eseguire chiamate API a Shopify
 async function callShopifyApi(query) {
     const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN } = process.env;
+    if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN) {
+        throw new Error("Variabili d'ambiente Shopify mancanti.");
+    }
     const endpoint = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/2024-04/graphql.json`;
 
     const response = await fetch(endpoint, {
@@ -30,6 +33,7 @@ async function callShopifyApi(query) {
 
     const data = await response.json();
     if (data.errors) {
+        console.error("Errore API Shopify:", JSON.stringify(data.errors, null, 2));
         throw new Error(data.errors.map(e => e.message).join(', '));
     }
     return data.data;
@@ -45,7 +49,6 @@ exports.handler = async (event) => {
         const payload = JSON.parse(event.body);
 
         switch (payload.action) {
-            // --- AZIONI PUBBLICHE ---
             case 'login':
                 const { password } = payload;
                 if (!password || password !== process.env.APP_PASSWORD) {
@@ -54,7 +57,6 @@ exports.handler = async (event) => {
                 const token = jwt.sign({ authorized: true }, process.env.JWT_SECRET, { expiresIn: '8h' });
                 return { statusCode: 200, body: JSON.stringify({ token }) };
 
-            // --- AZIONI PROTETTE ---
             case 'get-initial-data':
                 verifyToken(event.headers.authorization);
                 return getInitialData(payload.skus);
@@ -71,13 +73,16 @@ exports.handler = async (event) => {
                 return { statusCode: 400, body: JSON.stringify({ error: 'Azione non riconosciuta' }) };
         }
     } catch (error) {
-        console.error('Errore nel backend:', error);
+        console.error('Errore nel backend:', error.message);
         return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
     }
 };
 
-// Recupera tutti i dati iniziali (prezzi e giacenze)
+// Recupera i dati per un pacchetto di SKU
 async function getInitialData(skus) {
+    if (!skus || skus.length === 0) {
+        return { statusCode: 200, body: JSON.stringify({ results: [] }) };
+    }
     const skuQueryString = skus.map(s => `sku:'${s}'`).join(' OR ');
     const query = `
         query getProductsBySkus {
@@ -118,7 +123,7 @@ async function getInitialData(skus) {
     return { statusCode: 200, body: JSON.stringify({ results: products }) };
 }
 
-// Sincronizza giacenze e scadenze
+// Sincronizza giacenze e scadenze per un pacchetto
 async function syncInventory(items) {
     const locationId = `gid://shopify/Location/${process.env.SHOPIFY_LOCATION_ID}`;
     let mutations = [];
@@ -152,26 +157,28 @@ async function syncInventory(items) {
         `);
     }
 
-    if (mutations.length > 0) {
-        const finalMutation = `mutation { ${mutations.join('\n')} }`;
-        const result = await callShopifyApi(finalMutation);
-        const userErrors = [...(result.inventoryUpdate?.userErrors || []), ...(result.metafieldsUpdate?.userErrors || [])];
-        if (userErrors.length > 0) {
-            throw new Error(userErrors.map(e => e.message).join(', '));
-        }
+    if (mutations.length === 0) {
+        return { statusCode: 200, body: JSON.stringify({ success: true, message: "Nessuna azione da eseguire." }) };
     }
 
-    // Ritorna un successo generico, il frontend gestisce lo stato per riga
-    return { statusCode: 200, body: JSON.stringify({ success: true }) };
+    const finalMutation = `mutation { ${mutations.join('\n')} }`;
+    const result = await callShopifyApi(finalMutation);
+    const userErrors = [...(result.inventoryUpdate?.userErrors || []), ...(result.metafieldsUpdate?.userErrors || [])];
+
+    if (userErrors.length > 0) {
+        throw new Error(userErrors.map(e => e.message).join(', '));
+    }
+
+    return { statusCode: 200, body: JSON.stringify({ success: true, results: items.map(i => ({ sku: i.sku, success: true })) }) };
 }
 
 
-// Aggiorna i prezzi
+// Aggiorna i prezzi per un pacchetto
 async function updatePrices(items) {
     let results = [];
     for (const item of items) {
-        const findVariantQuery = `query { productVariants(first: 1, query: "sku:${item.sku}") { edges { node { id } } } }`;
         try {
+            const findVariantQuery = `query { productVariants(first: 1, query: "sku:${item.sku}") { edges { node { id } } } }`;
             const findData = await callShopifyApi(findVariantQuery);
             const variantId = findData.productVariants.edges[0]?.node.id;
 
