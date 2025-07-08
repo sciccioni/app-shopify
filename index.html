@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App Sincronizzazione e Verifica Dati</title>
+    <title>App Sincronizzazione e Verifica Dati (DEBUG MODE)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -46,6 +46,14 @@
             color: #4f46e5; /* indigo-600 */
             border-bottom-color: #4f46e5;
             font-weight: 600;
+        }
+        .debug-cell {
+            background-color: #fefce8;
+            font-family: monospace;
+            font-size: 10px;
+            white-space: pre;
+            max-width: 400px;
+            overflow-x: auto;
         }
     </style>
 </head>
@@ -365,7 +373,7 @@
                     const data = await uploadedFile.arrayBuffer();
                     const workbook = XLSX.read(data);
                     const sheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[sheetName]; 
+                    const worksheet = workbook.Sheets[sheetName];
                     fileDataRaw = XLSX.utils.sheet_to_json(worksheet);
 
                     window.dispatchEvent(new CustomEvent('data-loaded-for-verification', { detail: fileDataRaw }));
@@ -449,7 +457,15 @@
                         let giacenzaFile = parseInt(giacenza, 10);
                         let scadenzaFile = typeof scadenza === 'number' ? excelDateToJSDate(scadenza) : scadenza;
                         
-                        let resultRow = { minsan: minsan || 'N/D', descrizione, giacenzaFile, scadenzaFile, selected: false };
+                        let resultRow = { 
+                            minsan: minsan || 'N/D', 
+                            descrizione, 
+                            giacenzaFile, 
+                            scadenzaFile, 
+                            selected: false,
+                            // Aggiungo la riga originale per il debug
+                            _debug_source_row: row 
+                        };
 
                         if (!minsan || isNaN(giacenzaFile)) {
                             errorCount++;
@@ -655,7 +671,7 @@
                         resultsTableBody.appendChild(row);
                     });
                 } else {
-                    resultsTableHead.innerHTML = `<tr><th class="px-2 py-3"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 rounded"></th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minsan/SKU</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[200px]">Descrizione</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giac. Shopify</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giac. File</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. Shopify</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. File</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stato</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dettagli</th></tr>`;
+                    resultsTableHead.innerHTML = `<tr><th class="px-2 py-3"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 rounded"></th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minsan/SKU</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[200px]">Descrizione</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giac. Shopify</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giac. File</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. Shopify</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. File</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stato</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dettagli</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase text-red-600">DEBUG</th></tr>`;
                     items.forEach(res => {
                         const statusInfo = getStatusInfo(res.status);
                         const row = document.createElement('tr');
@@ -664,7 +680,8 @@
                         if (res.status === 'to-update') {
                             checkboxHTML = `<td class="px-2 py-4"><input type="checkbox" class="h-4 w-4 text-indigo-600 rounded row-checkbox" data-minsan="${res.minsan}" ${res.selected ? 'checked' : ''}></td>`;
                         }
-                        row.innerHTML = `${checkboxHTML}<td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${res.minsan}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.title || res.descrizione}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.inventory_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.giacenzaFile}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.expiry_date || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.scadenzaFile || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${statusInfo.badgeClass}">${statusInfo.icon} ${statusInfo.label}</span></td><td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.details || ''}</td>`;
+                        const debugData = JSON.stringify(res._debug_source_row, null, 2);
+                        row.innerHTML = `${checkboxHTML}<td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${res.minsan}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.title || res.descrizione}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.inventory_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.giacenzaFile}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.expiry_date || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.scadenzaFile || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${statusInfo.badgeClass}">${statusInfo.icon} ${statusInfo.label}</span></td><td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.details || ''}</td><td class="p-2 debug-cell">${debugData}</td>`;
                         resultsTableBody.appendChild(row);
                     });
                 }
@@ -695,7 +712,6 @@
                 }
             }
             
-            // ===== CODICE RIPRISTINATO: Event listener per filtri e download =====
             confirmSyncCheckbox.addEventListener('change', updateUIState);
             syncButton.addEventListener('click', syncFile);
             downloadCsvButton.addEventListener('click', downloadCSV);
