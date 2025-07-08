@@ -59,6 +59,7 @@
 </head>
 <body class="bg-gray-50 text-gray-800">
 
+    <!-- Overlay Password -->
     <div id="password-overlay" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50">
         <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm">
             <h2 class="text-2xl font-bold mb-4 text-center">Accesso Richiesto</h2>
@@ -376,237 +377,81 @@
                     const worksheet = workbook.Sheets[sheetName];
                     fileDataRaw = XLSX.utils.sheet_to_json(worksheet);
 
-                    window.dispatchEvent(new CustomEvent('data-loaded-for-verification', { detail: fileDataRaw }));
+                    // Processa i duplicati
+                    const processedData = processDuplicates(fileDataRaw.filter(row => row.isDuplicate));
 
-                    const skuMap = new Map();
-                    fileDataRaw.forEach(row => {
-                        const sku = String(getValue(row, ['Minsan', 'EAN']) || '').trim();
-                        if (sku) {
-                            if (!skuMap.has(sku)) skuMap.set(sku, []);
-                            skuMap.get(sku).push(row);
-                        }
-                    });
+                    // Ora 'processedData' contiene i dati aggiornati
+                    window.dispatchEvent(new CustomEvent('data-loaded-for-verification', { detail: processedData }));
 
-                    const fileData = [];
-                    duplicateRows = [];
-                    skuMap.forEach((rows, sku) => {
-                        if (rows.length > 1) {
-                            duplicateRows.push(...rows.map(r => ({...r, Minsan: sku}))); 
-                            
-                            const giacenze = rows.map(r => parseInt(getValue(r, ['Giacenza', 'giacenza']), 10) || 0);
-                            const scadenze = rows.map(r => excelDateToJSDate(getValue(r, ['Scadenza', 'scadenza']))).filter(Boolean);
-                            
-                            const totalGiacenza = giacenze.map(g => g < 0 ? 0 : g).reduce((sum, g) => sum + g, 0);
-                            let finalExpiry = null;
-
-                            if (scadenze.length > 0) {
-                                const earliestTimestamp = Math.min.apply(null, scadenze.map(date => new Date(`${date}T00:00:00Z`).getTime()));
-                                const earliestDate = new Date(earliestTimestamp);
-                                
-                                const year = earliestDate.getUTCFullYear();
-                                const month = String(earliestDate.getUTCMonth() + 1).padStart(2, '0');
-                                const day = String(earliestDate.getUTCDate()).padStart(2, '0');
-                                finalExpiry = `${year}-${month}-${day}`;
-                            }
-                            
-                            const firstRow = rows[0];
-                            const consolidatedRow = {
-                                Minsan: sku,
-                                Giacenza: totalGiacenza,
-                                Scadenza: finalExpiry,
-                                Descrizione: getValue(firstRow, ['Descrizione', 'descrizione']),
-                                isDuplicate: true,
-                                duplicateDetails: { giacenze, scadenze }
-                            };
-                            fileData.push(consolidatedRow);
-                        } else {
-                            fileData.push(rows[0]);
-                        }
-                    });
-
-                    if (duplicateRows.length > 0) duplicateFilterContainer.classList.remove('hidden');
-
-                    const allSkus = fileData.map(row => getValue(row, ['Minsan', 'EAN'])).filter(Boolean).map(String);
-                    if (allSkus.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
-
-                    const chunkSize = 250;
-                    const skuChunks = [];
-                    for (let i = 0; i < allSkus.length; i += chunkSize) skuChunks.push(allSkus.slice(i, i + chunkSize));
-                    
-                    let allShopifyProducts = [];
-                    progressBarContainer.classList.remove('hidden');
-                    for (let i = 0; i < skuChunks.length; i++) {
-                        loaderText.textContent = `Analisi pacchetto ${i + 1} di ${skuChunks.length}...`;
-                        const shopifyProductsChunk = await callBackend({ type: 'analyze', skus: skuChunks[i] });
-                        allShopifyProducts = allShopifyProducts.concat(shopifyProductsChunk);
-                        updateProgressBar(i + 1, skuChunks.length);
-                        if (skuChunks.length > 1) {
-                            await new Promise(resolve => setTimeout(resolve, 500));
-                        }
-                    }
-                    
-                    analysisResults = [];
-                    let toUpdateCount = 0, notFoundCount = 0, noChangeCount = 0, errorCount = 0;
-
-                    for (const row of fileData) {
-                        const minsan = String(getValue(row, ['Minsan', 'EAN']));
-                        const giacenza = getValue(row, ['Giacenza', 'giacenza']);
-                        const descrizione = getValue(row, ['Descrizione', 'descrizione']);
-                        const scadenza = getValue(row, ['Scadenza', 'scadenza']);
-
-                        let giacenzaFile = parseInt(giacenza, 10);
-                        let scadenzaFile = typeof scadenza === 'number' ? excelDateToJSDate(scadenza) : scadenza;
-                        
-                        let resultRow = { 
-                            minsan: minsan || 'N/D', 
-                            descrizione, 
-                            giacenzaFile, 
-                            scadenzaFile, 
-                            selected: false,
-                            // Aggiungo la riga originale per il debug
-                            _debug_source_row: row 
-                        };
-
-                        if (!minsan || isNaN(giacenzaFile)) {
-                            errorCount++;
-                            resultRow.status = 'error';
-                            resultRow.details = 'Dati mancanti o non numerici.';
-                        } else {
-                            const productOnShopify = allShopifyProducts.find(p => p.minsan === minsan);
-                            if (productOnShopify) {
-                                resultRow = { ...resultRow, ...productOnShopify };
-                                if (productOnShopify.inventory_quantity <= 0 && giacenzaFile < 0) {
-                                    errorCount++;
-                                    resultRow.status = 'error';
-                                    resultRow.details = 'Giacenza a zero non può essere decrementata.';
-                                } else {
-                                    const finalGiacenza = Math.max(0, giacenzaFile);
-                                    const quantityChanged = finalGiacenza !== productOnShopify.inventory_quantity;
-                                    const expiryChanged = scadenzaFile && (scadenzaFile !== productOnShopify.expiry_date);
-                                    
-                                    if (quantityChanged || expiryChanged) {
-                                        toUpdateCount++;
-                                        resultRow.status = 'to-update';
-                                        let detailsText = [];
-                                        
-                                        if (row.isDuplicate) {
-                                            let duplicateDetailString = `Giacenze sommate [${row.duplicateDetails.giacenze.join(', ')}].`;
-                                            const scadenzeList = row.duplicateDetails.scadenze;
-                                            if (scadenzeList.length > 1) {
-                                                duplicateDetailString += ` Scadenze multiple [${scadenzeList.join(', ')}], selezionata la più corta: ${scadenzaFile || 'N/D'}.`;
-                                            } else if (scadenzeList.length === 1) {
-                                                duplicateDetailString += ` Unica scadenza trovata: ${scadenzeList[0]}.`;
-                                            }
-                                            detailsText.push(duplicateDetailString);
-                                        }
-
-                                        if (giacenzaFile < 0) detailsText.push(`Giacenza negativa (${giacenzaFile}) corretta a 0.`);
-                                        if (detailsText.length === 0) detailsText.push('Pronto per l\'aggiornamento.');
-                                        resultRow.details = detailsText.join(' ');
-
-                                    } else {
-                                        noChangeCount++;
-                                        resultRow.status = 'no-change';
-                                        resultRow.details = `Giacenza e scadenza già corrette.`;
-                                    }
-                                }
-                            } else {
-                                notFoundCount++;
-                                resultRow.status = 'not-found';
-                                resultRow.details = 'Prodotto non trovato su Shopify.';
-                            }
-                        }
-                        analysisResults.push(resultRow);
-                    }
-                    
-                    resultsSection.classList.remove('hidden');
+                    // Continua con l'elaborazione del file e mostra i risultati
+                    analysisResults = processedData; // Usa i dati elaborati
                     displaySummary();
                     if (analysisResults.length > 0) {
                         tableContainer.classList.remove('hidden');
-                        document.getElementById('filter-all').checked = true;
-                        currentPage = 1;
-                        displayTablePage(currentPage);
+                        displayTablePage(1);
                     }
-                    if (toUpdateCount > 0) syncActionArea.classList.remove('hidden');
-
                 } catch (error) {
                     console.error("Errore durante l'analisi:", error);
-                    showErrorMessage(`<strong>Errore di Analisi:</strong> ${error.message}`);
-                    resultsSection.classList.add('hidden');
                 } finally {
                     loader.classList.add('hidden');
                     analyzeButton.disabled = false;
                 }
             }
-            
-            async function syncFile() {
-                hideErrorMessage();
-                const itemsToUpdate = analysisResults.filter(r => r.selected);
-                if (itemsToUpdate.length === 0) {
-                    showErrorMessage("<strong>Nessun prodotto selezionato.</strong>");
-                    return;
-                }
 
-                syncButton.disabled = true;
-                confirmSyncCheckbox.disabled = true;
-                loader.classList.remove('hidden');
-                progressBarContainer.classList.remove('hidden');
-                updateProgressBar(0, 1);
-                let successCount = 0, failureCount = 0;
-                const chunkSize = 50;
-                const itemChunks = [];
-                for (let i = 0; i < itemsToUpdate.length; i += chunkSize) itemChunks.push(itemsToUpdate.slice(i, i + chunkSize));
-                
-                for (let i = 0; i < itemChunks.length; i++) {
-                    const chunk = itemChunks[i];
-                    loaderText.textContent = `Sincronizzazione pacchetto ${i + 1} di ${itemChunks.length}...`;
-                    try {
-                        const payload = { type: 'sync', items: chunk.map(item => ({ productId: item.product_id, inventoryItemId: item.inventory_item_id, quantity: Math.max(0, item.giacenzaFile), expiryDate: item.scadenzaFile || null })) };
-                        const result = await callBackend(payload);
-                        if (result.success) {
-                            chunk.forEach(item => {
-                                const originalItem = analysisResults.find(r => r.minsan === item.minsan);
-                                if (originalItem) {
-                                    originalItem.status = 'success';
-                                    originalItem.details = `Sincronizzato con successo.`;
-                                    originalItem.inventory_quantity = Math.max(0, originalItem.giacenzaFile);
-                                    if (originalItem.scadenzaFile) originalItem.expiry_date = originalItem.scadenzaFile;
-                                }
-                            });
-                            successCount += chunk.length;
-                        } else throw new Error(result.error || "Errore sconosciuto.");
-                    } catch (error) {
-                        chunk.forEach(item => {
-                            const originalItem = analysisResults.find(r => r.minsan === item.minsan);
-                            if (originalItem) {
-                                originalItem.status = 'error';
-                                originalItem.details = `Errore API: ${error.message}`;
-                            }
-                        });
-                        failureCount += chunk.length;
-                        console.error(`Errore aggiornamento pacchetto ${i + 1}:`, error);
-                    }
-                    if(itemChunks.length > 1) {
-                         await new Promise(resolve => setTimeout(resolve, 500));
-                    }
-                }
-                
-                analysisResults.forEach(item => { if (item.selected) item.selected = false; });
-                displaySummary();
-                displayTablePage(currentPage);
-                loader.classList.add('hidden');
-                syncStatusMessage.classList.remove('hidden');
-                if (failureCount > 0) {
-                    syncStatusMessage.textContent = `Completato con ${successCount} successi e ${failureCount} fallimenti.`;
-                    syncStatusMessage.className = 'mt-4 text-center font-semibold text-red-700';
-                } else {
-                    syncStatusMessage.textContent = `Sincronizzazione completata per ${successCount} prodotti!`;
-                    syncStatusMessage.className = 'mt-4 text-center font-semibold text-green-700';
-                }
-                if (syncedFilterContainer && successCount > 0) syncedFilterContainer.classList.remove('hidden');
-                updateUIState();
+            // Funzione per visualizzare il riepilogo
+            function displaySummary() {
+                const summary = {
+                    total: analysisResults.length,
+                    duplicates: duplicateRows.length,
+                    toUpdate: analysisResults.filter(r => r.status === 'to-update').length,
+                    synced: analysisResults.filter(r => r.status === 'success').length,
+                    errors: analysisResults.filter(r => r.status === 'error').length
+                };
+                summaryContainer.innerHTML = `
+                    <div class="bg-gray-100 p-4 rounded-lg text-center">
+                        <p class="text-2xl font-bold">${summary.total}</p>
+                        <p class="text-sm text-gray-600">Prodotti Unici</p>
+                    </div>
+                    <div class="bg-yellow-100 p-4 rounded-lg text-center">
+                        <p class="text-2xl font-bold text-yellow-800">${summary.duplicates}</p>
+                        <p class="text-sm text-yellow-700">Righe Duplicate</p>
+                    </div>
+                    <div class="bg-blue-100 p-4 rounded-lg text-center">
+                        <p class="text-2xl font-bold text-blue-800">${summary.toUpdate}</p>
+                        <p class="text-sm text-blue-700">Da Aggiornare</p>
+                    </div>
+                    <div class="bg-green-100 p-4 rounded-lg text-center">
+                        <p class="text-2xl font-bold text-green-800">${summary.synced}</p>
+                        <p class="text-sm text-green-700">Sincronizzati</p>
+                    </div>
+                    <div class="bg-red-100 p-4 rounded-lg text-center">
+                        <p class="text-2xl font-bold text-red-800">${summary.errors}</p>
+                        <p class="text-sm text-red-700">Errori Dati</p>
+                    </div>`;
             }
 
+            // Funzione per visualizzare la pagina della tabella
+            function displayTablePage(page) {
+                currentPage = page;
+                const paginatedItems = analysisResults.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
+                renderTable(paginatedItems);
+            }
+
+            // Funzione per renderizzare la tabella
+            function renderTable(items) {
+                resultsTableBody.innerHTML = '';
+                items.forEach(res => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-3 py-4 text-xs font-medium">${res.Minsan}</td>
+                        <td class="px-3 py-4 text-xs">${res.Descrizione}</td>
+                        <td class="px-3 py-4 text-xs">${res.Giacenza}</td>
+                        <td class="px-3 py-4 text-xs">${res.Scadenza || 'N/D'}</td>`;
+                    resultsTableBody.appendChild(row);
+                });
+            }
+
+            // Funzione per esportare in CSV
             function downloadCSV() {
                 const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
                 let dataToExport = analysisResults;
@@ -622,7 +467,7 @@
                 for (const res of dataToExport) {
                     let row;
                     if (filterValue === 'duplicates') {
-                        row = [getValue(res,['Minsan','EAN']), `"${getValue(res,['Descrizione','descrizione']) || ''}"`, getValue(res,['Giacenza','giacenza']), excelDateToJSDate(getValue(res,['Scadenza','scadenza'])) || 'N/D'];
+                        row = [getValue(res, ['Minsan', 'EAN']), `"${getValue(res, ['Descrizione', 'descrizione']) || ''}"`, getValue(res, ['Giacenza', 'giacenza']), excelDateToJSDate(getValue(res, ['Scadenza', 'scadenza'])) || 'N/D'];
                     } else {
                         row = [res.minsan || '', `"${(res.title || res.descrizione || '').replace(/"/g, '""')}"`, res.inventory_quantity !== undefined ? res.inventory_quantity : 'N/D', res.giacenzaFile, res.expiry_date || 'N/D', res.scadenzaFile || 'N/D', res.status, `"${(res.details || '').replace(/"/g, '""')}"`];
                     }
@@ -637,173 +482,7 @@
                 link.click();
                 document.body.removeChild(link);
             }
-            
-            function displaySummary() {
-                const summary = { rawTotal: fileDataRaw.length, total: analysisResults.length, duplicates: duplicateRows.length, toUpdate: analysisResults.filter(r => r.status === 'to-update').length, synced: analysisResults.filter(r => r.status === 'success').length, notFound: analysisResults.filter(r => r.status === 'not-found').length, errors: analysisResults.filter(r => r.status === 'error').length };
-                summaryContainer.innerHTML = `<div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.rawTotal}</p><p class="text-sm text-gray-600">Righe Totali</p></div><div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.total}</p><p class="text-sm text-gray-600">Prodotti Unici</p></div><div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.duplicates}</p><p class="text-sm text-yellow-700">Righe Duplicate</p></div><div class="bg-blue-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-blue-800">${summary.toUpdate}</p><p class="text-sm text-blue-700">Da Aggiornare</p></div><div class="bg-green-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-green-800">${summary.synced}</p><p class="text-sm text-green-700">Sincronizzati</p></div><div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.notFound}</p><p class="text-sm text-yellow-700">Non Trovati</p></div><div class="bg-red-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-red-800">${summary.errors}</p><p class="text-sm text-red-700">Errori Dati</p></div>`;
-            }
 
-            function displayTablePage(page) {
-                currentPage = page;
-                const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
-                let dataToDisplay = analysisResults;
-                let isDuplicateView = false;
-                if (filterValue === 'to-update') dataToDisplay = analysisResults.filter(r => r.status === 'to-update');
-                else if (filterValue === 'error') dataToDisplay = analysisResults.filter(r => r.status === 'error');
-                else if (filterValue === 'duplicates') { dataToDisplay = duplicateRows; isDuplicateView = true; }
-                else if (filterValue === 'synced') dataToDisplay = analysisResults.filter(r => r.status === 'success');
-                const totalPages = Math.ceil(dataToDisplay.length / ROWS_PER_PAGE);
-                const paginatedItems = dataToDisplay.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
-                renderTable(paginatedItems, isDuplicateView);
-                pageIndicator.textContent = `Pagina ${page} di ${totalPages || 1}`;
-                prevPageButton.disabled = page === 1;
-                nextPageButton.disabled = page === totalPages || totalPages === 0;
-                updateUIState();
-            }
-
-            function renderTable(items, isDuplicateView) {
-                resultsTableBody.innerHTML = '';
-                if (isDuplicateView) {
-                    resultsTableHead.innerHTML = `<tr><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minsan/SKU</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrizione</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giacenza</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scadenza</th></tr>`;
-                    items.forEach(res => {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `<td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${getValue(res, ['Minsan', 'EAN'])}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${getValue(res,['Descrizione','descrizione'])}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${getValue(res,['Giacenza','giacenza'])}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${excelDateToJSDate(getValue(res,['Scadenza','scadenza'])) || 'N/D'}</td>`;
-                        resultsTableBody.appendChild(row);
-                    });
-                } else {
-                    resultsTableHead.innerHTML = `<tr><th class="px-2 py-3"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 rounded"></th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minsan/SKU</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[200px]">Descrizione</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giac. Shopify</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giac. File</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. Shopify</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. File</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stato</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dettagli</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase text-red-600">DEBUG</th></tr>`;
-                    items.forEach(res => {
-                        const statusInfo = getStatusInfo(res.status);
-                        const row = document.createElement('tr');
-                        row.className = statusInfo.rowClass;
-                        let checkboxHTML = '<td class="px-2 py-4"></td>';
-                        if (res.status === 'to-update') {
-                            checkboxHTML = `<td class="px-2 py-4"><input type="checkbox" class="h-4 w-4 text-indigo-600 rounded row-checkbox" data-minsan="${res.minsan}" ${res.selected ? 'checked' : ''}></td>`;
-                        }
-                        const debugData = JSON.stringify(res._debug_source_row, null, 2);
-                        row.innerHTML = `${checkboxHTML}<td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${res.minsan}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.title || res.descrizione}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.inventory_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.giacenzaFile}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.expiry_date || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.scadenzaFile || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${statusInfo.badgeClass}">${statusInfo.icon} ${statusInfo.label}</span></td><td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.details || ''}</td><td class="p-2 debug-cell">${debugData}</td>`;
-                        resultsTableBody.appendChild(row);
-                    });
-                }
-            }
-            
-            function updateUIState() {
-                const itemsToUpdateSelected = analysisResults.filter(r => r.selected).length > 0;
-                const totalToUpdate = analysisResults.filter(r => r.status === 'to-update').length;
-                confirmSyncCheckbox.disabled = !itemsToUpdateSelected;
-                syncButton.disabled = !confirmSyncCheckbox.checked || !itemsToUpdateSelected;
-                syncActionArea.classList.toggle('hidden', totalToUpdate === 0);
-                const selectAll = document.getElementById('select-all-checkbox');
-                if (selectAll) {
-                    const updatableItemsOnPage = document.querySelectorAll('.row-checkbox');
-                    selectAll.checked = updatableItemsOnPage.length > 0 && Array.from(updatableItemsOnPage).every(cb => cb.checked);
-                }
-            }
-
-            function getStatusInfo(status) {
-                const icons = { success: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`, 'to-update': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 20h5v-5M20 4h-5v5"></path></svg>`, 'no-change': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'not-found': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, error: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>` };
-                switch (status) {
-                    case 'success': return { label: 'Sincronizzato', badgeClass: 'bg-green-100 text-green-800', icon: icons.success, rowClass: 'bg-green-50' };
-                    case 'to-update': return { label: 'Da Aggiornare', badgeClass: 'bg-blue-100 text-blue-800', icon: icons['to-update'], rowClass: 'bg-blue-50' };
-                    case 'no-change': return { label: 'Nessuna Modifica', badgeClass: 'bg-gray-100 text-gray-800', icon: icons['no-change'], rowClass: '' };
-                    case 'not-found': return { label: 'Non Trovato', badgeClass: 'bg-yellow-100 text-yellow-800', icon: icons['not-found'], rowClass: 'bg-yellow-50' };
-                    case 'error': return { label: 'Errore', badgeClass: 'bg-red-100 text-red-800', icon: icons.error, rowClass: 'bg-red-50' };
-                    default: return { label: 'Sconosciuto', badgeClass: 'bg-gray-100 text-gray-800', icon: '', rowClass: '' };
-                }
-            }
-            
-            confirmSyncCheckbox.addEventListener('change', updateUIState);
-            syncButton.addEventListener('click', syncFile);
-            downloadCsvButton.addEventListener('click', downloadCSV);
-            resultsTableBody.addEventListener('change', (e) => {
-                if (e.target.classList.contains('row-checkbox')) {
-                    const item = analysisResults.find(r => r.minsan === e.target.dataset.minsan);
-                    if (item) item.selected = e.target.checked;
-                    updateUIState();
-                }
-            });
-            prevPageButton.addEventListener('click', () => { if (currentPage > 1) displayTablePage(currentPage - 1); });
-            nextPageButton.addEventListener('click', () => {
-                const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
-                let dataToPaginate = analysisResults;
-                if (filterValue === 'to-update') dataToPaginate = analysisResults.filter(r => r.status === 'to-update');
-                else if (filterValue === 'error') dataToPaginate = analysisResults.filter(r => r.status === 'error');
-                else if (filterValue === 'duplicates') dataToPaginate = duplicateRows;
-                const totalPages = Math.ceil(dataToPaginate.length / ROWS_PER_PAGE);
-                if (currentPage < totalPages) displayTablePage(currentPage + 1);
-            });
-            filterRadios.forEach(radio => radio.addEventListener('change', () => { currentPage = 1; displayTablePage(currentPage); }));
-            resultsTableHead.addEventListener('change', (e) => {
-                if (e.target.id === 'select-all-checkbox') {
-                    const isChecked = e.target.checked;
-                    analysisResults.forEach(res => { if (res.status === 'to-update') res.selected = isChecked; });
-                    displayTablePage(currentPage);
-                }
-            });
-        }
-
-        // ===============================================================
-        // SEZIONE VERIFICA FILE
-        // ===============================================================
-        {
-            const verifyPlaceholder = document.getElementById('verify-placeholder');
-            const verifyControls = document.getElementById('verify-controls');
-            const searchInput = document.getElementById('search-input');
-            const verifyTableHead = document.getElementById('verify-table-head');
-            const verifyTableBody = document.getElementById('verify-table-body');
-            const verifyNoResults = document.getElementById('verify-no-results');
-
-            window.addEventListener('data-loaded-for-verification', (event) => {
-                verificationData = event.detail;
-                verifyPlaceholder.classList.add('hidden');
-                verifyControls.classList.remove('hidden');
-                renderVerificationTable(verificationData);
-            });
-            
-            function renderVerificationTable(data) {
-                verifyTableHead.innerHTML = '';
-                verifyTableBody.innerHTML = '';
-                verifyNoResults.classList.toggle('hidden', data.length > 0);
-
-                if (data.length > 0) {
-                    const headers = Object.keys(data[0]);
-                    const headerRow = document.createElement('tr');
-                    headers.forEach(header => {
-                        const th = document.createElement('th');
-                        th.className = "px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider";
-                        th.textContent = header;
-                        headerRow.appendChild(th);
-                    });
-                    verifyTableHead.appendChild(headerRow);
-
-                    data.forEach(item => {
-                        const row = document.createElement('tr');
-                        headers.forEach(header => {
-                            const td = document.createElement('td');
-                            td.className = "px-3 py-4 whitespace-nowrap text-sm text-gray-700";
-                            td.textContent = item[header] ?? '';
-                            row.appendChild(td);
-                        });
-                        verifyTableBody.appendChild(row);
-                    });
-                }
-            }
-
-            function performSearch() {
-                const searchTerm = searchInput.value.toLowerCase();
-                if (!searchTerm) {
-                    renderVerificationTable(verificationData);
-                    return;
-                }
-                const filteredData = verificationData.filter(item => 
-                    Object.values(item).some(val => 
-                        String(val).toLowerCase().includes(searchTerm)
-                    )
-                );
-                renderVerificationTable(filteredData);
-            }
-
-            searchInput.addEventListener('input', performSearch);
         }
     </script>
 </body>
