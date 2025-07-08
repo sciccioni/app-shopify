@@ -365,10 +365,7 @@
                     const worksheet = workbook.Sheets[sheetName];
                     fileDataRaw = XLSX.utils.sheet_to_json(worksheet);
 
-                    // --- LOGICA CONDIVISIONE DATI CON SCHEDA VERIFICA ---
-                    verificationData = fileDataRaw;
-                    window.dispatchEvent(new CustomEvent('data-loaded-for-verification'));
-                    // --- FINE LOGICA CONDIVISIONE ---
+                    window.dispatchEvent(new CustomEvent('data-loaded-for-verification', { detail: fileDataRaw }));
 
                     const skuMap = new Map();
                     fileDataRaw.forEach(row => {
@@ -388,10 +385,20 @@
                             const totalGiacenza = giacenze.map(g => g < 0 ? 0 : g).reduce((sum, g) => sum + g, 0);
                             const scadenze = rows.map(r => excelDateToJSDate(r.Scadenza)).filter(Boolean);
                             let finalExpiry = null;
+
+                            // ===== CORREZIONE BUG FUSO ORARIO =====
                             if (scadenze.length > 0) {
-                                const earliestDate = new Date(Math.min.apply(null, scadenze.map(date => new Date(date))));
-                                finalExpiry = `${earliestDate.getFullYear()}-${String(earliestDate.getMonth() + 1).padStart(2, '0')}-${String(earliestDate.getDate()).padStart(2, '0')}`;
+                                // Forza il parsing e la manipolazione delle date in UTC per evitare errori di fuso orario
+                                const earliestTimestamp = Math.min.apply(null, scadenze.map(date => new Date(`${date}T00:00:00Z`).getTime()));
+                                const earliestDate = new Date(earliestTimestamp);
+                                
+                                const year = earliestDate.getUTCFullYear();
+                                const month = String(earliestDate.getUTCMonth() + 1).padStart(2, '0');
+                                const day = String(earliestDate.getUTCDate()).padStart(2, '0');
+                                finalExpiry = `${year}-${month}-${day}`;
                             }
+                            // ===== FINE CORREZIONE =====
+
                             fileData.push({ ...rows[0], Giacenza: totalGiacenza, Scadenza: finalExpiry, isDuplicate: true, duplicateDetails: { giacenze, scadenze } });
                         } else {
                             fileData.push(rows[0]);
@@ -447,7 +454,6 @@
                                         resultRow.status = 'to-update';
                                         let detailsText = [];
                                         
-                                        // ===== MODIFICA PER DETTAGLI SCADENZE MULTIPLE =====
                                         if (row.isDuplicate) {
                                             let duplicateDetailString = `Giacenze sommate [${row.duplicateDetails.giacenze.join(', ')}].`;
                                             const scadenzeList = row.duplicateDetails.scadenze;
@@ -458,7 +464,6 @@
                                             }
                                             detailsText.push(duplicateDetailString);
                                         }
-                                        // ===== FINE MODIFICA =====
 
                                         if (giacenzaFile < 0) detailsText.push(`Giacenza negativa (${giacenzaFile}) corretta a 0.`);
                                         if (detailsText.length === 0) detailsText.push('Pronto per l\'aggiornamento.');
@@ -711,7 +716,8 @@
             const verifyTableBody = document.getElementById('verify-table-body');
             const verifyNoResults = document.getElementById('verify-no-results');
 
-            window.addEventListener('data-loaded-for-verification', () => {
+            window.addEventListener('data-loaded-for-verification', (event) => {
+                verificationData = event.detail;
                 verifyPlaceholder.classList.add('hidden');
                 verifyControls.classList.remove('hidden');
                 renderVerificationTable(verificationData);
@@ -723,7 +729,6 @@
                 verifyNoResults.classList.toggle('hidden', data.length > 0);
 
                 if (data.length > 0) {
-                    // Crea Headers
                     const headers = Object.keys(data[0]);
                     const headerRow = document.createElement('tr');
                     headers.forEach(header => {
@@ -734,7 +739,6 @@
                     });
                     verifyTableHead.appendChild(headerRow);
 
-                    // Crea Righe
                     data.forEach(item => {
                         const row = document.createElement('tr');
                         headers.forEach(header => {
