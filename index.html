@@ -31,9 +31,9 @@
             <div class="space-y-4">
                 <div>
                     <label for="password-input" class="sr-only">Password</label>
-                    <input type="password" id="password-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" placeholder="Password">
+                    <input type="password" id="password-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Password">
                 </div>
-                <button id="login-button" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors">Accedi</button>
+                <button id="login-button" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700">Accedi</button>
             </div>
             <p id="password-error" class="text-red-500 text-sm text-center mt-4 hidden">Password non corretta. Riprova.</p>
         </div>
@@ -68,7 +68,7 @@
                                <p id="file-name" class="text-sm text-gray-500 mt-2"></p>
                            </div>
                        </div>
-                       <button id="analyze-button" class="mt-4 w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors" disabled>
+                       <button id="analyze-button" class="mt-4 w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed" disabled>
                            Analizza File
                        </button>
                    </div>
@@ -80,67 +80,7 @@
                         <p id="loader-text" class="mt-2 text-gray-600">Elaborazione in corso...</p>
                     </div>
                     <div id="results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden">
-                        <h2 class="text-xl font-semibold mb-4">2. Report di Analisi</h2>
-                        <div id="progress-bar-container" class="w-full bg-gray-200 rounded-full h-2.5 mb-4 hidden">
-                            <div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
                         </div>
-                        <div id="summary" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6"></div>
-                        <div id="sync-action-area" class="mt-6 p-4 border-t border-b border-gray-200 hidden">
-                            <div class="flex flex-col md:flex-row items-center justify-center gap-4">
-                                <div class="flex items-center">
-                                    <input id="confirm-sync-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
-                                    <label for="confirm-sync-checkbox" class="ml-2 block text-sm text-gray-900">
-                                        Confermo di voler aggiornare i prodotti selezionati.
-                                    </label>
-                                </div>
-                                <button id="sync-button" class="bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed transition-colors">
-                                    Sincronizza Selezionati
-                                </button>
-                            </div>
-                            <p id="sync-status-message" class="mt-4 text-center font-semibold hidden"></p>
-                        </div>
-                        <div id="table-container" class="hidden mt-6">
-                           <div class="flex justify-between items-center mb-4">
-                               <fieldset class="flex items-center space-x-4">
-                                   <legend class="sr-only">Filtri</legend>
-                                   <div class="flex items-center">
-                                       <input id="filter-all" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="all" checked>
-                                       <label for="filter-all" class="ml-2 block text-sm font-medium">Tutti</label>
-                                   </div>
-                                   <div class="flex items-center">
-                                       <input id="filter-toupdate" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="to-update">
-                                       <label for="filter-toupdate" class="ml-2 block text-sm font-medium">Da Aggiornare</label>
-                                   </div>
-                                   <div class="flex items-center">
-                                       <input id="filter-errors" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="error">
-                                       <label for="filter-errors" class="ml-2 block text-sm font-medium">Solo Errori</label>
-                                   </div>
-                                   <div id="synced-filter-container" class="flex items-center hidden">
-                                       <input id="filter-synced" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="synced">
-                                       <label for="filter-synced" class="ml-2 block text-sm font-medium">Solo Sincronizzati</label>
-                                   </div>
-                                   <div id="duplicate-filter-container" class="flex items-center hidden">
-                                       <input id="filter-duplicates" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="duplicates">
-                                       <label for="filter-duplicates" class="ml-2 block text-sm font-medium">Solo Duplicati</label>
-                                   </div>
-                               </fieldset>
-                               <button id="download-csv-button" class="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-800 text-sm">
-                                   Scarica Report
-                               </button>
-                           </div>
-                           <div class="overflow-x-auto">
-                               <table class="min-w-full divide-y divide-gray-200">
-                                   <thead id="results-table-head" class="bg-gray-50"></thead>
-                                   <tbody id="results-table-body" class="bg-white divide-y divide-gray-200"></tbody>
-                               </table>
-                           </div>
-                           <div id="pagination-controls" class="mt-4 flex items-center justify-between">
-                               <button id="prev-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed">&larr; Precedente</button>
-                               <span id="page-indicator" class="text-sm font-semibold"></span>
-                               <button id="next-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed">Successivo &rarr;</button>
-                           </div>
-                       </div>
-                    </div>
                 </main>
             </div>
 
@@ -173,7 +113,6 @@
     </div>
 
     <script>
-    // Blocco unico per evitare errori di scope e hoisting
     document.addEventListener('DOMContentLoaded', () => {
 
         // --- SELEZIONE DI TUTTI GLI ELEMENTI DEL DOM ---
@@ -195,26 +134,9 @@
         const loader = document.getElementById('loader');
         const loaderText = document.getElementById('loader-text');
         const resultsSection = document.getElementById('results-section');
-        const progressBarContainer = document.getElementById('progress-bar-container');
-        const progressBar = document.getElementById('progress-bar');
-        const summaryContainer = document.getElementById('summary');
-        const syncActionArea = document.getElementById('sync-action-area');
-        const confirmSyncCheckbox = document.getElementById('confirm-sync-checkbox');
-        const syncButton = document.getElementById('sync-button');
-        const syncStatusMessage = document.getElementById('sync-status-message');
-        const tableContainer = document.getElementById('table-container');
-        const downloadCsvButton = document.getElementById('download-csv-button');
-        const filterRadios = document.querySelectorAll('input[name="filter-type"]');
-        const duplicateFilterContainer = document.getElementById('duplicate-filter-container');
-        const syncedFilterContainer = document.getElementById('synced-filter-container');
-        const resultsTableHead = document.getElementById('results-table-head');
-        const resultsTableBody = document.getElementById('results-table-body');
-        const prevPageButton = document.getElementById('prev-page-button');
-        const nextPageButton = document.getElementById('next-page-button');
-        const pageIndicator = document.getElementById('page-indicator');
+        const searchInput = document.getElementById('search-input');
         const verifyPlaceholder = document.getElementById('verify-placeholder');
         const verifyControls = document.getElementById('verify-controls');
-        const searchInput = document.getElementById('search-input');
         const verifyTableHead = document.getElementById('verify-table-head');
         const verifyTableBody = document.getElementById('verify-table-body');
         const verifyNoResults = document.getElementById('verify-no-results');
@@ -234,15 +156,11 @@
             if (!obj) return undefined;
             for (const key of keys) {
                 const value = obj[key];
-                if (value !== undefined && value !== null) {
-                    return value;
-                }
+                if (value !== undefined && value !== null) return value;
             }
             const lowerCaseKeys = keys.map(k => k.toLowerCase());
             for (const objKey in obj) {
-                if (lowerCaseKeys.includes(objKey.toLowerCase())) {
-                    return obj[objKey];
-                }
+                if (lowerCaseKeys.includes(objKey.toLowerCase())) return obj[objKey];
             }
             return undefined;
         }
@@ -302,7 +220,15 @@
         }
 
         // --- FUNZIONI PRINCIPALI ---
-
+        function checkPassword() {
+            if (passwordInput.value === CORRECT_PASSWORD) {
+                passwordOverlay.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+            } else {
+                passwordError.classList.remove('hidden');
+            }
+        }
+        
         function handleFileSync(file) {
             uploadedFile = file;
             fileNameDisplay.textContent = file.name;
@@ -371,6 +297,7 @@
                 for (let i = 0; i < allSkus.length; i += chunkSize) skuChunks.push(allSkus.slice(i, i + chunkSize));
                 
                 let allShopifyProducts = [];
+                const progressBar = document.getElementById('progress-bar');
                 progressBarContainer.classList.remove('hidden');
                 for (let i = 0; i < skuChunks.length; i++) {
                     loaderText.textContent = `Analisi pacchetto ${i + 1} di ${skuChunks.length}...`;
@@ -389,8 +316,8 @@
                     const scadenza = getValue(row, ['Scadenza', 'scadenza']);
                     let giacenzaFile = parseInt(giacenza, 10);
                     let scadenzaFile = normalizeDate(scadenza);
+                    
                     let resultRow = { minsan: minsan || 'N/D', descrizione, giacenzaFile, scadenzaFile, selected: false };
-
                     if (!minsan || isNaN(giacenzaFile)) {
                         errorCount++;
                         resultRow.status = 'error';
@@ -439,15 +366,18 @@
                     analysisResults.push(resultRow);
                 }
                 
-                resultsSection.classList.remove('hidden');
-                displaySummary();
+                // Popola la sezione dei risultati con i dati calcolati
+                const resultsContent = document.getElementById('results-section');
+                resultsContent.querySelector('#summary').innerHTML = displaySummary(analysisResults, fileDataRaw.length, duplicateRows.length);
                 if (analysisResults.length > 0) {
-                    tableContainer.classList.remove('hidden');
-                    document.getElementById('filter-all').checked = true;
-                    currentPage = 1;
-                    displayTablePage(currentPage);
+                     resultsContent.querySelector('#table-container').classList.remove('hidden');
+                     document.getElementById('filter-all').checked = true;
+                     currentPage = 1;
+                     displayTablePage(currentPage);
                 }
-                if (toUpdateCount > 0) syncActionArea.classList.remove('hidden');
+                if (toUpdateCount > 0) resultsContent.querySelector('#sync-action-area').classList.remove('hidden');
+
+                resultsSection.classList.remove('hidden');
 
             } catch (error) {
                 console.error("Errore durante l'analisi:", error);
@@ -507,7 +437,7 @@
                 if(itemChunks.length > 1) await new Promise(resolve => setTimeout(resolve, 500));
             }
             analysisResults.forEach(item => { if (item.selected) item.selected = false; });
-            displaySummary();
+            document.getElementById('summary').innerHTML = displaySummary(analysisResults, fileDataRaw.length, duplicateRows.length);
             displayTablePage(currentPage);
             loader.classList.add('hidden');
             syncStatusMessage.classList.remove('hidden');
@@ -553,9 +483,17 @@
             document.body.removeChild(link);
         }
         
-        function displaySummary() {
-            const summary = { rawTotal: fileDataRaw.length, total: analysisResults.length, duplicates: duplicateRows.length, toUpdate: analysisResults.filter(r => r.status === 'to-update').length, synced: analysisResults.filter(r => r.status === 'success').length, notFound: analysisResults.filter(r => r.status === 'not-found').length, errors: analysisResults.filter(r => r.status === 'error').length };
-            summaryContainer.innerHTML = `<div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.rawTotal}</p><p class="text-sm text-gray-600">Righe Totali</p></div><div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.total}</p><p class="text-sm text-gray-600">Prodotti Unici</p></div><div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.duplicates}</p><p class="text-sm text-yellow-700">Righe Duplicate</p></div><div class="bg-blue-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-blue-800">${summary.toUpdate}</p><p class="text-sm text-blue-700">Da Aggiornare</p></div><div class="bg-green-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-green-800">${summary.synced}</p><p class="text-sm text-green-700">Sincronizzati</p></div><div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.notFound}</p><p class="text-sm text-yellow-700">Non Trovati</p></div><div class="bg-red-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-red-800">${summary.errors}</p><p class="text-sm text-red-700">Errori Dati</p></div>`;
+        function displaySummary(results, rawTotal, duplicatesTotal) {
+            const summaryData = {
+                rawTotal: rawTotal,
+                total: results.length,
+                duplicates: duplicatesTotal,
+                toUpdate: results.filter(r => r.status === 'to-update').length,
+                synced: results.filter(r => r.status === 'success').length,
+                notFound: results.filter(r => r.status === 'not-found').length,
+                errors: results.filter(r => r.status === 'error').length
+            };
+            return `<div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summaryData.rawTotal}</p><p class="text-sm text-gray-600">Righe Totali</p></div><div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summaryData.total}</p><p class="text-sm text-gray-600">Prodotti Unici</p></div><div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summaryData.duplicates}</p><p class="text-sm text-yellow-700">Righe Duplicate</p></div><div class="bg-blue-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-blue-800">${summaryData.toUpdate}</p><p class="text-sm text-blue-700">Da Aggiornare</p></div><div class="bg-green-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-green-800">${summaryData.synced}</p><p class="text-sm text-green-700">Sincronizzati</p></div><div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summaryData.notFound}</p><p class="text-sm text-yellow-700">Non Trovati</p></div><div class="bg-red-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-red-800">${summaryData.errors}</p><p class="text-sm text-red-700">Errori Dati</p></div>`;
         }
 
         function displayTablePage(page) {
@@ -626,9 +564,30 @@
             }
         }
         
+        function checkPassword() {
+            if (passwordInput.value === CORRECT_PASSWORD) {
+                passwordOverlay.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+            } else {
+                passwordError.classList.remove('hidden');
+            }
+        }
+
         // --- COLLEGAMENTO DI TUTTI GLI EVENT LISTENERS ---
         loginButton.addEventListener('click', checkPassword);
-        passwordInput.addEventListener('keypress', (e) => e.key === 'Enter' && checkPassword());
+        passwordInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') checkPassword(); });
+        syncTabButton.addEventListener('click', () => {
+            syncTabButton.classList.add('active');
+            verifyTabButton.classList.remove('active');
+            syncTabContent.classList.remove('hidden');
+            verifyTabContent.classList.add('hidden');
+        });
+        verifyTabButton.addEventListener('click', () => {
+            verifyTabButton.classList.add('active');
+            syncTabButton.classList.remove('active');
+            verifyTabContent.classList.remove('hidden');
+            syncTabContent.classList.add('hidden');
+        });
         dropZone.addEventListener('click', () => fileInput.click());
         dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
         dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
