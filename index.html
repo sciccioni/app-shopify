@@ -341,22 +341,18 @@
                         const giacenzeCorrette = giacenze.map(g => g < 0 ? 0 : g);
                         const totalGiacenza = giacenzeCorrette.reduce((sum, g) => sum + g, 0);
                         
-                        // ===== MODIFICA PER SCADENZA PIÙ CORTA =====
                         const scadenze = rows.map(r => excelDateToJSDate(r.Scadenza)).filter(Boolean);
                         let finalExpiry = null;
 
                         if (scadenze.length > 0) {
-                            // Trova la data minima (la più corta)
                             const earliestDate = new Date(
                                 Math.min.apply(null, scadenze.map(date => new Date(date)))
                             );
-                            // Formatta di nuovo la data in 'YYYY-MM-DD'
                             const year = earliestDate.getFullYear();
                             const month = String(earliestDate.getMonth() + 1).padStart(2, '0');
                             const day = String(earliestDate.getDate()).padStart(2, '0');
                             finalExpiry = `${year}-${month}-${day}`;
                         }
-                        // ===== FINE MODIFICA =====
 
                         const consolidatedRow = { ...rows[0], Giacenza: totalGiacenza, Scadenza: finalExpiry, isDuplicate: true, duplicateDetails: { giacenze, scadenze } };
                         fileData.push(consolidatedRow);
@@ -399,7 +395,6 @@
                     const scadenza = row.Scadenza;
                     
                     let giacenzaFile = parseInt(giacenza, 10);
-                    // La scadenza potrebbe essere già una stringa se è stata consolidata, altrimenti è un numero da convertire
                     let scadenzaFile = typeof scadenza === 'number' ? excelDateToJSDate(scadenza) : scadenza;
 
                     let resultRow = { 
@@ -431,17 +426,23 @@
                                 if (quantityChanged || expiryChanged) {
                                     toUpdateCount++;
                                     resultRow.status = 'to-update';
-                                    let detailsText = ['Pronto per aggiornare.'];
+                                    let detailsText = [];
+                                    
+                                    // ===== MODIFICA PER DETTAGLI PUNTUALI =====
                                     if(row.isDuplicate) {
-                                        detailsText.push(`Giacenze (${row.duplicateDetails.giacenze.join(', ')}) corrette e sommate.`);
-                                        if (scadenzaFile) {
-                                             detailsText.push(`Scadenza più corta (${scadenzaFile}) selezionata tra [${row.duplicateDetails.scadenze.join(', ')}].`);
-                                        }
+                                        const giacenzeList = row.duplicateDetails.giacenze.join(', ');
+                                        const scadenzeList = row.duplicateDetails.scadenze.length > 0 ? row.duplicateDetails.scadenze.join(', ') : 'Nessuna';
+                                        detailsText.push(`Duplicato: Giacenze [${giacenzeList}] - Scadenze [${scadenzeList}].`);
                                     }
                                     if (giacenzaFile < 0) {
-                                        detailsText.push(`Giacenza negativa (${giacenzaFile}) sarà impostata a 0.`);
+                                        detailsText.push(`Giacenza negativa (${giacenzaFile}) corretta a 0.`);
+                                    }
+                                    if (detailsText.length === 0) {
+                                        detailsText.push('Pronto per l\'aggiornamento.');
                                     }
                                     resultRow.details = detailsText.join(' ');
+                                    // ===== FINE MODIFICA =====
+
                                 } else {
                                     noChangeCount++;
                                     resultRow.status = 'no-change';
