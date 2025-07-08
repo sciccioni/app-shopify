@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -36,7 +35,7 @@
         .tab-button.active { color: #4f46e5; border-bottom-color: #4f46e5; font-weight: 600; }
     </style>
 </head>
-<body>
+<body class="bg-gray-50">
 
     <!-- Schermata di Login -->
     <div id="password-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50">
@@ -74,15 +73,6 @@
 
         <!-- Contenuto Principale -->
         <main class="space-y-8">
-            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <h2 class="text-xl font-semibold mb-4 text-gray-800">1. Carica il File Dati</h2>
-                <div id="drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
-                    <input type="file" id="file-input" class="hidden" accept=".xlsx, .xls, .csv">
-                    <p id="drop-zone-text">Trascina qui il file o <span class="font-semibold text-indigo-600">clicca per selezionarlo</span>.</p>
-                    <p id="file-name" class="text-sm text-gray-500 mt-2 font-medium"></p>
-                </div>
-            </div>
-
             <div id="loader" class="text-center p-8 hidden">
                 <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto"></div>
                 <p id="loader-text" class="mt-4 text-gray-600">Elaborazione in corso...</p>
@@ -92,9 +82,25 @@
                 <p class="font-bold">Errore</p>
                 <p id="general-error-text"></p>
             </div>
+            
+            <!-- Contenuto Unificato -->
+            <div id="unified-content">
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">1. Carica File Dati</h2>
+                    <div id="drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
+                        <input type="file" id="file-input" class="hidden" accept=".xlsx, .xls, .csv">
+                        <p id="drop-zone-text">Trascina qui il file o <span class="font-semibold text-indigo-600">clicca per selezionarlo</span>.</p>
+                        <p id="file-name" class="text-sm text-gray-500 mt-2 font-medium"></p>
+                    </div>
+                    <button id="analyze-button" class="mt-4 w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300" disabled>
+                        Analizza File Caricato
+                    </button>
+                </div>
+            </div>
 
-            <div id="prices-tab-content">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Controlli specifici per Tab -->
+            <div id="tab-controls">
+                <div id="prices-controls" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                         <h2 class="text-xl font-semibold mb-4 text-gray-800">2. Imposta Ricarica</h2>
                         <div class="space-y-4">
@@ -118,10 +124,7 @@
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <div id="inventory-tab-content" class="hidden">
-                 <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div id="inventory-controls" class="hidden bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                     <h2 class="text-xl font-semibold mb-4 text-gray-800">2. Sincronizza Giacenze</h2>
                     <div class="space-y-4">
                         <input id="confirm-sync-inventory-checkbox" type="checkbox" disabled>
@@ -131,6 +134,7 @@
                 </div>
             </div>
             
+            <!-- Tabella Dati (Condivisa) -->
             <div id="results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden">
                  <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
                     <h2 id="table-title" class="text-xl font-semibold text-gray-800">Elenco Prodotti</h2>
@@ -161,6 +165,7 @@
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
         const fileNameDisplay = document.getElementById('file-name');
+        const analyzeButton = document.getElementById('analyze-button');
         const loader = document.getElementById('loader');
         const loaderText = document.getElementById('loader-text');
         const generalErrorBox = document.getElementById('general-error-box');
@@ -168,8 +173,8 @@
         
         const pricesTabButton = document.getElementById('prices-tab-button');
         const inventoryTabButton = document.getElementById('inventory-tab-button');
-        const pricesTabContent = document.getElementById('prices-tab-content');
-        const inventoryTabContent = document.getElementById('inventory-tab-content');
+        const pricesControls = document.getElementById('prices-controls');
+        const inventoryControls = document.getElementById('inventory-controls');
 
         const markupInput = document.getElementById('markup-percentage');
         const calculatePricesButton = document.getElementById('calculate-prices-button');
@@ -188,11 +193,13 @@
 
         // --- STATO APP ---
         let authToken = sessionStorage.getItem('authToken');
+        let rawFileData = [];
         let inventoryData = [];
         let priceData = [];
         let currentPage = 1;
         let activeTab = 'prices';
         const ROWS_PER_PAGE = 50;
+        let uploadedFile = null;
         
         // --- INIZIALIZZAZIONE ---
         if (authToken) {
@@ -200,7 +207,6 @@
             appContainer.classList.remove('hidden');
         }
         
-        // Dark Mode
         const lightIcon = document.getElementById('theme-toggle-light-icon');
         const darkIcon = document.getElementById('theme-toggle-dark-icon');
 
@@ -215,25 +221,9 @@
         themeToggle.addEventListener('click', () => {
             lightIcon.classList.toggle('hidden');
             darkIcon.classList.toggle('hidden');
-            if (localStorage.getItem('color-theme')) {
-                if (localStorage.getItem('color-theme') === 'light') {
-                    document.documentElement.classList.add('dark');
-                    localStorage.setItem('color-theme', 'dark');
-                } else {
-                    document.documentElement.classList.remove('dark');
-                    localStorage.setItem('color-theme', 'light');
-                }
-            } else {
-                if (document.documentElement.classList.contains('dark')) {
-                    document.documentElement.classList.remove('dark');
-                    localStorage.setItem('color-theme', 'light');
-                } else {
-                    document.documentElement.classList.add('dark');
-                    localStorage.setItem('color-theme', 'dark');
-                }
-            }
+            document.documentElement.classList.toggle('dark');
+            localStorage.setItem('color-theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
         });
-
 
         // --- FUNZIONI PRINCIPALI ---
 
@@ -242,16 +232,8 @@
             loginButton.disabled = true;
             loginButton.textContent = 'Verifica...';
             try {
-                const response = await fetch('/.netlify/functions/unified-manager', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'login', password: passwordInput.value }),
-                });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || "Errore di autenticazione");
-                if (!data.token) throw new Error("Risposta di login non valida dal server.");
-
-                authToken = data.token;
+                const response = await callBackend({ action: 'login', password: passwordInput.value });
+                authToken = response.token;
                 sessionStorage.setItem('authToken', authToken);
                 passwordOverlay.classList.add('hidden');
                 appContainer.classList.remove('hidden');
@@ -265,15 +247,20 @@
         }
         
         function handleLogout() {
-            authToken = null;
             sessionStorage.removeItem('authToken');
             window.location.reload();
         }
 
-        async function handleFile(file) {
+        function handleFileSelect(file) {
             if (!file) return;
-            showLoader(true, "Leggendo il file...");
+            uploadedFile = file;
             fileNameDisplay.textContent = file.name;
+            analyzeButton.disabled = false;
+        }
+
+        async function analyzeFile() {
+            if (!uploadedFile) return;
+            showLoader(true, "Leggendo il file...");
             generalErrorBox.classList.add('hidden');
 
             try {
@@ -284,7 +271,7 @@
                         const workbook = XLSX.read(data, { type: 'array' });
                         const sheetName = workbook.SheetNames[0];
                         const worksheet = workbook.Sheets[sheetName];
-                        const rawFileData = XLSX.utils.sheet_to_json(worksheet);
+                        rawFileData = XLSX.utils.sheet_to_json(worksheet);
 
                         const inventoryMap = new Map();
                         rawFileData.forEach(row => {
@@ -301,7 +288,7 @@
                         });
 
                         const allSkus = Array.from(inventoryMap.keys());
-                        const CHUNK_SIZE = 100;
+                        const CHUNK_SIZE = 250;
                         let allShopifyData = [];
                         for (let i = 0; i < allSkus.length; i += CHUNK_SIZE) {
                             const chunk = allSkus.slice(i, i + CHUNK_SIZE);
@@ -364,7 +351,7 @@
                         showLoader(false);
                     }
                 };
-                reader.readAsArrayBuffer(file);
+                reader.readAsArrayBuffer(uploadedFile);
             } catch (error) {
                 showError(error.message);
                 showLoader(false);
@@ -375,8 +362,8 @@
             activeTab = tabName;
             pricesTabButton.classList.toggle('active', tabName === 'prices');
             inventoryTabButton.classList.toggle('active', tabName === 'inventory');
-            pricesTabContent.classList.toggle('hidden', tabName !== 'prices');
-            inventoryTabContent.classList.toggle('hidden', tabName !== 'inventory');
+            pricesControls.classList.toggle('hidden', tabName !== 'prices');
+            inventoryControls.classList.toggle('hidden', tabName !== 'inventory');
             if (inventoryData.length > 0) {
                 currentPage = 1;
                 renderUIForActiveTab();
@@ -617,10 +604,11 @@
         logoutButton.addEventListener('click', handleLogout);
         passwordInput.addEventListener('keypress', (e) => e.key === 'Enter' && handleLogin());
         dropZone.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+        fileInput.addEventListener('change', (e) => handleFileSelect(e.target.files[0]));
+        analyzeButton.addEventListener('click', analyzeFile);
         dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
         dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-        dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+        dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFileSelect(e.dataTransfer.files[0]); });
         pricesTabButton.addEventListener('click', () => switchTab('prices'));
         inventoryTabButton.addEventListener('click', () => switchTab('inventory'));
         calculatePricesButton.addEventListener('click', calculatePrices);
