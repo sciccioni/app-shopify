@@ -193,7 +193,6 @@
 
         // --- STATO APP ---
         let authToken = sessionStorage.getItem('authToken');
-        let rawFileData = [];
         let inventoryData = [];
         let priceData = [];
         let currentPage = 1;
@@ -271,7 +270,7 @@
                         const workbook = XLSX.read(data, { type: 'array' });
                         const sheetName = workbook.SheetNames[0];
                         const worksheet = workbook.Sheets[sheetName];
-                        rawFileData = XLSX.utils.sheet_to_json(worksheet);
+                        const rawFileData = XLSX.utils.sheet_to_json(worksheet);
 
                         const inventoryMap = new Map();
                         rawFileData.forEach(row => {
@@ -288,7 +287,7 @@
                         });
 
                         const allSkus = Array.from(inventoryMap.keys());
-                        const CHUNK_SIZE = 250;
+                        const CHUNK_SIZE = 100;
                         let allShopifyData = [];
                         for (let i = 0; i < allSkus.length; i += CHUNK_SIZE) {
                             const chunk = allSkus.slice(i, i + CHUNK_SIZE);
