@@ -9,7 +9,7 @@ async function callShopifyApi(query, variables = {}) {
         shopifyBaseUrl = `https://${SHOPIFY_STORE_NAME}.myshopify.com`;
     }
 
-    const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-07/graphql.json`, {
+    const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-04/graphql.json`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
