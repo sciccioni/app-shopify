@@ -61,11 +61,10 @@ exports.handler = async function(event) {
         // Caso 1: L'app chiede di ANALIZZARE un pacchetto di prodotti
         if (payload.type === 'analyze') {
             const { skus } = payload;
-            const locationId = `gid://shopify/Location/${SHOPIFY_LOCATION_ID}`;
             
             const skuQueryString = skus.map(s => `sku:'${s}'`).join(' OR ');
             const query = `
-                query getProductsBySkus($locationId: ID!) {
+                query getProductsBySkus {
                     products(first: ${skus.length}, query: "${skuQueryString}") {
                         edges {
                             node {
@@ -80,12 +79,13 @@ exports.handler = async function(event) {
                                             sku
                                             inventoryItem { 
                                                 id 
-                                                inventoryLevels(first: 1, query: "location_id:${locationId}") {
+                                                inventoryLevels(first: 1, query: "location_id:gid://shopify/Location/${SHOPIFY_LOCATION_ID}") {
                                                     edges {
                                                         node {
-                                                            available
-                                                            committed
-                                                            onHand
+                                                            quantities(names: ["available", "committed", "on_hand"]) {
+                                                                name
+                                                                quantity
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -98,13 +98,19 @@ exports.handler = async function(event) {
                         }
                     }
                 }`;
-            const shopifyData = await callShopifyApi(query, { locationId });
+            const shopifyData = await callShopifyApi(query);
             const products = shopifyData.products.edges.map(edge => {
                 const variant = edge.node.variants.edges[0]?.node;
                 const inventoryLevel = variant?.inventoryItem?.inventoryLevels?.edges[0]?.node;
-                const onHand = inventoryLevel?.onHand;
-                const available = inventoryLevel?.available;
-                const committed = inventoryLevel?.committed;
+                let onHand, available, committed;
+
+                if (inventoryLevel && Array.isArray(inventoryLevel.quantities)) {
+                    inventoryLevel.quantities.forEach(q => {
+                        if (q.name === 'on_hand') onHand = q.quantity;
+                        if (q.name === 'available') available = q.quantity;
+                        if (q.name === 'committed') committed = q.quantity;
+                    });
+                }
                 const unavailable = (onHand !== undefined && available !== undefined) ? (onHand - available) : undefined;
                 
                 return {
