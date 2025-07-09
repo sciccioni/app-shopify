@@ -481,7 +481,7 @@
                 if (allSkus.length === 0) throw new Error("Nessun EAN/Minsan valido trovato nel file.");
 
                 // *** MODIFICA QUI: chunkSize ridotto per l'analisi ***
-                const chunkSize = 10; // Ridotto per testare i limiti di Shopify
+                const chunkSize = 100; // Ridotto per testare i limiti di Shopify
                 const skuChunks = [];
                 for (let i = 0; i < allSkus.length; i += chunkSize) {
                     skuChunks.push(allSkus.slice(i, i + chunkSize));
