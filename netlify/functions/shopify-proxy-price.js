@@ -1,17 +1,21 @@
 // Funzione helper per eseguire chiamate all'API GraphQL di Shopify
 async function callShopifyApi(query, variables = {}) {
+    // Recupera le credenziali dalle variabili d'ambiente del server
     const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN } = process.env;
 
+    // Esegue la chiamata all'endpoint GraphQL di Shopify
     const response = await fetch(`https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/2024-07/graphql.json`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-Shopify-Access-Token': adminApiToken,
+            // CORREZIONE: Usa la variabile corretta SHOPIFY_ADMIN_API_TOKEN
+            'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN,
         },
         body: JSON.stringify({ query, variables }),
     });
 
     const data = await response.json();
+    // Se Shopify restituisce errori, li logga e li inoltra al frontend
     if (data.errors) {
         console.error("Shopify API Errors:", JSON.stringify(data.errors, null, 2));
         throw new Error(data.errors.map(e => e.message).join(', '));
@@ -21,7 +25,7 @@ async function callShopifyApi(query, variables = {}) {
 
 // Funzione principale del backend (Serverless Function)
 exports.handler = async function(event) {
-    // Controlla subito le variabili d'ambiente necessarie
+    // Controlla subito che tutte le variabili d'ambiente necessarie siano state impostate su Netlify
     const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, APP_PASSWORD } = process.env;
     if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN || !APP_PASSWORD) {
         const missing = [
@@ -32,6 +36,7 @@ exports.handler = async function(event) {
         return { statusCode: 500, body: JSON.stringify({ error: `Variabili d'ambiente mancanti sul server: ${missing}` }) };
     }
 
+    // Accetta solo richieste di tipo POST
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
@@ -39,7 +44,7 @@ exports.handler = async function(event) {
     try {
         const payload = JSON.parse(event.body);
 
-        // Controllo della password per ogni richiesta
+        // Controllo della password per ogni singola richiesta
         if (payload.password !== APP_PASSWORD) {
             return { statusCode: 401, body: JSON.stringify({ error: "Autenticazione fallita." }) };
         }
