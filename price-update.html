@@ -103,6 +103,9 @@
             border-bottom-color: #4f46e5;
             font-weight: 600;
         }
+        #progress-bar {
+            transition: width 0.3s ease-in-out;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -162,6 +165,9 @@
                         <div id="loader" class="text-center p-8 hidden">
                             <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto"></div>
                             <p id="loader-text" class="mt-4 text-gray-600">Elaborazione in corso...</p>
+                        </div>
+                        <div id="progress-bar-container" class="w-full bg-gray-200 rounded-full h-4 mb-4 hidden">
+                            <div id="progress-bar" class="bg-indigo-600 h-4 rounded-full text-center text-white text-xs leading-4" style="width: 0%">0%</div>
                         </div>
                         <div id="error-message-box" class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md hidden mb-4" role="alert">
                            <p id="error-message-text" class="text-sm"></p>
@@ -271,6 +277,8 @@
         const resultsSection = document.getElementById('results-section');
         const loader = document.getElementById('loader');
         const loaderText = document.getElementById('loader-text');
+        const progressBarContainer = document.getElementById('progress-bar-container');
+        const progressBar = document.getElementById('progress-bar');
         const errorMessageBox = document.getElementById('error-message-box');
         const errorMessageText = document.getElementById('error-message-text');
         const controlsContainer = document.getElementById('controls-container');
@@ -420,12 +428,12 @@
 
         // --- CHIAMATA AL BACKEND ---
         async function callBackend(payload) {
-            const endpoint = '/.netlify/functions/shopify-proxy-price'; // Endpoint della serverless function
+            const endpoint = '/.netlify/functions/shopify-proxy';
             
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...payload, password: userPassword }) // Aggiunge la password ad ogni richiesta
+                body: JSON.stringify({ ...payload, password: userPassword })
             });
 
             if (response.status === 401) {
@@ -457,8 +465,7 @@
             controlsContainer.classList.add('hidden');
             tableContainer.classList.add('hidden');
             summarySection.classList.add('hidden');
-            showLoader("Controllo duplicati e analisi file...");
-
+            
             const skuMap = new Map();
             fileDataRaw.forEach(row => {
                 const sku = String(getValue(row, ['EAN', 'Minsan']) || '').trim();
@@ -478,15 +485,40 @@
             });
 
             try {
-                showLoader("Recupero dati da Shopify...");
                 const allSkus = uniqueProductsForAnalysis.map(row => getValue(row, ['EAN', 'Minsan'])).filter(Boolean).map(String);
                 if (allSkus.length === 0) throw new Error("Nessun EAN/Minsan valido trovato nel file.");
 
-                const shopifyProducts = await callBackend({ type: 'analyze', skus: allSkus });
+                // --- LOGICA A PACCHETTI (CHUNKING) ---
+                const chunkSize = 200;
+                const skuChunks = [];
+                for (let i = 0; i < allSkus.length; i += chunkSize) {
+                    skuChunks.push(allSkus.slice(i, i + chunkSize));
+                }
+
+                let allShopifyProducts = [];
+                progressBarContainer.classList.remove('hidden');
+                progressBar.style.width = '0%';
+                progressBar.textContent = '0%';
+
+                for (let i = 0; i < skuChunks.length; i++) {
+                    const chunk = skuChunks[i];
+                    showLoader(`Analisi pacchetto ${i + 1} di ${skuChunks.length}...`);
+                    
+                    const shopifyProductsChunk = await callBackend({ type: 'analyze', skus: chunk });
+                    allShopifyProducts.push(...shopifyProductsChunk);
+
+                    const percentage = Math.round(((i + 1) / skuChunks.length) * 100);
+                    progressBar.style.width = `${percentage}%`;
+                    progressBar.textContent = `${percentage}%`;
+
+                    if (skuChunks.length > 1) {
+                        await new Promise(resolve => setTimeout(resolve, 250));
+                    }
+                }
                 
                 combinedData = uniqueProductsForAnalysis.map(fileRow => {
                     const sku = getValue(fileRow, ['EAN', 'Minsan']);
-                    const shopifyProduct = shopifyProducts.find(p => p.minsan === sku);
+                    const shopifyProduct = allShopifyProducts.find(p => p.minsan === sku);
                     const isDuplicate = skuMap.get(sku) ? skuMap.get(sku).length > 1 : false;
 
                     const priceString = String(getValue(fileRow, ['Prezzo', 'Listino', 'Costo', 'CostoMedio'], '0'));
@@ -534,6 +566,7 @@
                 showMessage(errorMessageText, `<b>Errore:</b> ${error.message}`, true);
             } finally {
                 hideLoader();
+                progressBarContainer.classList.add('hidden');
             }
         });
 
@@ -758,29 +791,52 @@
             }
 
             hideMessage(syncStatusMessage);
-            showLoader(`Sincronizzazione di ${itemsToSync.length} prodotti...`);
             syncButton.disabled = true;
             confirmSyncCheckbox.disabled = true;
 
             try {
-                const payload = {
-                    type: 'sync',
-                    items: itemsToSync.map(item => ({
-                        variantId: item.variantId,
-                        price: item.newPrice
-                    }))
-                };
+                // --- LOGICA A PACCHETTI (CHUNKING) PER LA SINCRONIZZAZIONE ---
+                const chunkSize = 50;
+                const itemChunks = [];
+                for (let i = 0; i < itemsToSync.length; i += chunkSize) {
+                    itemChunks.push(itemsToSync.slice(i, i + chunkSize));
+                }
 
-                const result = await callBackend(payload);
+                progressBarContainer.classList.remove('hidden');
+                progressBar.style.width = '0%';
+                progressBar.textContent = '0%';
+
+                for (let i = 0; i < itemChunks.length; i++) {
+                    const chunk = itemChunks[i];
+                    showLoader(`Sincronizzazione pacchetto ${i + 1} di ${itemChunks.length}...`);
+
+                    const payload = {
+                        type: 'sync',
+                        items: chunk.map(item => ({
+                            variantId: item.variantId,
+                            price: item.newPrice
+                        }))
+                    };
+                    await callBackend(payload);
+                    
+                    // Aggiorna lo stato degli item nel chunk dopo il successo
+                    chunk.forEach(syncedItem => {
+                        const originalItem = combinedData.find(d => d.ean === syncedItem.ean);
+                        originalItem.shopifyPrice = syncedItem.newPrice;
+                        originalItem.newPrice = null;
+                        originalItem.selected = false;
+                        originalItem.status = 'synced';
+                    });
+
+                    const percentage = Math.round(((i + 1) / itemChunks.length) * 100);
+                    progressBar.style.width = `${percentage}%`;
+                    progressBar.textContent = `${percentage}%`;
+
+                    if (itemChunks.length > 1) {
+                        await new Promise(resolve => setTimeout(resolve, 250));
+                    }
+                }
                 
-                itemsToSync.forEach(syncedItem => {
-                    const originalItem = combinedData.find(d => d.ean === syncedItem.ean);
-                    originalItem.shopifyPrice = syncedItem.newPrice;
-                    originalItem.newPrice = null;
-                    originalItem.selected = false;
-                    originalItem.status = 'synced';
-                });
-
                 showMessage(syncStatusMessage, `Sincronizzazione completata con successo per ${itemsToSync.length} prodotti!`, false);
                 confirmSyncCheckbox.checked = false;
                 renderFilterButtons();
@@ -791,6 +847,7 @@
                 showMessage(syncStatusMessage, `<b>Errore durante la sincronizzazione:</b> ${error.message}`, true);
             } finally {
                 hideLoader();
+                progressBarContainer.classList.add('hidden');
                 updateSyncArea();
             }
         });
