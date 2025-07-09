@@ -9,7 +9,6 @@ async function callShopifyApi(query, variables = {}) {
         shopifyBaseUrl = `https://${SHOPIFY_STORE_NAME}.myshopify.com`;
     }
 
-    // Manteniamo la versione 2024-07 per l'API GraphQL, dato che productVariantUpdate è stata rimossa qui
     const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-07/graphql.json`, { 
         method: 'POST',
         headers: {
@@ -23,7 +22,7 @@ async function callShopifyApi(query, variables = {}) {
     
     if (data.errors) {
         console.error("Shopify API Errors:", JSON.stringify(data.errors, null, 2));
-        console.error("GraphQL Query/Mutation that failed:", query); // Log per la query/mutazione fallita
+        console.error("GraphQL Query/Mutation that failed:", query);
         throw new Error(data.errors.map(e => e.message).join(', '));
     }
     return data.data;
@@ -51,7 +50,6 @@ exports.handler = async function(event) {
             return { statusCode: 401, body: JSON.stringify({ error: "Autenticazione fallita." }) };
         }
 
-        // 1. ANALIZZA PRODOTTI
         if (payload.type === 'analyze') {
             const { skus } = payload;
             if (!skus || !Array.isArray(skus)) {
@@ -60,8 +58,6 @@ exports.handler = async function(event) {
             
             console.log("DEBUG: Received SKUs payload for analyze:", skus);
 
-            // *** MODIFICA APPLICATA QUI: Uso di virgolette singole per i valori SKU ***
-            // Questo allinea la sintassi con il file shopify-proxy.js che funziona
             const skuQueryString = skus.map(s => `sku:'${String(s).trim()}'`).join(' OR '); 
             
             console.log("DEBUG: Final skuQueryString for Shopify (analyze):", skuQueryString);
@@ -106,7 +102,7 @@ exports.handler = async function(event) {
                                     minsan: String(variantNode.sku),
                                     price: variantNode.price,
                                     variant_id: variantNode.id,
-                                    product_id: productNode.id,
+                                    product_id: productNode.id, // Assicurati di avere questo ID dal frontend
                                     title: productNode.title,
                                 });
                                 foundSkus.add(String(variantNode.sku));
@@ -125,54 +121,82 @@ exports.handler = async function(event) {
             return { statusCode: 200, body: JSON.stringify(products) };
         }
 
-        // 2. SINCRONIZZA PREZZI - Ora usa productVariantsBulkUpdate
+        // 2. SINCRONIZZA PREZZI - Raggruppiamo per productId per usare productVariantsBulkUpdate
         if (payload.type === 'sync') {
-            const { items } = payload;
+            const { items } = payload; // 'items' qui sono le varianti da aggiornare
+
             if (!items || !Array.isArray(items) || items.length === 0) {
-                throw new Error("Nessun prodotto da sincronizzare.");
+                return { statusCode: 200, body: JSON.stringify({ success: true, message: "Nessuna azione da eseguire." }) };
             }
 
-            // Prepara gli input per productVariantsBulkUpdate
-            const variantInputs = items.map(item => ({
-                id: item.variantId,
-                price: parseFloat(item.price).toFixed(2) // Assicurati che il prezzo sia formattato correttamente
-            }));
+            // Raggruppa gli item per productId
+            const itemsGroupedByProductId = items.reduce((acc, item) => {
+                const productId = item.productId; // Abbiamo bisogno del productId dal frontend!
+                if (!productId) {
+                    console.warn(`WARN: Variant ${item.variantId} missing productId, skipping.`);
+                    return acc;
+                }
+                if (!acc[productId]) {
+                    acc[productId] = [];
+                }
+                acc[productId].push(item);
+                return acc;
+            }, {});
 
-            // La mutazione productVariantsBulkUpdate prende un array di input
-            const finalMutation = `
-                mutation productVariantsBulkUpdate($variants: [ProductVariantBulkUpdateInput!]!) {
-                    productVariantsBulkUpdate(variants: $variants) {
-                        productVariants {
-                            id
-                            price
-                        }
-                        userErrors {
-                            field
-                            message
+            const results = [];
+            const errors = [];
+
+            // Itera su ogni gruppo di productId e invia una mutazione bulk separata
+            for (const productId in itemsGroupedByProductId) {
+                const variantsToUpdate = itemsGroupedByProductId[productId];
+
+                const variantInputs = variantsToUpdate.map(variantItem => ({
+                    id: variantItem.variantId,
+                    price: parseFloat(variantItem.price).toFixed(2)
+                }));
+
+                const mutation = `
+                    mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantBulkUpdateInput!]!) {
+                        productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+                            productVariants {
+                                id
+                                price
+                            }
+                            userErrors {
+                                field
+                                message
+                            }
                         }
                     }
+                `;
+                
+                const variables = {
+                    productId: productId,
+                    variants: variantInputs
+                };
+
+                console.log(`DEBUG: Sending productVariantsBulkUpdate for productId: ${productId}`);
+                console.log("DEBUG: Mutation:", mutation);
+                console.log("DEBUG: Variables:", JSON.stringify(variables, null, 2));
+
+                try {
+                    const result = await callShopifyApi(mutation, variables);
+                    const userErrors = result.productVariantsBulkUpdate?.userErrors || [];
+                    if (userErrors.length > 0) {
+                        userErrors.forEach(err => errors.push(`[${productId} - ${err.field?.join(', ') || 'N/A'}]: ${err.message}`));
+                    } else {
+                        results.push({ productId, success: true });
+                    }
+                } catch (e) {
+                    errors.push(`Error for productId ${productId}: ${e.message}`);
                 }
-            `;
-            
-            // Le variabili per la mutazione
-            const variables = {
-                variants: variantInputs
-            };
-
-            console.log("DEBUG: productVariantsBulkUpdate Mutation sent to Shopify:", finalMutation);
-            console.log("DEBUG: Variables for productVariantsBulkUpdate:", JSON.stringify(variables, null, 2));
-
-            // Chiamata all'API con query e variabili
-            const result = await callShopifyApi(finalMutation, variables);
-
-            // Controlla gli errori specifici di productVariantsBulkUpdate
-            const userErrors = result.productVariantsBulkUpdate?.userErrors || [];
-
-            if (userErrors.length > 0) {
-                throw new Error(userErrors.map(e => `[${e.field?.join(', ') || 'N/A'}]: ${e.message}`).join('; '));
             }
 
-            return { statusCode: 200, body: JSON.stringify({ success: true, data: result }) };
+            if (errors.length > 0) {
+                throw new Error("Errore durante la sincronizzazione di alcuni prodotti: " + errors.join('; '));
+            }
+
+            return { statusCode: 200, body: JSON.stringify({ success: true, results: results }) };
         }
 
         return { statusCode: 400, body: JSON.stringify({ error: 'Tipo di richiesta non valido.' }) };
