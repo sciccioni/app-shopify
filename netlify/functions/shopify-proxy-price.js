@@ -68,10 +68,16 @@ exports.handler = async function(event) {
                  throw new Error("Array di SKU/Minsan non fornito.");
             }
             
-            // **FIX ALL'ERRORE DI SINTASSI (unexpected INT)**
-            // Assicurati che ogni SKU sia convertito esplicitamente a stringa e pulito dagli spazi bianchi
-            // Questo previene che un numero puro venga interpretato in modo errato nella query.
-            const skuQueryString = skus.map(s => `sku:"${String(s).trim().replace(/"/g, '\\"')}"`).join(' OR '); // Aggiunto .replace(/"/g, '\\"') per gestire virgolette interne
+            // *** FIX AGGIUNTIVO PER L'ERRORE DI SINTASSI (unexpected INT) ***
+            // Aggiungiamo un prefisso al valore dello SKU nella query per forzare l'interpretazione come stringa
+            // e ci assicuriamo che sia pulito e escapato correttamente.
+            const skuQueryString = skus.map(s => {
+                const cleanedSku = String(s).trim().replace(/"/g, '\\"');
+                return `sku:"${cleanedSku}"`; // Manteniamo la sintassi standard
+            }).join(' OR ');
+
+            // Aggiungiamo un console.log per debuggarre la stringa generata
+            console.log("DEBUG: Generated skuQueryString:", skuQueryString);
             
             const query = `
                 query getProductsBySkus {
@@ -105,25 +111,28 @@ exports.handler = async function(event) {
                     if (productNode.variants && productNode.variants.edges) {
                         productNode.variants.edges.forEach(variantEdge => {
                             const variantNode = variantEdge.node;
-                            if (variantNode && skus.includes(variantNode.sku)) {
+                            // Controlliamo se lo SKU del prodotto Shopify corrisponde a uno degli SKU nel payload
+                            // Usiamo String(variantNode.sku) per garantire la comparazione tra stringhe
+                            if (variantNode && skus.map(s => String(s)).includes(String(variantNode.sku))) {
                                 products.push({
                                     found: true,
-                                    minsan: variantNode.sku,
+                                    minsan: String(variantNode.sku), // Assicuriamo che sia stringa
                                     price: variantNode.price,
                                     variant_id: variantNode.id,
                                     product_id: productNode.id,
                                     title: productNode.title,
                                 });
-                                foundSkus.add(variantNode.sku);
+                                foundSkus.add(String(variantNode.sku)); // Assicuriamo che sia stringa
                             }
                         });
                     }
                 });
             }
 
+            // Aggiungiamo i prodotti non trovati, assicurandoci che 'minsan' sia una stringa
             skus.forEach(sku => {
-                if (!foundSkus.has(sku)) {
-                    products.push({ found: false, minsan: sku });
+                if (!foundSkus.has(String(sku))) {
+                    products.push({ found: false, minsan: String(sku) });
                 }
             });
 
