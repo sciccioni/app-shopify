@@ -9,7 +9,8 @@ async function callShopifyApi(query, variables = {}) {
         shopifyBaseUrl = `https://${SHOPIFY_STORE_NAME}.myshopify.com`;
     }
 
-    const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-04/graphql.json`, {
+    // MANTENIAMO 2024-07 o versione più recente, dato che la mutazione precedente è stata rimossa qui
+    const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-07/graphql.json`, { 
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -22,7 +23,7 @@ async function callShopifyApi(query, variables = {}) {
     
     if (data.errors) {
         console.error("Shopify API Errors:", JSON.stringify(data.errors, null, 2));
-        console.error("GraphQL Query that failed:", query); 
+        console.error("GraphQL Query/Mutation that failed:", query); // Log per la query/mutazione fallita
         throw new Error(data.errors.map(e => e.message).join(', '));
     }
     return data.data;
@@ -56,14 +57,15 @@ exports.handler = async function(event) {
                  throw new Error("Array di SKU/Minsan non fornito.");
             }
             
-            console.log("DEBUG: Received SKUs payload:", skus);
+            console.log("DEBUG: Received SKUs payload for analyze:", skus);
 
-            // *** FIX DEFINITIVA: Adottare il metodo di skuQueryString dal file shopify-proxy.js ***
-            // Usiamo virgolette singole per i valori SKU. Questo evita problemi di doppio escaping
-            // quando l'intera stringa è racchiusa tra virgolette doppie nella query GraphQL.
-            const skuQueryString = skus.map(s => `sku:'${String(s).trim()}'`).join(' OR '); 
+            const skuQueryString = skus.map(s => {
+                const cleanedSku = String(s).trim();
+                const escapedSku = cleanedSku.replace(/"/g, '\\"');
+                return `sku:"${escapedSku}"`; 
+            }).join(' OR ');
             
-            console.log("DEBUG: Final skuQueryString for Shopify:", skuQueryString);
+            console.log("DEBUG: Final skuQueryString for Shopify (analyze):", skuQueryString);
             
             const query = `
                 query getProductsBySkus {
@@ -86,7 +88,7 @@ exports.handler = async function(event) {
                     }
                 }`;
             
-            console.log("DEBUG: Complete GraphQL Query sent to Shopify:", query); 
+            console.log("DEBUG: Complete GraphQL Query sent to Shopify (analyze):", query); 
 
             const shopifyData = await callShopifyApi(query);
             
@@ -124,32 +126,51 @@ exports.handler = async function(event) {
             return { statusCode: 200, body: JSON.stringify(products) };
         }
 
+        // 2. SINCRONIZZA PREZZI - ORA USA productVariantsBulkUpdate
         if (payload.type === 'sync') {
             const { items } = payload;
             if (!items || !Array.isArray(items) || items.length === 0) {
                 throw new Error("Nessun prodotto da sincronizzare.");
             }
 
-            let mutations = items.map((item, index) => `
-                variantUpdate${index}: productVariantUpdate(input: {id: "${item.variantId}", price: "${item.price}"}) {
-                    productVariant {
-                        id
-                        price
-                    }
-                    userErrors {
-                        field
-                        message
+            // Prepara gli input per productVariantsBulkUpdate
+            const variantInputs = items.map(item => ({
+                id: item.variantId,
+                price: parseFloat(item.price).toFixed(2) // Assicurati che il prezzo sia formattato correttamente
+            }));
+
+            // La mutazione productVariantsBulkUpdate prende un array di input
+            const finalMutation = `
+                mutation productVariantsBulkUpdate($variants: [ProductVariantBulkUpdateInput!]!) {
+                    productVariantsBulkUpdate(variants: $variants) {
+                        productVariants {
+                            id
+                            price
+                        }
+                        userErrors {
+                            field
+                            message
+                        }
                     }
                 }
-            `).join('\n');
-
-            const finalMutation = `mutation { ${mutations} }`;
+            `;
             
-            const result = await callShopifyApi(finalMutation);
+            // Le variabili per la mutazione
+            const variables = {
+                variants: variantInputs
+            };
 
-            const allErrors = Object.values(result).flatMap(res => res.userErrors || []);
-            if (allErrors.length > 0) {
-                throw new Error(allErrors.map(e => `[${e.field.join(', ')}]: ${e.message}`).join('; '));
+            console.log("DEBUG: productVariantsBulkUpdate Mutation sent to Shopify:", finalMutation);
+            console.log("DEBUG: Variables for productVariantsBulkUpdate:", JSON.stringify(variables, null, 2));
+
+            // Chiamata all'API con query e variabili
+            const result = await callShopifyApi(finalMutation, variables);
+
+            // Controlla gli errori specifici di productVariantsBulkUpdate
+            const userErrors = result.productVariantsBulkUpdate?.userErrors || [];
+
+            if (userErrors.length > 0) {
+                throw new Error(userErrors.map(e => `[${e.field?.join(', ') || 'N/A'}]: ${e.message}`).join('; '));
             }
 
             return { statusCode: 200, body: JSON.stringify({ success: true, data: result }) };
