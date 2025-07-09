@@ -468,7 +468,7 @@
             
             const skuMap = new Map();
             fileDataRaw.forEach(row => {
-                const sku = String(getValue(row, ['EAN', 'Minsan']) || '').trim();
+                const sku = String(getValue(row, ['Minsan', 'EAN']) || '').trim();
                 if (sku) {
                     if (!skuMap.has(sku)) skuMap.set(sku, []);
                     skuMap.get(sku).push(row);
