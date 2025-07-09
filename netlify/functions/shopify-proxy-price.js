@@ -55,24 +55,28 @@ exports.handler = async function(event) {
         if (payload.type === 'analyze') {
             const { skus } = payload;
             if (!skus || !Array.isArray(skus)) {
-                 throw new Error("Array di SKU non fornito.");
+                 throw new Error("Array di SKU/Minsan non fornito.");
             }
             
-            // CORREZIONE: Utilizzo di una query più robusta basata sulla ricerca per prodotto
-            const skuQueryString = skus.map(s => `sku:"${s}"`).join(' OR ');
+            // CORREZIONE: Utilizzo di una query basata su metafield "minsan" per maggiore affidabilità
+            // Nota: si assume che il metafield sia nel namespace "custom" e abbia la chiave "minsan"
+            const minsanQueryString = skus.map(s => `(metafield:custom.minsan:'${s}')`).join(' OR ');
             const query = `
-                query getProductsBySkus {
-                    products(first: ${skus.length}, query: "${skuQueryString}") {
+                query getProductsByMinsan {
+                    products(first: ${skus.length}, query: "${minsanQueryString}") {
                         edges {
                             node {
                                 id
                                 title
-                                variants(first: 10) {
+                                minsan: metafield(namespace: "custom", key: "minsan") {
+                                    value
+                                }
+                                variants(first: 1) {
                                     edges {
                                         node {
                                             id
-                                            sku
                                             price
+                                            sku
                                         }
                                     }
                                 }
@@ -84,35 +88,33 @@ exports.handler = async function(event) {
             const shopifyData = await callShopifyApi(query);
             
             const products = [];
-            const foundSkus = new Set();
+            const foundMinsans = new Set();
 
             // Processa la nuova struttura della risposta
             if (shopifyData.products && shopifyData.products.edges) {
                 shopifyData.products.edges.forEach(productEdge => {
                     const productNode = productEdge.node;
-                    if (productNode.variants && productNode.variants.edges) {
-                        productNode.variants.edges.forEach(variantEdge => {
-                            const variantNode = variantEdge.node;
-                            // Controlla se lo SKU della variante è tra quelli che stiamo cercando
-                            if (skus.includes(variantNode.sku)) {
-                                products.push({
-                                    found: true,
-                                    minsan: variantNode.sku,
-                                    price: variantNode.price,
-                                    variant_id: variantNode.id,
-                                    product_id: productNode.id,
-                                    title: productNode.title,
-                                });
-                                foundSkus.add(variantNode.sku);
-                            }
+                    const minsanMetafield = productNode.minsan;
+                    const firstVariant = productNode.variants?.edges[0]?.node;
+
+                    // Assicura che sia il metafield Minsan che una variante esistano
+                    if (minsanMetafield && firstVariant && skus.includes(minsanMetafield.value)) {
+                        products.push({
+                            found: true,
+                            minsan: minsanMetafield.value,
+                            price: firstVariant.price,
+                            variant_id: firstVariant.id,
+                            product_id: productNode.id,
+                            title: productNode.title,
                         });
+                        foundMinsans.add(minsanMetafield.value);
                     }
                 });
             }
 
-            // Aggiunge gli SKU che non sono stati trovati
+            // Aggiunge i Minsan che non sono stati trovati
             skus.forEach(sku => {
-                if (!foundSkus.has(sku)) {
+                if (!foundMinsans.has(sku)) {
                     products.push({ found: false, minsan: sku });
                 }
             });
@@ -144,7 +146,7 @@ exports.handler = async function(event) {
             
             const result = await callShopifyApi(finalMutation);
 
-            const allErrors = Object.values(result).flatMap(res => res.userErrors);
+            const allErrors = Object.values(result).flatMap(res => res.userErrors || []);
             if (allErrors.length > 0) {
                 throw new Error(allErrors.map(e => `[${e.field.join(', ')}]: ${e.message}`).join('; '));
             }
