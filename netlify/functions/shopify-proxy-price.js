@@ -3,7 +3,6 @@ async function callShopifyApi(query, variables = {}) {
     // Recupera le credenziali dalle variabili d'ambiente del server
     const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN } = process.env;
 
-    // --- INIZIO FIX: Costruzione URL API Shopify ---
     // Determina l'URL base di Shopify. Se SHOPIFY_STORE_NAME include già ".myshopify.com",
     // lo usiamo direttamente. Altrimenti, lo concateniamo.
     let shopifyBaseUrl;
@@ -12,10 +11,9 @@ async function callShopifyApi(query, variables = {}) {
     } else {
         shopifyBaseUrl = `https://${SHOPIFY_STORE_NAME}.myshopify.com`;
     }
-    // --- FINE FIX ---
 
     // Esegue la chiamata all'endpoint GraphQL di Shopify
-    const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-07/graphql.json`, { // Modificata questa riga
+    const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-07/graphql.json`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -70,8 +68,11 @@ exports.handler = async function(event) {
                  throw new Error("Array di SKU/Minsan non fornito.");
             }
             
-            // Assicurati che ogni SKU sia trattato come stringa per la query GraphQL
-            const skuQueryString = skus.map(s => `sku:"${String(s).trim()}"`).join(' OR '); // Aggiunto String(s).trim() per robustezza
+            // **FIX ALL'ERRORE DI SINTASSI (unexpected INT)**
+            // Assicurati che ogni SKU sia convertito esplicitamente a stringa e pulito dagli spazi bianchi
+            // Questo previene che un numero puro venga interpretato in modo errato nella query.
+            const skuQueryString = skus.map(s => `sku:"${String(s).trim().replace(/"/g, '\\"')}"`).join(' OR '); // Aggiunto .replace(/"/g, '\\"') per gestire virgolette interne
+            
             const query = `
                 query getProductsBySkus {
                     products(first: ${skus.length}, query: "${skuQueryString}") {
