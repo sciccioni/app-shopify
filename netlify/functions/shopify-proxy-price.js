@@ -3,8 +3,19 @@ async function callShopifyApi(query, variables = {}) {
     // Recupera le credenziali dalle variabili d'ambiente del server
     const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN } = process.env;
 
+    // --- INIZIO FIX: Costruzione URL API Shopify ---
+    // Determina l'URL base di Shopify. Se SHOPIFY_STORE_NAME include già ".myshopify.com",
+    // lo usiamo direttamente. Altrimenti, lo concateniamo.
+    let shopifyBaseUrl;
+    if (SHOPIFY_STORE_NAME.includes('.myshopify.com')) {
+        shopifyBaseUrl = `https://${SHOPIFY_STORE_NAME}`;
+    } else {
+        shopifyBaseUrl = `https://${SHOPIFY_STORE_NAME}.myshopify.com`;
+    }
+    // --- FINE FIX ---
+
     // Esegue la chiamata all'endpoint GraphQL di Shopify
-    const response = await fetch(`https://${SHOPIFY_STORE_NAME}/admin/api/2024-07/graphql.json`, {
+    const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-07/graphql.json`, { // Modificata questa riga
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -27,7 +38,7 @@ async function callShopifyApi(query, variables = {}) {
 exports.handler = async function(event) {
     // Funzione interna che contiene la logica principale, per gestirla con un timeout
     const mainLogic = async () => {
-        // **MIGLIORAMENTO QUI:** Controllo più robusto delle variabili d'ambiente
+        // Controllo robusto delle variabili d'ambiente
         const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, APP_PASSWORD } = process.env;
         if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN || !APP_PASSWORD) {
             const missing = [
@@ -35,7 +46,6 @@ exports.handler = async function(event) {
                 !SHOPIFY_ADMIN_API_TOKEN && "SHOPIFY_ADMIN_API_TOKEN",
                 !APP_PASSWORD && "APP_PASSWORD"
             ].filter(Boolean).join(', ');
-            // Lancia un errore catturato dal blocco try/catch esterno per un 500 coerente
             throw new Error(`Variabili d'ambiente mancanti su Netlify: ${missing}`);
         }
 
@@ -60,8 +70,8 @@ exports.handler = async function(event) {
                  throw new Error("Array di SKU/Minsan non fornito.");
             }
             
-            // Utilizzo della query basata su `products` come nel file di esempio funzionante
-            const skuQueryString = skus.map(s => `sku:"${s}"`).join(' OR ');
+            // Assicurati che ogni SKU sia trattato come stringa per la query GraphQL
+            const skuQueryString = skus.map(s => `sku:"${String(s).trim()}"`).join(' OR '); // Aggiunto String(s).trim() per robustezza
             const query = `
                 query getProductsBySkus {
                     products(first: ${skus.length}, query: "${skuQueryString}") {
@@ -155,7 +165,6 @@ exports.handler = async function(event) {
     };
 
     try {
-        // Watchdog per il timeout della funzione
         const watchdog = new Promise((_, reject) => 
             setTimeout(() => reject(new Error("Timeout della funzione superato (10s). Il pacchetto di dati potrebbe essere troppo grande.")), 9500)
         );
