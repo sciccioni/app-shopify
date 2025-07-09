@@ -9,7 +9,7 @@ async function callShopifyApi(query, variables = {}) {
         shopifyBaseUrl = `https://${SHOPIFY_STORE_NAME}.myshopify.com`;
     }
 
-    // MANTENIAMO 2024-07 o versione più recente, dato che la mutazione precedente è stata rimossa qui
+    // Manteniamo la versione 2024-07 per l'API GraphQL, dato che productVariantUpdate è stata rimossa qui
     const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-07/graphql.json`, { 
         method: 'POST',
         headers: {
@@ -51,6 +51,7 @@ exports.handler = async function(event) {
             return { statusCode: 401, body: JSON.stringify({ error: "Autenticazione fallita." }) };
         }
 
+        // 1. ANALIZZA PRODOTTI
         if (payload.type === 'analyze') {
             const { skus } = payload;
             if (!skus || !Array.isArray(skus)) {
@@ -59,11 +60,9 @@ exports.handler = async function(event) {
             
             console.log("DEBUG: Received SKUs payload for analyze:", skus);
 
-            const skuQueryString = skus.map(s => {
-                const cleanedSku = String(s).trim();
-                const escapedSku = cleanedSku.replace(/"/g, '\\"');
-                return `sku:"${escapedSku}"`; 
-            }).join(' OR ');
+            // *** MODIFICA APPLICATA QUI: Uso di virgolette singole per i valori SKU ***
+            // Questo allinea la sintassi con il file shopify-proxy.js che funziona
+            const skuQueryString = skus.map(s => `sku:'${String(s).trim()}'`).join(' OR '); 
             
             console.log("DEBUG: Final skuQueryString for Shopify (analyze):", skuQueryString);
             
@@ -126,7 +125,7 @@ exports.handler = async function(event) {
             return { statusCode: 200, body: JSON.stringify(products) };
         }
 
-        // 2. SINCRONIZZA PREZZI - ORA USA productVariantsBulkUpdate
+        // 2. SINCRONIZZA PREZZI - Ora usa productVariantsBulkUpdate
         if (payload.type === 'sync') {
             const { items } = payload;
             if (!items || !Array.isArray(items) || items.length === 0) {
