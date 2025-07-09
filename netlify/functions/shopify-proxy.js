@@ -25,12 +25,16 @@ exports.handler = async function(event) {
     // Funzione interna che contiene la logica principale
     const mainLogic = async () => {
         // Controlla subito le variabili d'ambiente necessarie
-        const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, SHOPIFY_LOCATION_ID } = process.env;
-        if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN || !SHOPIFY_LOCATION_ID) {
+        const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, SHOPIFY_LOCATION_ID, APP_PASSWORD, JWT_SECRET } = process.env;
+        
+        // Ensure all required environment variables are set. APP_PASSWORD is now used.
+        if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN || !SHOPIFY_LOCATION_ID || !APP_PASSWORD || !JWT_SECRET) {
             const missing = [
                 !SHOPIFY_STORE_NAME && "SHOPIFY_STORE_NAME",
                 !SHOPIFY_ADMIN_API_TOKEN && "SHOPIFY_ADMIN_API_TOKEN",
-                !SHOPIFY_LOCATION_ID && "SHOPIFY_LOCATION_ID"
+                !SHOPIFY_LOCATION_ID && "SHOPIFY_LOCATION_ID",
+                !APP_PASSWORD && "APP_PASSWORD",
+                !JWT_SECRET && "JWT_SECRET" // Include JWT_SECRET in the check if it's strictly required for function operation
             ].filter(Boolean).join(', ');
             // Restituisce un errore specifico se mancano delle variabili
             throw new Error(`Variabili d'ambiente mancanti su Netlify: ${missing}`);
@@ -41,6 +45,18 @@ exports.handler = async function(event) {
         }
 
         const payload = JSON.parse(event.body);
+
+        // NEW: Handle login request using APP_PASSWORD
+        if (payload.type === 'login') {
+            const { password } = payload;
+            if (password === APP_PASSWORD) {
+                // In un'implementazione JWT completa, qui genereresti e restituiresti un token JWT.
+                // Per ora, solo una risposta di successo.
+                return { statusCode: 200, body: JSON.stringify({ success: true }) };
+            } else {
+                return { statusCode: 401, body: JSON.stringify({ success: false, error: 'Password non corretta.' }) };
+            }
+        }
 
         // Caso 1: L'app chiede di ANALIZZARE un pacchetto di prodotti
         if (payload.type === 'analyze') {
