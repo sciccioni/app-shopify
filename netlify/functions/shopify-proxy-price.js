@@ -58,18 +58,23 @@ exports.handler = async function(event) {
                  throw new Error("Array di SKU non fornito.");
             }
             
-            const skuQueryString = skus.map(s => `sku:'${s}'`).join(' OR ');
+            // CORREZIONE: Utilizzo di una query più robusta basata sulla ricerca per prodotto
+            const skuQueryString = skus.map(s => `sku:"${s}"`).join(' OR ');
             const query = `
-                query getProductVariantsBySkus {
-                    productVariants(first: ${skus.length}, query: "${skuQueryString}") {
+                query getProductsBySkus {
+                    products(first: ${skus.length}, query: "${skuQueryString}") {
                         edges {
                             node {
                                 id
-                                sku
-                                price
-                                product {
-                                    id
-                                    title
+                                title
+                                variants(first: 10) {
+                                    edges {
+                                        node {
+                                            id
+                                            sku
+                                            price
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -78,16 +83,34 @@ exports.handler = async function(event) {
 
             const shopifyData = await callShopifyApi(query);
             
-            const products = shopifyData.productVariants.edges.map(edge => ({
-                found: true,
-                minsan: edge.node.sku,
-                price: edge.node.price,
-                variant_id: edge.node.id,
-                product_id: edge.node.product.id,
-                title: edge.node.product.title,
-            }));
+            const products = [];
+            const foundSkus = new Set();
 
-            const foundSkus = new Set(products.map(p => p.minsan));
+            // Processa la nuova struttura della risposta
+            if (shopifyData.products && shopifyData.products.edges) {
+                shopifyData.products.edges.forEach(productEdge => {
+                    const productNode = productEdge.node;
+                    if (productNode.variants && productNode.variants.edges) {
+                        productNode.variants.edges.forEach(variantEdge => {
+                            const variantNode = variantEdge.node;
+                            // Controlla se lo SKU della variante è tra quelli che stiamo cercando
+                            if (skus.includes(variantNode.sku)) {
+                                products.push({
+                                    found: true,
+                                    minsan: variantNode.sku,
+                                    price: variantNode.price,
+                                    variant_id: variantNode.id,
+                                    product_id: productNode.id,
+                                    title: productNode.title,
+                                });
+                                foundSkus.add(variantNode.sku);
+                            }
+                        });
+                    }
+                });
+            }
+
+            // Aggiunge gli SKU che non sono stati trovati
             skus.forEach(sku => {
                 if (!foundSkus.has(sku)) {
                     products.push({ found: false, minsan: sku });
