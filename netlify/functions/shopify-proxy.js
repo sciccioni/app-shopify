@@ -1,5 +1,5 @@
 // Funzione per eseguire chiamate API a Shopify
-async function callShopifyApi(query) {
+async function callShopifyApi(query, variables = {}) {
     const storeName = process.env.SHOPIFY_STORE_NAME;
     const adminApiToken = process.env.SHOPIFY_ADMIN_API_TOKEN;
 
@@ -10,7 +10,7 @@ async function callShopifyApi(query) {
             'Content-Type': 'application/json',
             'X-Shopify-Access-Token': adminApiToken,
         },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query, variables }),
     });
 
     const data = await response.json();
@@ -61,10 +61,11 @@ exports.handler = async function(event) {
         // Caso 1: L'app chiede di ANALIZZARE un pacchetto di prodotti
         if (payload.type === 'analyze') {
             const { skus } = payload;
+            const locationId = `gid://shopify/Location/${SHOPIFY_LOCATION_ID}`;
             
             const skuQueryString = skus.map(s => `sku:'${s}'`).join(' OR ');
             const query = `
-                query getProductsBySkus {
+                query getProductsBySkus($locationId: ID!) {
                     products(first: ${skus.length}, query: "${skuQueryString}") {
                         edges {
                             node {
@@ -77,7 +78,18 @@ exports.handler = async function(event) {
                                     edges { 
                                         node { 
                                             sku
-                                            inventoryItem { id } 
+                                            inventoryItem { 
+                                                id 
+                                                inventoryLevels(first: 1, query: "location_id:${locationId}") {
+                                                    edges {
+                                                        node {
+                                                            available
+                                                            committed
+                                                            onHand
+                                                        }
+                                                    }
+                                                }
+                                            }
                                             inventoryQuantity 
                                         } 
                                     }
@@ -86,16 +98,27 @@ exports.handler = async function(event) {
                         }
                     }
                 }`;
-            const shopifyData = await callShopifyApi(query);
+            const shopifyData = await callShopifyApi(query, { locationId });
             const products = shopifyData.products.edges.map(edge => {
                 const variant = edge.node.variants.edges[0]?.node;
+                const inventoryLevel = variant?.inventoryItem?.inventoryLevels?.edges[0]?.node;
+                const onHand = inventoryLevel?.onHand;
+                const available = inventoryLevel?.available;
+                const committed = inventoryLevel?.committed;
+                const unavailable = (onHand !== undefined && available !== undefined) ? (onHand - available) : undefined;
+                
                 return {
                     product_id: edge.node.id,
                     minsan: variant?.sku,
                     title: edge.node.title,
-                    inventory_quantity: variant?.inventoryQuantity,
+                    inventory_quantity: variant?.inventoryQuantity, // This is still the primary quantity
                     inventory_item_id: variant?.inventoryItem.id,
-                    expiry_date: edge.node.expireDate?.value
+                    expiry_date: edge.node.expireDate?.value,
+                    // New inventory fields
+                    on_hand_quantity: onHand,
+                    available_quantity: available,
+                    committed_quantity: committed,
+                    unavailable_quantity: unavailable
                 };
             });
 
