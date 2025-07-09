@@ -4,7 +4,7 @@ async function callShopifyApi(query, variables = {}) {
     const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN } = process.env;
 
     // Esegue la chiamata all'endpoint GraphQL di Shopify
-    const response = await fetch(`https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/2024-07/graphql.json`, {
+    const response = await fetch(`https://${SHOPIFY_STORE_NAME}/admin/api/2024-07/graphql.json`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
