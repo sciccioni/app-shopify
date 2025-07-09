@@ -9,7 +9,9 @@ async function callShopifyApi(query, variables = {}) {
         shopifyBaseUrl = `https://${SHOPIFY_STORE_NAME}.myshopify.com`;
     }
 
-    const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-07/graphql.json`, { 
+    // *** CAMBIATO QUI: VERSIONE API 2024-04 per la sincronizzazione ***
+    // Questa versione è nota per supportare productVariantUpdate
+    const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-04/graphql.json`, { 
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -33,7 +35,7 @@ exports.handler = async function(event) {
         const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, APP_PASSWORD } = process.env;
         if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN || !APP_PASSWORD) {
             const missing = [
-                !SHOPIFY_STORENAME && "SHOPIFY_STORE_NAME",
+                !SHOPIFY_STORE_NAME && "SHOPIFY_STORE_NAME",
                 !SHOPIFY_ADMIN_API_TOKEN && "SHOPIFY_ADMIN_API_TOKEN",
                 !APP_PASSWORD && "APP_PASSWORD"
             ].filter(Boolean).join(', ');
@@ -122,8 +124,8 @@ exports.handler = async function(event) {
             return { statusCode: 200, body: JSON.stringify(products) };
         }
 
-        // 2. SINCRONIZZA PREZZI - Implementazione con productVariantsBulkUpdate per 2024-07+
-        // Rimozione dei commenti dalla stringa della mutazione GraphQL
+        // 2. SINCRONIZZA PREZZI - RIPRISTINATO productVariantUpdate (per singola variante)
+        // e API versione 2024-04 (nota per funzionare)
         if (payload.type === 'sync') {
             const { items } = payload; 
 
@@ -134,72 +136,72 @@ exports.handler = async function(event) {
             const results = [];
             const errors = [];
 
-            const allVariantUpdateInputs = items.map(variantItem => {
-                const originalPrice = variantItem.price;
+            // Adesso iteriamo su ogni singolo item e inviamo una mutazione productVariantUpdate
+            for (const item of items) {
+                const originalPrice = item.price;
+                const variantId = item.variantId; // Prendiamo il variantId
+
+                if (!variantId) {
+                    console.warn(`WARN: Skipping variant due to missing variantId in sync payload: ${JSON.stringify(item)}`);
+                    errors.push(`Missing variantId for item: ${JSON.stringify(item)}`);
+                    continue;
+                }
                 
+                // Pulizia e formattazione del prezzo
                 const cleanedPriceString = String(originalPrice).replace(',', '.');
                 const parsedPrice = parseFloat(cleanedPriceString);
                 
                 if (isNaN(parsedPrice)) {
-                    console.error(`ERROR: Invalid price encountered for variant ${variantItem.variantId} (original: '${originalPrice}')`);
-                    errors.push(`Invalid price format for variant ${variantItem.variantId}: '${originalPrice}'`);
-                    return null; 
+                    console.error(`ERROR: Invalid price encountered for variant ${variantId} (original: '${originalPrice}')`);
+                    errors.push(`Invalid price format for variant ${variantId}: '${originalPrice}'`);
+                    continue; // Salta questo item e passa al successivo
                 }
                 
                 const formattedPrice = parsedPrice.toFixed(2);
 
-                console.log(`DEBUG: Preparing price for Variant ${variantItem.variantId}: Original='${originalPrice}', Cleaned='${cleanedPriceString}', Parsed=${parsedPrice}, Formatted='${formattedPrice}'`); 
-
-                return {
-                    id: variantItem.variantId, 
-                    price: formattedPrice
-                };
-            }).filter(Boolean); 
-
-            if (allVariantUpdateInputs.length === 0) {
-                if (errors.length > 0) {
-                    throw new Error("Errore durante la preparazione dei prodotti per la sincronizzazione: " + errors.join('; '));
-                }
-                return { statusCode: 200, body: JSON.stringify({ success: true, message: "Nessuna variante valida da aggiornare." }) };
-            }
-
-            // *** MODIFICA QUI: Rimossi i commenti dalla stringa della mutazione GraphQL ***
-            const mutation = `
-                mutation productVariantsBulkUpdate($productVariants: [ProductVariantBulkUpdateInput!]!) {
-                    productVariantsBulkUpdate(productVariants: $productVariants) {
-                        productVariants {
-                            id
-                            price
-                        }
-                        userErrors {
-                            field
-                            message
+                // La mutazione productVariantUpdate prende un ID e un prezzo
+                const mutation = `
+                    mutation productVariantUpdate($id: ID!, $price: Decimal!) {
+                        productVariantUpdate(input: {id: $id, price: $price}) {
+                            productVariant {
+                                id
+                                price
+                            }
+                            userErrors {
+                                field
+                                message
+                            }
                         }
                     }
-                }
-            `;
-            
-            const variables = {
-                productVariants: allVariantUpdateInputs
-            };
-
-            console.log(`DEBUG: Sending productVariantsBulkUpdate with ${allVariantUpdateInputs.length} variants.`);
-            console.log("DEBUG: Mutation:", mutation);
-            console.log("DEBUG: Variables:", JSON.stringify(variables, null, 2));
-
-            try {
-                const result = await callShopifyApi(mutation, variables);
-                const userErrors = result.productVariantsBulkUpdate?.userErrors || [];
+                `;
                 
-                if (userErrors.length > 0) {
-                    userErrors.forEach(err => errors.push(`[${err.field?.join(', ') || 'N/A'}]: ${err.message}`));
-                    throw new Error("Errore durante l'aggiornamento in blocco dei prezzi: " + errors.join('; '));
-                } else {
-                    results.push({ success: true, updatedCount: allVariantUpdateInputs.length });
+                const variables = {
+                    id: variantId,
+                    price: formattedPrice
+                };
+
+                console.log(`DEBUG: Sending productVariantUpdate for variant ${variantId}`);
+                console.log("DEBUG: Mutation:", mutation);
+                console.log("DEBUG: Variables:", JSON.stringify(variables, null, 2));
+
+                try {
+                    // Chiamata all'API GraphQL con mutazione e variabili
+                    const result = await callShopifyApi(mutation, variables);
+                    const userErrors = result.productVariantUpdate?.userErrors || [];
+                    if (userErrors.length > 0) {
+                        userErrors.forEach(err => errors.push(`[${variantId} - ${err.field?.join(', ') || 'N/A'}]: ${err.message}`));
+                    } else {
+                        results.push({ variantId, success: true });
+                    }
+                } catch (e) {
+                    errors.push(`Error for variant ${variantId}: ${e.message}`);
                 }
-            } catch (e) {
-                errors.push(`Errore di API durante l'aggiornamento in blocco: ${e.message}`);
-                throw new Error("Errore di sistema durante la sincronizzazione: " + errors.join('; '));
+            }
+
+            if (errors.length > 0) {
+                const errorMessage = "Errore durante la sincronizzazione di alcuni prodotti: " + errors.join('; ');
+                console.error("Final sync errors:", errorMessage);
+                throw new Error(errorMessage);
             }
 
             return { statusCode: 200, body: JSON.stringify({ success: true, results: results }) };
