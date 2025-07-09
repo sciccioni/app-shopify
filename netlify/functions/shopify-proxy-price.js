@@ -51,78 +51,59 @@ exports.handler = async function(event) {
 
         // --- GESTIONE DELLE DIVERSE AZIONI ---
 
-        // 1. ANALIZZA PRODOTTI
+        // 1. ANALIZZA PRODOTTI (gestito a pacchetti dal frontend)
         if (payload.type === 'analyze') {
             const { skus } = payload;
             if (!skus || !Array.isArray(skus)) {
                  throw new Error("Array di SKU non fornito.");
             }
             
-            // --- NUOVA LOGICA CON PACCHETTI (CHUNKING) ---
-            const chunkSize = 200; // Un valore sicuro per evitare timeout e limiti API
-            const skuChunks = [];
-            for (let i = 0; i < skus.length; i += chunkSize) {
-                skuChunks.push(skus.slice(i, i + chunkSize));
-            }
-
-            let allShopifyProducts = [];
-
-            // Processa ogni pacchetto sequenzialmente
-            for (const chunk of skuChunks) {
-                const skuQueryString = chunk.map(s => `sku:'${s}'`).join(' OR ');
-                const query = `
-                    query getProductVariantsBySkus {
-                        productVariants(first: ${chunk.length}, query: "${skuQueryString}") {
-                            edges {
-                                node {
+            const skuQueryString = skus.map(s => `sku:'${s}'`).join(' OR ');
+            const query = `
+                query getProductVariantsBySkus {
+                    productVariants(first: ${skus.length}, query: "${skuQueryString}") {
+                        edges {
+                            node {
+                                id
+                                sku
+                                price
+                                product {
                                     id
-                                    sku
-                                    price
-                                    product {
-                                        id
-                                        title
-                                    }
+                                    title
                                 }
                             }
                         }
-                    }`;
+                    }
+                }`;
 
-                const shopifyData = await callShopifyApi(query);
-                const productsFromChunk = shopifyData.productVariants.edges.map(edge => ({
-                    found: true,
-                    minsan: edge.node.sku,
-                    price: edge.node.price,
-                    variant_id: edge.node.id,
-                    product_id: edge.node.product.id,
-                    title: edge.node.product.title,
-                }));
-                allShopifyProducts.push(...productsFromChunk);
-
-                // Aggiunge una piccola pausa per non sovraccaricare l'API di Shopify
-                if (skuChunks.length > 1) {
-                    await new Promise(resolve => setTimeout(resolve, 250));
-                }
-            }
+            const shopifyData = await callShopifyApi(query);
             
-            // Aggiunge i prodotti non trovati alla risposta finale
-            const foundSkus = new Set(allShopifyProducts.map(p => p.minsan));
+            const products = shopifyData.productVariants.edges.map(edge => ({
+                found: true,
+                minsan: edge.node.sku,
+                price: edge.node.price,
+                variant_id: edge.node.id,
+                product_id: edge.node.product.id,
+                title: edge.node.product.title,
+            }));
+
+            const foundSkus = new Set(products.map(p => p.minsan));
             skus.forEach(sku => {
                 if (!foundSkus.has(sku)) {
-                    allShopifyProducts.push({ found: false, minsan: sku });
+                    products.push({ found: false, minsan: sku });
                 }
             });
 
-            return { statusCode: 200, body: JSON.stringify(allShopifyProducts) };
+            return { statusCode: 200, body: JSON.stringify(products) };
         }
 
-        // 2. SINCRONIZZA PREZZI
+        // 2. SINCRONIZZA PREZZI (gestito a pacchetti dal frontend)
         if (payload.type === 'sync') {
             const { items } = payload;
             if (!items || !Array.isArray(items) || items.length === 0) {
                 throw new Error("Nessun prodotto da sincronizzare.");
             }
 
-            // Costruisce una singola mutazione GraphQL con alias per aggiornare più varianti
             let mutations = items.map((item, index) => `
                 variantUpdate${index}: productVariantUpdate(input: {id: "${item.variantId}", price: "${item.price}"}) {
                     productVariant {
@@ -140,7 +121,6 @@ exports.handler = async function(event) {
             
             const result = await callShopifyApi(finalMutation);
 
-            // Controlla se ci sono errori in una qualsiasi delle mutazioni
             const allErrors = Object.values(result).flatMap(res => res.userErrors);
             if (allErrors.length > 0) {
                 throw new Error(allErrors.map(e => `[${e.field.join(', ')}]: ${e.message}`).join('; '));
@@ -153,12 +133,11 @@ exports.handler = async function(event) {
         return { statusCode: 400, body: JSON.stringify({ error: 'Tipo di richiesta non valido.' }) };
     };
 
-    // Watchdog per gestire i timeout delle funzioni serverless (es. 10s su Netlify)
+    // Watchdog per gestire i timeout delle funzioni serverless
     try {
         const watchdog = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Timeout della funzione superato (10s). Il pacchetto di dati potrebbe essere troppo grande.")), 9500)
+            setTimeout(() => reject(new Error("Timeout della funzione superato (10s). Il pacchetto di dati è troppo grande.")), 9500)
         );
-        // Esegue la logica principale e il watchdog in parallelo
         return await Promise.race([mainLogic(), watchdog]);
     } catch (error) {
         console.error('Errore nel backend o timeout:', error);
