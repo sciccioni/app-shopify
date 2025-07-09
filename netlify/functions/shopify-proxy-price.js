@@ -9,9 +9,8 @@ async function callShopifyApi(query, variables = {}) {
         shopifyBaseUrl = `https://${SHOPIFY_STORE_NAME}.myshopify.com`;
     }
 
-    // *** CAMBIATO QUI: VERSIONE API 2024-04 PER LA SINCRONIZZAZIONE ***
-    // Questo è cruciale perché productVariantUpdate è disponibile in questa versione.
-    const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-04/graphql.json`, { 
+    // Manteniamo la versione 2024-07 o più recente, dato che la mutazione precedente è stata rimossa qui
+    const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-07/graphql.json`, { 
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -124,8 +123,7 @@ exports.handler = async function(event) {
             return { statusCode: 200, body: JSON.stringify(products) };
         }
 
-        // 2. SINCRONIZZA PREZZI - RIPRISTINATO productVariantUpdate (per singola variante)
-        // e API versione 2024-04
+        // 2. SINCRONIZZA PREZZI - IMPLEMENTAZIONE CORRETTA di productVariantsBulkUpdate per 2024-07+
         if (payload.type === 'sync') {
             const { items } = payload; 
 
@@ -136,71 +134,78 @@ exports.handler = async function(event) {
             const results = [];
             const errors = [];
 
-            // Adesso iteriamo su ogni singolo item e inviamo una mutazione productVariantUpdate
-            for (const item of items) {
-                const originalPrice = item.price;
-                const variantId = item.variantId; // Prendiamo il variantId
-
-                if (!variantId) {
-                    console.warn(`WARN: Skipping variant due to missing variantId in sync payload: ${JSON.stringify(item)}`);
-                    errors.push(`Missing variantId for item: ${JSON.stringify(item)}`);
-                    continue;
-                }
+            // Prepara un UNICO array di input per TUTTE le varianti da aggiornare
+            const allVariantUpdateInputs = items.map(variantItem => {
+                const originalPrice = variantItem.price;
                 
-                // Pulizia e formattazione del prezzo
                 const cleanedPriceString = String(originalPrice).replace(',', '.');
                 const parsedPrice = parseFloat(cleanedPriceString);
                 
                 if (isNaN(parsedPrice)) {
-                    console.error(`ERROR: Invalid price encountered for variant ${variantId} (original: '${originalPrice}')`);
-                    errors.push(`Invalid price format for variant ${variantId}: '${originalPrice}'`);
-                    continue; // Salta questo item e passa al successivo
+                    console.error(`ERROR: Invalid price encountered for variant ${variantItem.variantId} (original: '${originalPrice}')`);
+                    errors.push(`Invalid price format for variant ${variantItem.variantId}: '${originalPrice}'`);
+                    return null; 
                 }
                 
                 const formattedPrice = parsedPrice.toFixed(2);
 
-                const mutation = `
-                    mutation productVariantUpdate($id: ID!, $price: Decimal!) {
-                        productVariantUpdate(input: {id: $id, price: $price}) {
-                            productVariant {
-                                id
-                                price
-                            }
-                            userErrors {
-                                field
-                                message
-                            }
-                        }
-                    }
-                `;
-                
-                const variables = {
-                    id: variantId,
-                    price: formattedPrice
+                console.log(`DEBUG: Preparing price for Variant ${variantItem.variantId}: Original='${originalPrice}', Cleaned='${cleanedPriceString}', Parsed=${parsedPrice}, Formatted='${formattedPrice}'`); 
+
+                return {
+                    id: variantItem.variantId, // ID della variante
+                    price: formattedPrice     // Prezzo aggiornato
+                    // Puoi aggiungere altri campi qui se vuoi aggiornarli, es. sku: "nuovo_sku", inventoryManagement: BASIC
                 };
+            }).filter(Boolean); // Filtra via eventuali item nulli a causa di prezzi non validi
 
-                console.log(`DEBUG: Sending productVariantUpdate for variant ${variantId}`);
-                console.log("DEBUG: Mutation:", mutation);
-                console.log("DEBUG: Variables:", JSON.stringify(variables, null, 2));
-
-                try {
-                    // Chiamata all'API GraphQL con mutazione e variabili
-                    const result = await callShopifyApi(mutation, variables);
-                    const userErrors = result.productVariantUpdate?.userErrors || [];
-                    if (userErrors.length > 0) {
-                        userErrors.forEach(err => errors.push(`[${variantId} - ${err.field?.join(', ') || 'N/A'}]: ${err.message}`));
-                    } else {
-                        results.push({ variantId, success: true });
-                    }
-                } catch (e) {
-                    errors.push(`Error for variant ${variantId}: ${e.message}`);
+            // Se non ci sono varianti valide da aggiornare, non procedere
+            if (allVariantUpdateInputs.length === 0) {
+                if (errors.length > 0) {
+                    throw new Error("Errore durante la preparazione dei prodotti per la sincronizzazione: " + errors.join('; '));
                 }
+                return { statusCode: 200, body: JSON.stringify({ success: true, message: "Nessuna variante valida da aggiornare." }) };
             }
 
-            if (errors.length > 0) {
-                const errorMessage = "Errore durante la sincronizzazione di alcuni prodotti: " + errors.join('; ');
-                console.error("Final sync errors:", errorMessage);
-                throw new Error(errorMessage);
+            // La mutazione productVariantsBulkUpdate
+            const mutation = `
+                mutation productVariantsBulkUpdate($productVariants: [ProductVariantBulkUpdateInput!]!) {
+                    productVariantsBulkUpdate(productVariants: $productVariants) {
+                        productVariants {
+                            id
+                            price
+                            // Puoi chiedere altri campi della variante se ti servono
+                        }
+                        userErrors {
+                            field
+                            message
+                        }
+                    }
+                }
+            `;
+            
+            // Le variabili per la mutazione (l'array di input)
+            const variables = {
+                productVariants: allVariantUpdateInputs
+            };
+
+            console.log(`DEBUG: Sending productVariantsBulkUpdate with ${allVariantUpdateInputs.length} variants.`);
+            console.log("DEBUG: Mutation:", mutation);
+            console.log("DEBUG: Variables:", JSON.stringify(variables, null, 2));
+
+            try {
+                // Chiamata all'API GraphQL con mutazione e variabili
+                const result = await callShopifyApi(mutation, variables);
+                const userErrors = result.productVariantsBulkUpdate?.userErrors || [];
+                
+                if (userErrors.length > 0) {
+                    userErrors.forEach(err => errors.push(`[${err.field?.join(', ') || 'N/A'}]: ${err.message}`));
+                    throw new Error("Errore durante l'aggiornamento in blocco dei prezzi: " + errors.join('; '));
+                } else {
+                    results.push({ success: true, updatedCount: allVariantUpdateInputs.length });
+                }
+            } catch (e) {
+                errors.push(`Errore di API durante l'aggiornamento in blocco: ${e.message}`);
+                throw new Error("Errore di sistema durante la sincronizzazione: " + errors.join('; '));
             }
 
             return { statusCode: 200, body: JSON.stringify({ success: true, results: results }) };
