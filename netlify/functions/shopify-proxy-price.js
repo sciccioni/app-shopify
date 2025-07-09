@@ -9,6 +9,7 @@ async function callShopifyApi(query, variables = {}) {
         shopifyBaseUrl = `https://${SHOPIFY_STORE_NAME}.myshopify.com`;
     }
 
+    // Manteniamo la versione 2024-07 per l'API GraphQL
     const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-07/graphql.json`, { 
         method: 'POST',
         headers: {
@@ -22,7 +23,7 @@ async function callShopifyApi(query, variables = {}) {
     
     if (data.errors) {
         console.error("Shopify API Errors:", JSON.stringify(data.errors, null, 2));
-        console.error("GraphQL Query/Mutation that failed:", query);
+        console.error("GraphQL Query/Mutation that failed:", query); // Log per la query/mutazione fallita
         throw new Error(data.errors.map(e => e.message).join(', '));
     }
     return data.data;
@@ -50,6 +51,7 @@ exports.handler = async function(event) {
             return { statusCode: 401, body: JSON.stringify({ error: "Autenticazione fallita." }) };
         }
 
+        // 1. ANALIZZA PRODOTTI
         if (payload.type === 'analyze') {
             const { skus } = payload;
             if (!skus || !Array.isArray(skus)) {
@@ -102,7 +104,7 @@ exports.handler = async function(event) {
                                     minsan: String(variantNode.sku),
                                     price: variantNode.price,
                                     variant_id: variantNode.id,
-                                    product_id: productNode.id, // Assicurati di avere questo ID dal frontend
+                                    product_id: productNode.id, 
                                     title: productNode.title,
                                 });
                                 foundSkus.add(String(variantNode.sku));
@@ -121,9 +123,9 @@ exports.handler = async function(event) {
             return { statusCode: 200, body: JSON.stringify(products) };
         }
 
-        // 2. SINCRONIZZA PREZZI - Raggruppiamo per productId per usare productVariantsBulkUpdate
+        // 2. SINCRONIZZA PREZZI - ORA USA productVariantsBulkUpdate
         if (payload.type === 'sync') {
-            const { items } = payload; // 'items' qui sono le varianti da aggiornare
+            const { items } = payload; 
 
             if (!items || !Array.isArray(items) || items.length === 0) {
                 return { statusCode: 200, body: JSON.stringify({ success: true, message: "Nessuna azione da eseguire." }) };
@@ -131,7 +133,7 @@ exports.handler = async function(event) {
 
             // Raggruppa gli item per productId
             const itemsGroupedByProductId = items.reduce((acc, item) => {
-                const productId = item.productId; // Abbiamo bisogno del productId dal frontend!
+                const productId = item.productId;
                 if (!productId) {
                     console.warn(`WARN: Variant ${item.variantId} missing productId, skipping.`);
                     return acc;
@@ -150,10 +152,35 @@ exports.handler = async function(event) {
             for (const productId in itemsGroupedByProductId) {
                 const variantsToUpdate = itemsGroupedByProductId[productId];
 
-                const variantInputs = variantsToUpdate.map(variantItem => ({
-                    id: variantItem.variantId,
-                    price: parseFloat(variantItem.price).toFixed(2)
-                }));
+                const variantInputs = variantsToUpdate.map(variantItem => {
+                    const originalPrice = variantItem.price;
+                    
+                    // *** MODIFICA QUI PER LA PULIZIA DEL PREZZO ***
+                    // Assicurati che la stringa prezzo abbia il punto come separatore decimale
+                    const cleanedPriceString = String(originalPrice).replace(',', '.');
+                    const parsedPrice = parseFloat(cleanedPriceString);
+                    
+                    // Controlla se la conversione è andata a buon fine
+                    if (isNaN(parsedPrice)) {
+                        console.error(`ERROR: Invalid price encountered for variant ${variantItem.variantId} (original: '${originalPrice}')`);
+                        errors.push(`Invalid price format for variant ${variantItem.variantId}: '${originalPrice}'`);
+                        return null; // Ritorna null per indicare che questo item non è valido
+                    }
+                    
+                    const formattedPrice = parsedPrice.toFixed(2);
+
+                    console.log(`DEBUG: Processing price for Variant ${variantItem.variantId}: Original='${originalPrice}' (type: ${typeof originalPrice}), Cleaned='${cleanedPriceString}', Parsed=${parsedPrice}, Formatted='${formattedPrice}'`); 
+
+                    return {
+                        id: variantItem.variantId,
+                        price: formattedPrice
+                    };
+                }).filter(Boolean); // Filtra via eventuali item nulli a causa di prezzi non validi
+
+                // Se non ci sono varianti valide dopo la pulizia del prezzo, salta la mutazione
+                if (variantInputs.length === 0) {
+                    continue; 
+                }
 
                 const mutation = `
                     mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantBulkUpdateInput!]!) {
@@ -193,7 +220,10 @@ exports.handler = async function(event) {
             }
 
             if (errors.length > 0) {
-                throw new Error("Errore durante la sincronizzazione di alcuni prodotti: " + errors.join('; '));
+                // Se ci sono errori, li propaghiamo al frontend
+                const errorMessage = "Errore durante la sincronizzazione di alcuni prodotti: " + errors.join('; ');
+                console.error("Final sync errors:", errorMessage);
+                throw new Error(errorMessage);
             }
 
             return { statusCode: 200, body: JSON.stringify({ success: true, results: results }) };
