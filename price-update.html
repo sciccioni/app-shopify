@@ -460,7 +460,7 @@
             
             const skuMap = new Map();
             fileDataRaw.forEach(row => {
-                const sku = String(getValue(row, ['Minsan', 'EAN']) || '').trim();
+                const sku = String(getValue(row, ['Minsan', 'EAN']) || '').trim(); // Priorità Minsan
                 if (sku) {
                     if (!skuMap.has(sku)) skuMap.set(sku, []);
                     skuMap.get(sku).push(row);
@@ -477,11 +477,11 @@
             });
 
             try {
-                // MODIFICA QUI: Assicurati che anche allSkus dia priorità a Minsan
-                const allSkus = uniqueProductsForAnalysis.map(row => getValue(row, ['Minsan', 'EAN'])).filter(Boolean).map(String);
+                const allSkus = uniqueProductsForAnalysis.map(row => getValue(row, ['Minsan', 'EAN'])).filter(Boolean).map(String); // Priorità Minsan
                 if (allSkus.length === 0) throw new Error("Nessun EAN/Minsan valido trovato nel file.");
 
-                const chunkSize = 200; // Ripristinato a 200 come da originale
+                // *** MODIFICA QUI: chunkSize ridotto per l'analisi ***
+                const chunkSize = 10; // Ridotto per testare i limiti di Shopify
                 const skuChunks = [];
                 for (let i = 0; i < allSkus.length; i += chunkSize) {
                     skuChunks.push(allSkus.slice(i, i + chunkSize));
@@ -509,8 +509,7 @@
                 }
                 
                 combinedData = uniqueProductsForAnalysis.map(fileRow => {
-                    // MODIFICA QUI: Assicurati che anche qui venga usato Minsan
-                    const sku = getValue(fileRow, ['Minsan', 'EAN']);
+                    const sku = getValue(fileRow, ['Minsan', 'EAN']); // Priorità Minsan
                     const shopifyProduct = allShopifyProducts.find(p => p.minsan === sku);
                     const isDuplicate = skuMap.get(sku) ? skuMap.get(sku).length > 1 : false;
 
@@ -520,7 +519,7 @@
 
                     const baseData = {
                         ditta: getValue(fileRow, ['Ditta']),
-                        ean: sku, // Questo 'ean' qui è in realtà lo sku principale scelto (Minsan o EAN)
+                        ean: sku, // Ora questo campo conterrà il Minsan se presente
                         descrizione: getValue(fileRow, ['Descrizione']),
                         prezzoFile: priceValue,
                         selected: false,
@@ -534,7 +533,7 @@
                             status: 'ok',
                             shopifyTitle: shopifyProduct.title,
                             shopifyPrice: parseFloat(shopifyProduct.price),
-                            productId: shopifyProduct.product_id,
+                            productId: shopifyProduct.product_id, // Assicurati che questo sia presente per la sync
                             variantId: shopifyProduct.variant_id,
                         };
                     } else {
@@ -604,7 +603,6 @@
         
         function getCurrentlyFilteredData() {
             const dittaFilter = searchDitta.value.toLowerCase();
-            // MODIFICA QUI: Assicurati che il filtro EAN/Minsan utilizzi Minsan per la ricerca
             const eanFilter = searchEan.value.toLowerCase(); 
             const descFilter = searchDesc.value.toLowerCase();
 
@@ -620,15 +618,13 @@
 
             return dataToDisplay.filter(item => {
                  const ditta = getValue(item, ['Ditta']);
-                 // MODIFICA QUI: Assicurati che la ricerca della tabella usi Minsan
-                 const itemSku = getValue(item, ['Minsan', 'EAN']); 
+                 const itemSku = getValue(item, ['Minsan', 'EAN']); // Priorità Minsan
                  const desc = getValue(item, ['Descrizione']);
                  
-                 // Applica il filtro della ricerca sull'EAN/Minsan principale dell'item
                  const eanMatch = itemSku.toLowerCase().includes(eanFilter);
 
                  return ditta.toLowerCase().includes(dittaFilter) &&
-                        eanMatch && // Usa il nuovo eanMatch
+                        eanMatch && 
                         desc.toLowerCase().includes(descFilter);
             });
         }
@@ -652,7 +648,8 @@
                         row.className = 'bg-yellow-50';
                         row.innerHTML = `
                             <td class="px-3 py-4 text-sm">${getValue(item, ['Ditta'])}</td>
-                            <td class="px-3 py-4 text-sm font-semibold">${getValue(item, ['Minsan', 'EAN'])}</td> <td class="px-3 py-4 text-sm">${getValue(item, ['Descrizione'])}</td>
+                            <td class="px-3 py-4 text-sm font-semibold">${getValue(item, ['Minsan', 'EAN'])}</td> 
+                            <td class="px-3 py-4 text-sm">${getValue(item, ['Descrizione'])}</td>
                             <td class="px-3 py-4 text-sm font-mono">${(parseFloat(getValue(item, ['Prezzo', 'Listino', 'Costo', 'CostoMedio'], '0').toString().replace(',', '.')) || 0).toFixed(2)} €</td>
                         `;
                         resultsTableBody.appendChild(row);
@@ -662,7 +659,7 @@
                     resultsTableHead.innerHTML = `<tr>${headers.map(h => `<th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${h}</th>`).join('')}</tr>`;
                     filteredData.forEach(item => {
                         const row = document.createElement('tr');
-                        row.dataset.ean = item.ean; // Questo 'ean' viene dal campo 'ean' di combinedData, che ora sarà il Minsan se presente
+                        row.dataset.ean = item.ean; 
                         const statusInfo = getStatusInfo(item);
                         row.innerHTML = `
                             <td class="px-3 py-4"><input type="checkbox" class="row-checkbox" ${item.selected ? 'checked' : ''} ${item.status === 'not-found' ? 'disabled' : ''}></td>
@@ -708,7 +705,6 @@
             const target = e.target;
             const row = target.closest('tr');
             if (!row) return;
-            // Modificato per usare item.ean che ora sarà il Minsan se trovato
             const ean = row.dataset.ean; 
             const item = combinedData.find(d => d.ean === ean);
             if (!item) return;
@@ -794,7 +790,7 @@
             confirmSyncCheckbox.disabled = true;
 
             try {
-                const chunkSize = 50; // Mantenuto a 50
+                const chunkSize = 50; 
                 const itemChunks = [];
                 for (let i = 0; i < itemsToSync.length; i += chunkSize) {
                     itemChunks.push(itemsToSync.slice(i, i + chunkSize));
@@ -812,14 +808,14 @@
                         type: 'sync',
                         items: chunk.map(item => ({
                             variantId: item.variantId,
-                            price: item.newPrice
+                            price: item.newPrice,
+                            productId: item.productId // Passiamo productId al backend
                         }))
                     };
                     await callBackend(payload);
                     
                     chunk.forEach(syncedItem => {
-                        // Modificato per usare item.ean che ora sarà il Minsan se trovato
-                        const originalItem = combinedData.find(d => d.ean === syncedItem.ean); 
+                        const originalItem = combinedData.find(d => d.ean === syncedItem.ean);
                         originalItem.shopifyPrice = syncedItem.newPrice;
                         originalItem.newPrice = null;
                         originalItem.selected = false;
@@ -853,7 +849,7 @@
         downloadCsvButton.addEventListener('click', () => {
             const dataToExport = combinedData.map(item => ({
                 Ditta: item.ditta,
-                EAN: item.ean, // Questo EAN ora conterrà il Minsan se è stato trovato
+                EAN: item.ean, 
                 Descrizione: `"${item.descrizione.replace(/"/g, '""')}"`,
                 'Prezzo File': item.prezzoFile.toFixed(2),
                 Stato: getStatusInfo(item).label,
