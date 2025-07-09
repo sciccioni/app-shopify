@@ -1,5 +1,54 @@
-// Funzione helper per eseguire chiamate API (ora supporta anche REST)
-async function callShopifyApi(endpoint, method, body = null, variables = {}) {
+// Funzione per eseguire chiamate all'API GraphQL di Shopify
+async function callShopifyApi(graphQlQuery, variables = {}) { // Resa esplicita per GraphQL
+    const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN } = process.env;
+
+    let shopifyBaseUrl;
+    if (SHOPIFY_STORE_NAME.includes('.myshopify.com')) {
+        shopifyBaseUrl = `https://${SHOPIFY_STORE_NAME}`;
+    } else {
+        shopifyBaseUrl = `https://${SHOPIFY_STORE_NAME}.myshopify.com`;
+    }
+
+    // Endpoint GraphQL Admin API
+    // Per l'analisi, possiamo rimanere su 2024-07 se non ci sono stati altri problemi,
+    // o 2024-04 se preferisci coerenza con l'altro file per l'analisi.
+    // L'errore corrente NON è legato alla versione API in questo contesto.
+    const graphqlApiUrl = `${shopifyBaseUrl}/admin/api/2024-07/graphql.json`; 
+
+    const headers = {
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN,
+    };
+
+    const requestBody = JSON.stringify({ query: graphQlQuery, variables: variables });
+
+    const response = await fetch(graphqlApiUrl, { // URL è ora corretto
+        method: 'POST', // Le chiamate GraphQL sono POST
+        headers: headers,
+        body: requestBody
+    });
+
+    const data = await response.json();
+    
+    if (data.errors) { 
+        console.error("Shopify API Errors (GraphQL):", JSON.stringify(data.errors, null, 2));
+        console.error("GraphQL Query/Mutation that failed:", graphQlQuery); 
+        throw new Error(data.errors.map(e => e.message).join(', '));
+    }
+    
+    // Per GraphQL, la risposta valida è solitamente in data.data
+    if (data.data) {
+        return data.data;
+    } else {
+        // Gestione caso limite se non c'è data.data ma non ci sono errori espliciti
+        console.warn("GraphQL API response missing 'data' field but no explicit errors:", JSON.stringify(data, null, 2));
+        throw new Error("Risposta API GraphQL inattesa.");
+    }
+}
+
+
+// Funzione per eseguire chiamate all'API REST di Shopify (Nuova funzione o integrata)
+async function callShopifyRestApi(endpoint, method, body = null) {
     const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN } = process.env;
 
     let baseUrl;
@@ -9,59 +58,40 @@ async function callShopifyApi(endpoint, method, body = null, variables = {}) {
         baseUrl = `https://${SHOPIFY_STORE_NAME}.myshopify.com`;
     }
 
-    const url = `${baseUrl}${endpoint}`; // L'endpoint è ora un percorso completo per REST o GraphQL
+    const url = `${baseUrl}${endpoint}`; 
 
     const headers = {
+        'Content-Type': 'application/json',
         'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN,
     };
-
-    let requestBody = undefined;
-    if (body) {
-        // Per GraphQL, body è già JSON.stringify({ query, variables })
-        // Per REST, body sarà un oggetto da stringify
-        headers['Content-Type'] = 'application/json';
-        requestBody = JSON.stringify(body);
-    } else if (method === 'POST' || method === 'PUT') {
-        // Se è una chiamata GraphQL, variabili contengono query e variabili GraphQL
-        headers['Content-Type'] = 'application/json';
-        requestBody = JSON.stringify({ query: endpoint, variables: variables }); // Endpoint è la query GraphQL qui
-    }
-
 
     const response = await fetch(url, {
         method: method,
         headers: headers,
-        body: requestBody
+        body: body ? JSON.stringify(body) : undefined
     });
 
     const data = await response.json();
-    
-    // Controlla errori sia per GraphQL che per REST (REST ha errori in un formato diverso, ma il .json li cattura)
-    // Per GraphQL, data.errors. Per REST, a volte l'API restituisce un oggetto 'errors' nel body
-    if (data.errors) { // GraphQL errors
-        console.error("Shopify API Errors (GraphQL):", JSON.stringify(data.errors, null, 2));
-        console.error("GraphQL Query/Mutation that failed:", endpoint); 
-        throw new Error(data.errors.map(e => e.message).join(', '));
-    }
-    // Esempio rudimentale per errori REST nel body
-    if (response.status >= 400 && data.error) { // REST errors
-         console.error("Shopify API Errors (REST):", JSON.stringify(data.error, null, 2));
-         throw new Error(data.error);
-    }
-    if (response.status >= 400 && data.errors) { // REST errors (a volte come array di errori)
-        console.error("Shopify API Errors (REST):", JSON.stringify(data.errors, null, 2));
-        if (Array.isArray(data.errors)) {
-            throw new Error(data.errors.join(', '));
-        }
-        if (typeof data.errors === 'object') {
-            throw new Error(Object.values(data.errors).flat().join(', '));
-        }
-        throw new Error(data.errors.toString());
-    }
 
-
-    return data; // REST restituisce l'oggetto risorsa direttamente, GraphQL restituisce data.data
+    if (response.status >= 400) {
+        console.error("Shopify API Errors (REST):", JSON.stringify(data, null, 2));
+        let errorMessage = `REST API Error ${response.status}`;
+        if (data.errors) {
+            if (Array.isArray(data.errors)) {
+                errorMessage += `: ${data.errors.join(', ')}`;
+            } else if (typeof data.errors === 'object') {
+                errorMessage += `: ${Object.values(data.errors).flat().join(', ')}`;
+            } else {
+                errorMessage += `: ${data.errors.toString()}`;
+            }
+        } else if (data.error) {
+            errorMessage += `: ${data.error}`;
+        }
+        throw new Error(errorMessage);
+    }
+    return data;
 }
+
 
 exports.handler = async function(event) {
     const mainLogic = async () => {
@@ -85,7 +115,7 @@ exports.handler = async function(event) {
             return { statusCode: 401, body: JSON.stringify({ error: "Autenticazione fallita." }) };
         }
 
-        // 1. ANALIZZA PRODOTTI (rimane invariato, usa GraphQL)
+        // 1. ANALIZZA PRODOTTI (usa GraphQL tramite callShopifyApi)
         if (payload.type === 'analyze') {
             const { skus } = payload;
             if (!skus || !Array.isArray(skus)) {
@@ -122,14 +152,14 @@ exports.handler = async function(event) {
             
             console.log("DEBUG: Complete GraphQL Query sent to Shopify (analyze):", query); 
 
-            // Chiamata all'API GraphQL (passando la query come primo argomento)
-            const shopifyData = await callShopifyApi(query, 'POST', { query: query }); // Passa la query come oggetto GraphQL
+            // *** MODIFICA QUI: Chiamata corretta a callShopifyApi per GraphQL ***
+            const shopifyData = await callShopifyApi(query); // query è il primo argomento (GraphQL)
 
             const products = [];
             const foundSkus = new Set();
 
-            if (shopifyData.data && shopifyData.data.products && shopifyData.data.products.edges) { // Accesso ai dati GraphQL
-                shopifyData.data.products.edges.forEach(productEdge => {
+            if (shopifyData.products && shopifyData.products.edges) { 
+                shopifyData.products.edges.forEach(productEdge => {
                     const productNode = productEdge.node;
                     if (productNode.variants && productNode.variants.edges) {
                         productNode.variants.edges.forEach(variantEdge => {
@@ -159,7 +189,7 @@ exports.handler = async function(event) {
             return { statusCode: 200, body: JSON.stringify(products) };
         }
 
-        // 2. SINCRONIZZA PREZZI - ORA USA L'API REST
+        // 2. SINCRONIZZA PREZZI (usa la NUOVA funzione callShopifyRestApi)
         if (payload.type === 'sync') {
             const { items } = payload; 
 
@@ -170,10 +200,9 @@ exports.handler = async function(event) {
             const results = [];
             const errors = [];
 
-            // Adesso iteriamo su ogni singolo item e inviamo una richiesta REST PUT
             for (const item of items) {
                 const originalPrice = item.price;
-                const variantId = item.variantId; // Prendiamo il variantId
+                const variantId = item.variantId; 
 
                 if (!variantId) {
                     console.warn(`WARN: Skipping variant due to missing variantId in sync payload: ${JSON.stringify(item)}`);
@@ -181,7 +210,6 @@ exports.handler = async function(event) {
                     continue;
                 }
                 
-                // Pulizia e formattazione del prezzo
                 const cleanedPriceString = String(originalPrice).replace(',', '.');
                 const parsedPrice = parseFloat(cleanedPriceString);
                 
@@ -194,7 +222,6 @@ exports.handler = async function(event) {
                 const formattedPrice = parsedPrice.toFixed(2);
 
                 // L'ID della variante GraphQL (gid://...) deve essere convertito a ID numerico per l'API REST
-                // L'ID numerico si trova alla fine del GID.
                 const restVariantId = variantId.split('/').pop();
                 if (!restVariantId) {
                     console.error(`ERROR: Could not parse REST ID from GID: ${variantId}`);
@@ -202,8 +229,7 @@ exports.handler = async function(event) {
                     continue;
                 }
 
-                // Endpoint API REST per aggiornare la variante
-                // Usiamo la versione API 2024-07 per REST.
+                // Endpoint API REST per aggiornare la variante (VERSIONE 2024-07)
                 const endpoint = `/admin/api/2024-07/variants/${restVariantId}.json`;
                 const requestBody = {
                     variant: {
@@ -216,13 +242,11 @@ exports.handler = async function(event) {
                 console.log("DEBUG: REST Request Body:", JSON.stringify(requestBody, null, 2));
 
                 try {
-                    // Chiamata all'API REST (metodo PUT, con body)
-                    const result = await callShopifyApi(endpoint, 'PUT', requestBody);
-                    // L'API REST restituisce l'oggetto variante aggiornato o errori.
+                    // *** MODIFICA QUI: Chiamata a callShopifyRestApi per REST ***
+                    const result = await callShopifyRestApi(endpoint, 'PUT', requestBody);
                     if (result.variant && result.variant.id) {
                         results.push({ variantId, success: true, rest_response: result.variant });
                     } else {
-                        // Gestione di errori REST non nel campo 'errors' ma nel body di risposta
                         errors.push(`REST update failed for variant ${variantId}: ${JSON.stringify(result)}`);
                     }
                 } catch (e) {
