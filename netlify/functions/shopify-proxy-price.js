@@ -8,7 +8,6 @@ async function callShopifyApi(query, variables = {}) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            // CORREZIONE: Usa la variabile corretta SHOPIFY_ADMIN_API_TOKEN
             'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN,
         },
         body: JSON.stringify({ query, variables }),
@@ -25,23 +24,24 @@ async function callShopifyApi(query, variables = {}) {
 
 // Funzione principale del backend (Serverless Function)
 exports.handler = async function(event) {
-    // Controlla subito che tutte le variabili d'ambiente necessarie siano state impostate su Netlify
-    const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, APP_PASSWORD } = process.env;
-    if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN || !APP_PASSWORD) {
-        const missing = [
-            !SHOPIFY_STORE_NAME && "SHOPIFY_STORE_NAME",
-            !SHOPIFY_ADMIN_API_TOKEN && "SHOPIFY_ADMIN_API_TOKEN",
-            !APP_PASSWORD && "APP_PASSWORD"
-        ].filter(Boolean).join(', ');
-        return { statusCode: 500, body: JSON.stringify({ error: `Variabili d'ambiente mancanti sul server: ${missing}` }) };
-    }
+    // Funzione interna che contiene la logica principale, per gestirla con un timeout
+    const mainLogic = async () => {
+        // Controlla subito che tutte le variabili d'ambiente necessarie siano state impostate su Netlify
+        const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, APP_PASSWORD } = process.env;
+        if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN || !APP_PASSWORD) {
+            const missing = [
+                !SHOPIFY_STORE_NAME && "SHOPIFY_STORE_NAME",
+                !SHOPIFY_ADMIN_API_TOKEN && "SHOPIFY_ADMIN_API_TOKEN",
+                !APP_PASSWORD && "APP_PASSWORD"
+            ].filter(Boolean).join(', ');
+            return { statusCode: 500, body: JSON.stringify({ error: `Variabili d'ambiente mancanti sul server: ${missing}` }) };
+        }
 
-    // Accetta solo richieste di tipo POST
-    if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: 'Method Not Allowed' };
-    }
+        // Accetta solo richieste di tipo POST
+        if (event.httpMethod !== 'POST') {
+            return { statusCode: 405, body: 'Method Not Allowed' };
+        }
 
-    try {
         const payload = JSON.parse(event.body);
 
         // Controllo della password per ogni singola richiesta
@@ -58,46 +58,61 @@ exports.handler = async function(event) {
                  throw new Error("Array di SKU non fornito.");
             }
             
-            // Costruisce la query per cercare varianti prodotto tramite SKU
-            const skuQueryString = skus.map(s => `sku:'${s}'`).join(' OR ');
-            const query = `
-                query getProductVariantsBySkus {
-                    productVariants(first: 250, query: "${skuQueryString}") {
-                        edges {
-                            node {
-                                id
-                                sku
-                                price
-                                product {
+            // --- NUOVA LOGICA CON PACCHETTI (CHUNKING) ---
+            const chunkSize = 200; // Un valore sicuro per evitare timeout e limiti API
+            const skuChunks = [];
+            for (let i = 0; i < skus.length; i += chunkSize) {
+                skuChunks.push(skus.slice(i, i + chunkSize));
+            }
+
+            let allShopifyProducts = [];
+
+            // Processa ogni pacchetto sequenzialmente
+            for (const chunk of skuChunks) {
+                const skuQueryString = chunk.map(s => `sku:'${s}'`).join(' OR ');
+                const query = `
+                    query getProductVariantsBySkus {
+                        productVariants(first: ${chunk.length}, query: "${skuQueryString}") {
+                            edges {
+                                node {
                                     id
-                                    title
+                                    sku
+                                    price
+                                    product {
+                                        id
+                                        title
+                                    }
                                 }
                             }
                         }
-                    }
-                }`;
+                    }`;
 
-            const shopifyData = await callShopifyApi(query);
+                const shopifyData = await callShopifyApi(query);
+                const productsFromChunk = shopifyData.productVariants.edges.map(edge => ({
+                    found: true,
+                    minsan: edge.node.sku,
+                    price: edge.node.price,
+                    variant_id: edge.node.id,
+                    product_id: edge.node.product.id,
+                    title: edge.node.product.title,
+                }));
+                allShopifyProducts.push(...productsFromChunk);
+
+                // Aggiunge una piccola pausa per non sovraccaricare l'API di Shopify
+                if (skuChunks.length > 1) {
+                    await new Promise(resolve => setTimeout(resolve, 250));
+                }
+            }
             
-            // Mappa i risultati per il frontend
-            const products = shopifyData.productVariants.edges.map(edge => ({
-                found: true,
-                minsan: edge.node.sku,
-                price: edge.node.price,
-                variant_id: edge.node.id,
-                product_id: edge.node.product.id,
-                title: edge.node.product.title,
-            }));
-
-            // Aggiunge i prodotti non trovati alla risposta
-            const foundSkus = new Set(products.map(p => p.minsan));
+            // Aggiunge i prodotti non trovati alla risposta finale
+            const foundSkus = new Set(allShopifyProducts.map(p => p.minsan));
             skus.forEach(sku => {
                 if (!foundSkus.has(sku)) {
-                    products.push({ found: false, minsan: sku });
+                    allShopifyProducts.push({ found: false, minsan: sku });
                 }
             });
 
-            return { statusCode: 200, body: JSON.stringify(products) };
+            return { statusCode: 200, body: JSON.stringify(allShopifyProducts) };
         }
 
         // 2. SINCRONIZZA PREZZI
@@ -136,9 +151,17 @@ exports.handler = async function(event) {
 
         // Se il tipo di richiesta non è valido
         return { statusCode: 400, body: JSON.stringify({ error: 'Tipo di richiesta non valido.' }) };
+    };
 
+    // Watchdog per gestire i timeout delle funzioni serverless (es. 10s su Netlify)
+    try {
+        const watchdog = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Timeout della funzione superato (10s). Il pacchetto di dati potrebbe essere troppo grande.")), 9500)
+        );
+        // Esegue la logica principale e il watchdog in parallelo
+        return await Promise.race([mainLogic(), watchdog]);
     } catch (error) {
-        console.error('Errore nel backend:', error);
+        console.error('Errore nel backend o timeout:', error);
         return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
     }
 };
