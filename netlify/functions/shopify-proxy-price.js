@@ -9,8 +9,9 @@ async function callShopifyApi(query, variables = {}) {
         shopifyBaseUrl = `https://${SHOPIFY_STORE_NAME}.myshopify.com`;
     }
 
-    // Manteniamo la versione 2024-07 per l'API GraphQL, poiché productVariantUpdate è stata rimossa qui
-    const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-07/graphql.json`, { 
+    // *** CAMBIATO QUI: VERSIONE API 2024-04 PER LA SINCRONIZZAZIONE ***
+    // Questo è cruciale perché productVariantUpdate è disponibile in questa versione.
+    const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-04/graphql.json`, { 
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -23,7 +24,7 @@ async function callShopifyApi(query, variables = {}) {
     
     if (data.errors) {
         console.error("Shopify API Errors:", JSON.stringify(data.errors, null, 2));
-        console.error("GraphQL Query/Mutation that failed:", query); // Log per la query/mutazione fallita
+        console.error("GraphQL Query/Mutation that failed:", query); 
         throw new Error(data.errors.map(e => e.message).join(', '));
     }
     return data.data;
@@ -60,8 +61,6 @@ exports.handler = async function(event) {
             
             console.log("DEBUG: Received SKUs payload for analyze:", skus);
 
-            // *** FIX PER L'ERRORE DI SINTASSI (unexpected INT): Uso di virgolette singole interne ***
-            // Questo allinea la sintassi con il file shopify-proxy.js che funziona
             const skuQueryString = skus.map(s => `sku:'${String(s).trim()}'`).join(' OR '); 
             
             console.log("DEBUG: Final skuQueryString for Shopify (analyze):", skuQueryString);
@@ -125,7 +124,8 @@ exports.handler = async function(event) {
             return { statusCode: 200, body: JSON.stringify(products) };
         }
 
-        // 2. SINCRONIZZA PREZZI - Ora usa productVariantsBulkUpdate
+        // 2. SINCRONIZZA PREZZI - RIPRISTINATO productVariantUpdate (per singola variante)
+        // e API versione 2024-04
         if (payload.type === 'sync') {
             const { items } = payload; 
 
@@ -133,60 +133,36 @@ exports.handler = async function(event) {
                 return { statusCode: 200, body: JSON.stringify({ success: true, message: "Nessuna azione da eseguire." }) };
             }
 
-            // Raggruppa gli item per productId
-            const itemsGroupedByProductId = items.reduce((acc, item) => {
-                const productId = item.productId;
-                if (!productId) {
-                    console.warn(`WARN: Variant ${item.variantId} missing productId, skipping.`);
-                    return acc;
-                }
-                if (!acc[productId]) {
-                    acc[productId] = [];
-                }
-                acc[productId].push(item);
-                return acc;
-            }, {});
-
             const results = [];
             const errors = [];
 
-            // Itera su ogni gruppo di productId e invia una mutazione bulk separata
-            for (const productId in itemsGroupedByProductId) {
-                const variantsToUpdate = itemsGroupedByProductId[productId];
+            // Adesso iteriamo su ogni singolo item e inviamo una mutazione productVariantUpdate
+            for (const item of items) {
+                const originalPrice = item.price;
+                const variantId = item.variantId; // Prendiamo il variantId
 
-                const variantInputs = variantsToUpdate.map(variantItem => {
-                    const originalPrice = variantItem.price;
-                    
-                    // *** FIX PER LA PULIZIA DEL PREZZO: Assicurati il punto decimale ***
-                    const cleanedPriceString = String(originalPrice).replace(',', '.');
-                    const parsedPrice = parseFloat(cleanedPriceString);
-                    
-                    if (isNaN(parsedPrice)) {
-                        console.error(`ERROR: Invalid price encountered for variant ${variantItem.variantId} (original: '${originalPrice}')`);
-                        errors.push(`Invalid price format for variant ${variantItem.variantId}: '${originalPrice}'`);
-                        return null; 
-                    }
-                    
-                    const formattedPrice = parsedPrice.toFixed(2);
-
-                    console.log(`DEBUG: Processing price for Variant ${variantItem.variantId}: Original='${originalPrice}' (type: ${typeof originalPrice}), Cleaned='${cleanedPriceString}', Parsed=${parsedPrice}, Formatted='${formattedPrice}'`); 
-
-                    return {
-                        id: variantItem.variantId,
-                        price: formattedPrice
-                    };
-                }).filter(Boolean); // Filtra via eventuali item nulli a causa di prezzi non validi
-
-                // Se non ci sono varianti valide dopo la pulizia del prezzo, salta la mutazione
-                if (variantInputs.length === 0) {
-                    continue; 
+                if (!variantId) {
+                    console.warn(`WARN: Skipping variant due to missing variantId in sync payload: ${JSON.stringify(item)}`);
+                    errors.push(`Missing variantId for item: ${JSON.stringify(item)}`);
+                    continue;
                 }
+                
+                // Pulizia e formattazione del prezzo
+                const cleanedPriceString = String(originalPrice).replace(',', '.');
+                const parsedPrice = parseFloat(cleanedPriceString);
+                
+                if (isNaN(parsedPrice)) {
+                    console.error(`ERROR: Invalid price encountered for variant ${variantId} (original: '${originalPrice}')`);
+                    errors.push(`Invalid price format for variant ${variantId}: '${originalPrice}'`);
+                    continue; // Salta questo item e passa al successivo
+                }
+                
+                const formattedPrice = parsedPrice.toFixed(2);
 
-                // Mutazione productVariantsBulkUpdate: richiede productId e un array di varianti
                 const mutation = `
-                    mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantBulkUpdateInput!]!) {
-                        productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-                            productVariants {
+                    mutation productVariantUpdate($id: ID!, $price: Decimal!) {
+                        productVariantUpdate(input: {id: $id, price: $price}) {
+                            productVariant {
                                 id
                                 price
                             }
@@ -199,24 +175,25 @@ exports.handler = async function(event) {
                 `;
                 
                 const variables = {
-                    productId: productId,
-                    variants: variantInputs
+                    id: variantId,
+                    price: formattedPrice
                 };
 
-                console.log(`DEBUG: Sending productVariantsBulkUpdate for productId: ${productId}`);
+                console.log(`DEBUG: Sending productVariantUpdate for variant ${variantId}`);
                 console.log("DEBUG: Mutation:", mutation);
                 console.log("DEBUG: Variables:", JSON.stringify(variables, null, 2));
 
                 try {
+                    // Chiamata all'API GraphQL con mutazione e variabili
                     const result = await callShopifyApi(mutation, variables);
-                    const userErrors = result.productVariantsBulkUpdate?.userErrors || [];
+                    const userErrors = result.productVariantUpdate?.userErrors || [];
                     if (userErrors.length > 0) {
-                        userErrors.forEach(err => errors.push(`[${productId} - ${err.field?.join(', ') || 'N/A'}]: ${err.message}`));
+                        userErrors.forEach(err => errors.push(`[${variantId} - ${err.field?.join(', ') || 'N/A'}]: ${err.message}`));
                     } else {
-                        results.push({ productId, success: true });
+                        results.push({ variantId, success: true });
                     }
                 } catch (e) {
-                    errors.push(`Error for productId ${productId}: ${e.message}`);
+                    errors.push(`Error for variant ${variantId}: ${e.message}`);
                 }
             }
 
