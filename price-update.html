@@ -141,7 +141,6 @@
 
             <div id="pricing-content">
                 <main class="space-y-6">
-                    <!-- Sezione di Upload -->
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                         <h2 class="text-xl font-semibold mb-4">1. Carica il File Giacenze</h2>
                         <div id="drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
@@ -157,11 +156,9 @@
                         </button>
                     </div>
 
-                    <!-- Sezione Risultati e Filtri -->
                     <div id="results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden">
                         <h2 class="text-xl font-semibold mb-4">2. Risultati e Modifica Prezzi</h2>
                         
-                        <!-- Messaggi e Loader -->
                         <div id="loader" class="text-center p-8 hidden">
                             <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto"></div>
                             <p id="loader-text" class="mt-4 text-gray-600">Elaborazione in corso...</p>
@@ -174,10 +171,8 @@
                         </div>
                         <div id="sync-status-message" class="text-center font-semibold hidden mb-4 p-4 rounded-md"></div>
 
-                        <!-- Summary Section -->
                         <div id="summary-section" class="hidden grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6"></div>
 
-                        <!-- Controlli e Filtri -->
                         <div id="controls-container" class="hidden">
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                                 <input type="search" id="search-ditta" class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Filtra per Ditta...">
@@ -187,7 +182,6 @@
                             
                             <div id="filter-buttons" class="flex flex-wrap gap-2 mb-4 border-b pb-4"></div>
 
-                            <!-- Sezione Ricarico -->
                             <div class="flex items-center gap-4 mt-4 p-4 bg-gray-100 rounded-lg border border-gray-200">
                                 <label for="markup-percentage" class="text-sm font-medium whitespace-nowrap">Applica Ricarico (%):</label>
                                 <input type="number" id="markup-percentage" class="w-24 px-2 py-1 border border-gray-300 rounded-lg" placeholder="Es. 20">
@@ -197,7 +191,6 @@
                             </div>
 
 
-                            <!-- Azioni di Sincronizzazione -->
                             <div id="sync-action-area" class="mt-6 p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
                                 <div class="flex flex-col md:flex-row items-center justify-between gap-4">
                                     <div class="flex items-center">
@@ -219,7 +212,6 @@
                             </div>
                         </div>
 
-                        <!-- Tabella Risultati -->
                         <div id="table-container" class="hidden mt-6 overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200">
                                 <thead id="results-table-head" class="bg-gray-50"></thead>
@@ -485,10 +477,11 @@
             });
 
             try {
-                const allSkus = uniqueProductsForAnalysis.map(row => getValue(row, ['EAN', 'Minsan'])).filter(Boolean).map(String);
+                // MODIFICA QUI: Assicurati che anche allSkus dia priorità a Minsan
+                const allSkus = uniqueProductsForAnalysis.map(row => getValue(row, ['Minsan', 'EAN'])).filter(Boolean).map(String);
                 if (allSkus.length === 0) throw new Error("Nessun EAN/Minsan valido trovato nel file.");
 
-                const chunkSize = 50;
+                const chunkSize = 200; // Ripristinato a 200 come da originale
                 const skuChunks = [];
                 for (let i = 0; i < allSkus.length; i += chunkSize) {
                     skuChunks.push(allSkus.slice(i, i + chunkSize));
@@ -516,7 +509,8 @@
                 }
                 
                 combinedData = uniqueProductsForAnalysis.map(fileRow => {
-                    const sku = getValue(fileRow, ['EAN', 'Minsan']);
+                    // MODIFICA QUI: Assicurati che anche qui venga usato Minsan
+                    const sku = getValue(fileRow, ['Minsan', 'EAN']);
                     const shopifyProduct = allShopifyProducts.find(p => p.minsan === sku);
                     const isDuplicate = skuMap.get(sku) ? skuMap.get(sku).length > 1 : false;
 
@@ -526,7 +520,7 @@
 
                     const baseData = {
                         ditta: getValue(fileRow, ['Ditta']),
-                        ean: sku,
+                        ean: sku, // Questo 'ean' qui è in realtà lo sku principale scelto (Minsan o EAN)
                         descrizione: getValue(fileRow, ['Descrizione']),
                         prezzoFile: priceValue,
                         selected: false,
@@ -562,7 +556,7 @@
 
             } catch (error) {
                 console.error("Errore durante l'analisi:", error);
-                showMessage(errorMessageText, `<b>Errore:</b> ${error.message}<br><br><b>Possibili cause:</b><br>1. Le credenziali (token, nome negozio) non sono corrette nelle variabili d'ambiente di Netlify.<br>2. L'app privata su Shopify non ha i permessi per leggere e scrivere i prodotti.<br>3. Il nome del file della funzione su Netlify non è esattamente 'shopify-proxy-price.js'.`, true);
+                showMessage(errorMessageText, `<b>Errore:</b> ${error.message}<br><br><b>Possibili cause:</b><br>1. Le credenziali (token, nome negozio) non sono corrette nelle variabili d'ambiente di Netlify.<br>2. L'app privata su Shopify non ha i permessi per leggere e scrivere i prodotti.<br>3. Il nome del file della funzione su Netlify non è esattamente 'shopify-proxy-price.js'.<br>4. Timeout della funzione per pacchetti troppo grandi.`, true);
             } finally {
                 hideLoader();
                 progressBarContainer.classList.add('hidden');
@@ -610,7 +604,8 @@
         
         function getCurrentlyFilteredData() {
             const dittaFilter = searchDitta.value.toLowerCase();
-            const eanFilter = searchEan.value.toLowerCase();
+            // MODIFICA QUI: Assicurati che il filtro EAN/Minsan utilizzi Minsan per la ricerca
+            const eanFilter = searchEan.value.toLowerCase(); 
             const descFilter = searchDesc.value.toLowerCase();
 
             let dataToDisplay;
@@ -625,10 +620,15 @@
 
             return dataToDisplay.filter(item => {
                  const ditta = getValue(item, ['Ditta']);
-                 const ean = getValue(item, ['EAN', 'Minsan']);
+                 // MODIFICA QUI: Assicurati che la ricerca della tabella usi Minsan
+                 const itemSku = getValue(item, ['Minsan', 'EAN']); 
                  const desc = getValue(item, ['Descrizione']);
+                 
+                 // Applica il filtro della ricerca sull'EAN/Minsan principale dell'item
+                 const eanMatch = itemSku.toLowerCase().includes(eanFilter);
+
                  return ditta.toLowerCase().includes(dittaFilter) &&
-                        ean.toLowerCase().includes(eanFilter) &&
+                        eanMatch && // Usa il nuovo eanMatch
                         desc.toLowerCase().includes(descFilter);
             });
         }
@@ -652,8 +652,7 @@
                         row.className = 'bg-yellow-50';
                         row.innerHTML = `
                             <td class="px-3 py-4 text-sm">${getValue(item, ['Ditta'])}</td>
-                            <td class="px-3 py-4 text-sm font-semibold">${getValue(item, ['EAN', 'Minsan'])}</td>
-                            <td class="px-3 py-4 text-sm">${getValue(item, ['Descrizione'])}</td>
+                            <td class="px-3 py-4 text-sm font-semibold">${getValue(item, ['Minsan', 'EAN'])}</td> <td class="px-3 py-4 text-sm">${getValue(item, ['Descrizione'])}</td>
                             <td class="px-3 py-4 text-sm font-mono">${(parseFloat(getValue(item, ['Prezzo', 'Listino', 'Costo', 'CostoMedio'], '0').toString().replace(',', '.')) || 0).toFixed(2)} €</td>
                         `;
                         resultsTableBody.appendChild(row);
@@ -663,7 +662,7 @@
                     resultsTableHead.innerHTML = `<tr>${headers.map(h => `<th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${h}</th>`).join('')}</tr>`;
                     filteredData.forEach(item => {
                         const row = document.createElement('tr');
-                        row.dataset.ean = item.ean;
+                        row.dataset.ean = item.ean; // Questo 'ean' viene dal campo 'ean' di combinedData, che ora sarà il Minsan se presente
                         const statusInfo = getStatusInfo(item);
                         row.innerHTML = `
                             <td class="px-3 py-4"><input type="checkbox" class="row-checkbox" ${item.selected ? 'checked' : ''} ${item.status === 'not-found' ? 'disabled' : ''}></td>
@@ -709,7 +708,8 @@
             const target = e.target;
             const row = target.closest('tr');
             if (!row) return;
-            const ean = row.dataset.ean;
+            // Modificato per usare item.ean che ora sarà il Minsan se trovato
+            const ean = row.dataset.ean; 
             const item = combinedData.find(d => d.ean === ean);
             if (!item) return;
 
@@ -794,7 +794,7 @@
             confirmSyncCheckbox.disabled = true;
 
             try {
-                const chunkSize = 50;
+                const chunkSize = 50; // Mantenuto a 50
                 const itemChunks = [];
                 for (let i = 0; i < itemsToSync.length; i += chunkSize) {
                     itemChunks.push(itemsToSync.slice(i, i + chunkSize));
@@ -818,7 +818,8 @@
                     await callBackend(payload);
                     
                     chunk.forEach(syncedItem => {
-                        const originalItem = combinedData.find(d => d.ean === syncedItem.ean);
+                        // Modificato per usare item.ean che ora sarà il Minsan se trovato
+                        const originalItem = combinedData.find(d => d.ean === syncedItem.ean); 
                         originalItem.shopifyPrice = syncedItem.newPrice;
                         originalItem.newPrice = null;
                         originalItem.selected = false;
@@ -852,7 +853,7 @@
         downloadCsvButton.addEventListener('click', () => {
             const dataToExport = combinedData.map(item => ({
                 Ditta: item.ditta,
-                EAN: item.ean,
+                EAN: item.ean, // Questo EAN ora conterrà il Minsan se è stato trovato
                 Descrizione: `"${item.descrizione.replace(/"/g, '""')}"`,
                 'Prezzo File': item.prezzoFile.toFixed(2),
                 Stato: getStatusInfo(item).label,
