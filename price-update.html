@@ -420,7 +420,7 @@
 
         // --- CHIAMATA AL BACKEND ---
         async function callBackend(payload) {
-            const endpoint = '/.netlify/functions/shopify-proxy'; // Endpoint della serverless function
+            const endpoint = '/.netlify/functions/shopify-proxy-price'; // Endpoint della serverless function
             
             const response = await fetch(endpoint, {
                 method: 'POST',
