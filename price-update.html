@@ -428,7 +428,8 @@
 
         // --- CHIAMATA AL BACKEND ---
         async function callBackend(payload) {
-            const endpoint = '/.netlify/functions/shopify-proxy';
+            // CORREZIONE: L'endpoint punta al nome del file corretto che l'utente ha specificato
+            const endpoint = '/.netlify/functions/shopify-proxy-price';
             
             const response = await fetch(endpoint, {
                 method: 'POST',
@@ -488,7 +489,6 @@
                 const allSkus = uniqueProductsForAnalysis.map(row => getValue(row, ['EAN', 'Minsan'])).filter(Boolean).map(String);
                 if (allSkus.length === 0) throw new Error("Nessun EAN/Minsan valido trovato nel file.");
 
-                // --- LOGICA A PACCHETTI (CHUNKING) ---
                 const chunkSize = 200;
                 const skuChunks = [];
                 for (let i = 0; i < allSkus.length; i += chunkSize) {
@@ -795,7 +795,6 @@
             confirmSyncCheckbox.disabled = true;
 
             try {
-                // --- LOGICA A PACCHETTI (CHUNKING) PER LA SINCRONIZZAZIONE ---
                 const chunkSize = 50;
                 const itemChunks = [];
                 for (let i = 0; i < itemsToSync.length; i += chunkSize) {
@@ -819,7 +818,6 @@
                     };
                     await callBackend(payload);
                     
-                    // Aggiorna lo stato degli item nel chunk dopo il successo
                     chunk.forEach(syncedItem => {
                         const originalItem = combinedData.find(d => d.ean === syncedItem.ean);
                         originalItem.shopifyPrice = syncedItem.newPrice;
