@@ -488,7 +488,7 @@
                 const allSkus = uniqueProductsForAnalysis.map(row => getValue(row, ['EAN', 'Minsan'])).filter(Boolean).map(String);
                 if (allSkus.length === 0) throw new Error("Nessun EAN/Minsan valido trovato nel file.");
 
-                const chunkSize = 200;
+                const chunkSize = 50;
                 const skuChunks = [];
                 for (let i = 0; i < allSkus.length; i += chunkSize) {
                     skuChunks.push(allSkus.slice(i, i + chunkSize));
