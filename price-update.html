@@ -428,7 +428,6 @@
 
         // --- CHIAMATA AL BACKEND ---
         async function callBackend(payload) {
-            // CORREZIONE: L'endpoint punta al nome del file corretto che l'utente ha specificato
             const endpoint = '/.netlify/functions/shopify-proxy-price';
             
             const response = await fetch(endpoint, {
@@ -563,7 +562,7 @@
 
             } catch (error) {
                 console.error("Errore durante l'analisi:", error);
-                showMessage(errorMessageText, `<b>Errore:</b> ${error.message}`, true);
+                showMessage(errorMessageText, `<b>Errore:</b> ${error.message}<br><br><b>Possibili cause:</b><br>1. Le credenziali (token, nome negozio) non sono corrette nelle variabili d'ambiente di Netlify.<br>2. L'app privata su Shopify non ha i permessi per leggere e scrivere i prodotti.<br>3. Il nome del file della funzione su Netlify non è esattamente 'shopify-proxy-price.js'.`, true);
             } finally {
                 hideLoader();
                 progressBarContainer.classList.add('hidden');
