@@ -27,7 +27,7 @@ async function callShopifyApi(query, variables = {}) {
 exports.handler = async function(event) {
     // Funzione interna che contiene la logica principale, per gestirla con un timeout
     const mainLogic = async () => {
-        // Controlla subito che tutte le variabili d'ambiente necessarie siano state impostate su Netlify
+        // **MIGLIORAMENTO QUI:** Controllo più robusto delle variabili d'ambiente
         const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, APP_PASSWORD } = process.env;
         if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN || !APP_PASSWORD) {
             const missing = [
@@ -35,7 +35,8 @@ exports.handler = async function(event) {
                 !SHOPIFY_ADMIN_API_TOKEN && "SHOPIFY_ADMIN_API_TOKEN",
                 !APP_PASSWORD && "APP_PASSWORD"
             ].filter(Boolean).join(', ');
-            return { statusCode: 500, body: JSON.stringify({ error: `Variabili d'ambiente mancanti sul server: ${missing}` }) };
+            // Lancia un errore catturato dal blocco try/catch esterno per un 500 coerente
+            throw new Error(`Variabili d'ambiente mancanti su Netlify: ${missing}`);
         }
 
         // Accetta solo richieste di tipo POST
@@ -154,6 +155,7 @@ exports.handler = async function(event) {
     };
 
     try {
+        // Watchdog per il timeout della funzione
         const watchdog = new Promise((_, reject) => 
             setTimeout(() => reject(new Error("Timeout della funzione superato (10s). Il pacchetto di dati potrebbe essere troppo grande.")), 9500)
         );
