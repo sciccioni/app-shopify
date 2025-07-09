@@ -58,27 +58,19 @@ exports.handler = async function(event) {
                  throw new Error("Array di SKU/Minsan non fornito.");
             }
             
-            // CORREZIONE: Utilizzo di una query basata su metafield "minsan" per maggiore affidabilità
-            // Nota: si assume che il metafield sia nel namespace "custom" e abbia la chiave "minsan"
-            const minsanQueryString = skus.map(s => `(metafield:custom.minsan:'${s}')`).join(' OR ');
+            // CORREZIONE: Utilizzo della query basata su SKU, come nella vecchia app, per maggiore affidabilità
+            const skuQueryString = skus.map(s => `sku:${s}`).join(' OR ');
             const query = `
-                query getProductsByMinsan {
-                    products(first: ${skus.length}, query: "${minsanQueryString}") {
+                query getProductVariantsBySkus {
+                    productVariants(first: ${skus.length}, query: "${skuQueryString}") {
                         edges {
                             node {
                                 id
-                                title
-                                minsan: metafield(namespace: "custom", key: "minsan") {
-                                    value
-                                }
-                                variants(first: 1) {
-                                    edges {
-                                        node {
-                                            id
-                                            price
-                                            sku
-                                        }
-                                    }
+                                sku
+                                price
+                                product {
+                                    id
+                                    title
                                 }
                             }
                         }
@@ -88,33 +80,29 @@ exports.handler = async function(event) {
             const shopifyData = await callShopifyApi(query);
             
             const products = [];
-            const foundMinsans = new Set();
+            const foundSkus = new Set();
 
-            // Processa la nuova struttura della risposta
-            if (shopifyData.products && shopifyData.products.edges) {
-                shopifyData.products.edges.forEach(productEdge => {
-                    const productNode = productEdge.node;
-                    const minsanMetafield = productNode.minsan;
-                    const firstVariant = productNode.variants?.edges[0]?.node;
-
-                    // Assicura che sia il metafield Minsan che una variante esistano
-                    if (minsanMetafield && firstVariant && skus.includes(minsanMetafield.value)) {
+            // Processa la risposta basata sulle varianti
+            if (shopifyData.productVariants && shopifyData.productVariants.edges) {
+                shopifyData.productVariants.edges.forEach(variantEdge => {
+                    const variantNode = variantEdge.node;
+                    if (variantNode && skus.includes(variantNode.sku)) {
                         products.push({
                             found: true,
-                            minsan: minsanMetafield.value,
-                            price: firstVariant.price,
-                            variant_id: firstVariant.id,
-                            product_id: productNode.id,
-                            title: productNode.title,
+                            minsan: variantNode.sku, // Minsan corrisponde allo SKU
+                            price: variantNode.price,
+                            variant_id: variantNode.id,
+                            product_id: variantNode.product.id,
+                            title: variantNode.product.title,
                         });
-                        foundMinsans.add(minsanMetafield.value);
+                        foundSkus.add(variantNode.sku);
                     }
                 });
             }
 
-            // Aggiunge i Minsan che non sono stati trovati
+            // Aggiunge gli SKU/Minsan che non sono stati trovati
             skus.forEach(sku => {
-                if (!foundMinsans.has(sku)) {
+                if (!foundSkus.has(sku)) {
                     products.push({ found: false, minsan: sku });
                 }
             });
