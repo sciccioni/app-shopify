@@ -9,7 +9,6 @@ async function callShopifyApi(query, variables = {}) {
         shopifyBaseUrl = `https://${SHOPIFY_STORE_NAME}.myshopify.com`;
     }
 
-    // Manteniamo la versione 2024-07 o più recente, dato che la mutazione precedente è stata rimossa qui
     const response = await fetch(`${shopifyBaseUrl}/admin/api/2024-07/graphql.json`, { 
         method: 'POST',
         headers: {
@@ -34,7 +33,7 @@ exports.handler = async function(event) {
         const { SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, APP_PASSWORD } = process.env;
         if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN || !APP_PASSWORD) {
             const missing = [
-                !SHOPIFY_STORE_NAME && "SHOPIFY_STORE_NAME",
+                !SHOPIFY_STORENAME && "SHOPIFY_STORE_NAME",
                 !SHOPIFY_ADMIN_API_TOKEN && "SHOPIFY_ADMIN_API_TOKEN",
                 !APP_PASSWORD && "APP_PASSWORD"
             ].filter(Boolean).join(', ');
@@ -123,7 +122,8 @@ exports.handler = async function(event) {
             return { statusCode: 200, body: JSON.stringify(products) };
         }
 
-        // 2. SINCRONIZZA PREZZI - IMPLEMENTAZIONE CORRETTA di productVariantsBulkUpdate per 2024-07+
+        // 2. SINCRONIZZA PREZZI - Implementazione con productVariantsBulkUpdate per 2024-07+
+        // Rimozione dei commenti dalla stringa della mutazione GraphQL
         if (payload.type === 'sync') {
             const { items } = payload; 
 
@@ -134,7 +134,6 @@ exports.handler = async function(event) {
             const results = [];
             const errors = [];
 
-            // Prepara un UNICO array di input per TUTTE le varianti da aggiornare
             const allVariantUpdateInputs = items.map(variantItem => {
                 const originalPrice = variantItem.price;
                 
@@ -152,13 +151,11 @@ exports.handler = async function(event) {
                 console.log(`DEBUG: Preparing price for Variant ${variantItem.variantId}: Original='${originalPrice}', Cleaned='${cleanedPriceString}', Parsed=${parsedPrice}, Formatted='${formattedPrice}'`); 
 
                 return {
-                    id: variantItem.variantId, // ID della variante
-                    price: formattedPrice     // Prezzo aggiornato
-                    // Puoi aggiungere altri campi qui se vuoi aggiornarli, es. sku: "nuovo_sku", inventoryManagement: BASIC
+                    id: variantItem.variantId, 
+                    price: formattedPrice
                 };
-            }).filter(Boolean); // Filtra via eventuali item nulli a causa di prezzi non validi
+            }).filter(Boolean); 
 
-            // Se non ci sono varianti valide da aggiornare, non procedere
             if (allVariantUpdateInputs.length === 0) {
                 if (errors.length > 0) {
                     throw new Error("Errore durante la preparazione dei prodotti per la sincronizzazione: " + errors.join('; '));
@@ -166,14 +163,13 @@ exports.handler = async function(event) {
                 return { statusCode: 200, body: JSON.stringify({ success: true, message: "Nessuna variante valida da aggiornare." }) };
             }
 
-            // La mutazione productVariantsBulkUpdate
+            // *** MODIFICA QUI: Rimossi i commenti dalla stringa della mutazione GraphQL ***
             const mutation = `
                 mutation productVariantsBulkUpdate($productVariants: [ProductVariantBulkUpdateInput!]!) {
                     productVariantsBulkUpdate(productVariants: $productVariants) {
                         productVariants {
                             id
                             price
-                            // Puoi chiedere altri campi della variante se ti servono
                         }
                         userErrors {
                             field
@@ -183,7 +179,6 @@ exports.handler = async function(event) {
                 }
             `;
             
-            // Le variabili per la mutazione (l'array di input)
             const variables = {
                 productVariants: allVariantUpdateInputs
             };
@@ -193,7 +188,6 @@ exports.handler = async function(event) {
             console.log("DEBUG: Variables:", JSON.stringify(variables, null, 2));
 
             try {
-                // Chiamata all'API GraphQL con mutazione e variabili
                 const result = await callShopifyApi(mutation, variables);
                 const userErrors = result.productVariantsBulkUpdate?.userErrors || [];
                 
