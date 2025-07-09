@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App Sincronizzazione e Verifica Dati (DEBUG MODE)</title>
+    <title>App Sincronizzazione e Verifica Dati</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -56,10 +56,13 @@
             overflow-x: auto;
         }
         /* Aggiungi questo per nascondere la colonna di debug */
+/* Removed for production, if you need it, uncomment */
+/*
 #results-table-head th:last-child,
 #results-table-body td:last-child {
     display: none;
 }
+*/
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -244,13 +247,27 @@
         });
 
         // --- LOGICA DI ACCESSO CON PASSWORD ---
-        const CORRECT_PASSWORD = 'Ut0ph@2025!';
+        async function checkPassword() {
+            const enteredPassword = passwordInput.value;
+            try {
+                const response = await fetch('/.netlify/functions/shopify-proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'login', password: enteredPassword }),
+                });
+                const data = await response.json();
 
-        function checkPassword() {
-            if (passwordInput.value === CORRECT_PASSWORD) {
-                passwordOverlay.classList.add('hidden');
-                appContainer.classList.remove('hidden');
-            } else {
+                if (response.ok && data.success) {
+                    passwordOverlay.classList.add('hidden');
+                    appContainer.classList.remove('hidden');
+                    passwordError.classList.add('hidden'); // Hide error if it was previously shown
+                } else {
+                    passwordError.classList.remove('hidden');
+                    passwordInput.value = ''; // Clear password field
+                }
+            } catch (error) {
+                console.error("Errore durante l'autenticazione:", error);
+                passwordError.textContent = "Errore di connessione. Riprova più tardi.";
                 passwordError.classList.remove('hidden');
             }
         }
