@@ -47,6 +47,20 @@
             border-bottom-color: #4f46e5;
             font-weight: 600;
         }
+        .sub-tab-button {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: color 0.2s, border-color 0.2s;
+            font-size: 0.875rem; /* text-sm */
+            font-weight: 500; /* font-medium */
+            color: #6b7280; /* gray-500 */
+        }
+        .sub-tab-button.active {
+            color: #4f46e5; /* indigo-600 */
+            border-bottom-color: #4f46e5;
+            font-weight: 600;
+        }
         .debug-cell {
             background-color: #fefce8;
             font-family: monospace;
@@ -125,66 +139,98 @@
                     </div>
    
                     <div id="results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden">
-                        <h2 class="text-xl font-semibold mb-4">2. Report di Analisi</h2>
-                        <div id="progress-bar-container" class="w-full bg-gray-200 rounded-full h-2.5 mb-4 hidden">
-                            <div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+                        <div class="border-b border-gray-200 mb-4">
+                            <nav class="flex -mb-px">
+                                <button id="raw-import-tab-button" class="sub-tab-button">Dati Importati (Raw)</button>
+                                <button id="sync-report-tab-button" class="sub-tab-button active">Report di Sincronizzazione</button>
+                            </nav>
                         </div>
-                        <div id="summary" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6"></div>
-                        <div id="sync-action-area" class="mt-6 p-4 border-t border-b border-gray-200 hidden">
-                            <div class="flex flex-col md:flex-row items-center justify-center gap-4">
-                                <div class="flex items-center">
-                                    <input id="confirm-sync-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
-                                    <label for="confirm-sync-checkbox" class="ml-2 block text-sm text-gray-900">
-                                        Confermo di voler aggiornare i prodotti selezionati.
-                                    </label>
+
+                        <div id="raw-import-content" class="hidden">
+                            <h2 class="text-xl font-semibold mb-4">2. Dati Importati (Raw)</h2>
+                            <div id="raw-import-table-container" class="mt-6">
+                                <div class="flex justify-between items-center mb-4">
+                                    <input type="search" id="raw-search-input" class="w-1/3 px-4 py-2 border border-gray-300 rounded-lg" placeholder="Cerca nei dati importati...">
+                                    <button id="download-raw-csv-button" class="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-800 text-sm">
+                                        Scarica Raw Report
+                                    </button>
                                 </div>
-                                <button id="sync-button" class="bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed transition-colors">
-                                    Sincronizza Selezionati
-                                </button>
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead id="raw-import-table-head" class="bg-gray-50"></thead>
+                                        <tbody id="raw-import-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                                    </table>
+                                </div>
+                                <div id="raw-pagination-controls" class="mt-4 flex items-center justify-between">
+                                    <button id="raw-prev-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed">&larr; Precedente</button>
+                                    <span id="raw-page-indicator" class="text-sm font-semibold"></span>
+                                    <button id="raw-next-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed">Successivo &rarr;</button>
+                                </div>
                             </div>
-                            <p id="sync-status-message" class="mt-4 text-center font-semibold hidden"></p>
                         </div>
-                           <div id="table-container" class="hidden mt-6">
-                           <div class="flex justify-between items-center mb-4">
-                               <fieldset class="flex items-center space-x-4">
-                                   <legend class="sr-only">Filtri</legend>
-                                   <div class="flex items-center">
-                                       <input id="filter-all" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="all" checked>
-                                       <label for="filter-all" class="ml-2 block text-sm font-medium">Tutti</label>
-                                   </div>
-                                   <div class="flex items-center">
-                                       <input id="filter-toupdate" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="to-update">
-                                       <label for="filter-toupdate" class="ml-2 block text-sm font-medium">Da Aggiornare</label>
-                                   </div>
-                                   <div class="flex items-center">
-                                       <input id="filter-errors" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="error">
-                                       <label for="filter-errors" class="ml-2 block text-sm font-medium">Solo Errori</label>
-                                   </div>
-                                   <div id="synced-filter-container" class="flex items-center hidden">
-                                       <input id="filter-synced" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="synced">
-                                       <label for="filter-synced" class="ml-2 block text-sm font-medium">Solo Sincronizzati</label>
-                                   </div>
-                                   <div id="duplicate-filter-container" class="flex items-center hidden">
-                                       <input id="filter-duplicates" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="duplicates">
-                                       <label for="filter-duplicates" class="ml-2 block text-sm font-medium">Solo Duplicati</label>
-                                   </div>
-                               </fieldset>
-                               <button id="download-csv-button" class="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-800 text-sm">
-                                   Scarica Report
-                               </button>
-                           </div>
-                           <div class="overflow-x-auto">
-                               <table class="min-w-full divide-y divide-gray-200">
-                                   <thead id="results-table-head" class="bg-gray-50"></thead>
-                                   <tbody id="results-table-body" class="bg-white divide-y divide-gray-200"></tbody>
-                               </table>
-                           </div>
-                           <div id="pagination-controls" class="mt-4 flex items-center justify-between">
-                               <button id="prev-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed">&larr; Precedente</button>
-                               <span id="page-indicator" class="text-sm font-semibold"></span>
-                               <button id="next-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed">Successivo &rarr;</button>
-                           </div>
-                       </div>
+
+                        <div id="sync-report-content">
+                            <h2 class="text-xl font-semibold mb-4">2. Report di Sincronizzazione Shopify</h2>
+                            <div id="progress-bar-container" class="w-full bg-gray-200 rounded-full h-2.5 mb-4 hidden">
+                                <div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                            <div id="summary" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6"></div>
+                            <div id="sync-action-area" class="mt-6 p-4 border-t border-b border-gray-200 hidden">
+                                <div class="flex flex-col md:flex-row items-center justify-center gap-4">
+                                    <div class="flex items-center">
+                                        <input id="confirm-sync-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                        <label for="confirm-sync-checkbox" class="ml-2 block text-sm text-gray-900">
+                                            Confermo di voler aggiornare i prodotti selezionati.
+                                        </label>
+                                    </div>
+                                    <button id="sync-button" class="bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed transition-colors">
+                                        Sincronizza Selezionati
+                                    </button>
+                                </div>
+                                <p id="sync-status-message" class="mt-4 text-center font-semibold hidden"></p>
+                            </div>
+                            <div id="sync-report-table-container" class="mt-6">
+                                <div class="flex justify-between items-center mb-4">
+                                    <fieldset class="flex items-center space-x-4">
+                                        <legend class="sr-only">Filtri</legend>
+                                        <div class="flex items-center">
+                                            <input id="filter-all" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="all" checked>
+                                            <label for="filter-all" class="ml-2 block text-sm font-medium">Tutti</label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input id="filter-toupdate" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="to-update">
+                                            <label for="filter-toupdate" class="ml-2 block text-sm font-medium">Da Aggiornare</label>
+                                        </div>
+                                        <div class="flex items-center">
+                                            <input id="filter-errors" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="error">
+                                            <label for="filter-errors" class="ml-2 block text-sm font-medium">Solo Errori</label>
+                                        </div>
+                                        <div id="synced-filter-container" class="flex items-center hidden">
+                                            <input id="filter-synced" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="synced">
+                                            <label for="filter-synced" class="ml-2 block text-sm font-medium">Solo Sincronizzati</label>
+                                        </div>
+                                        <div id="duplicate-filter-container" class="flex items-center hidden">
+                                            <input id="filter-duplicates" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="duplicates">
+                                            <label for="filter-duplicates" class="ml-2 block text-sm font-medium">Solo Duplicati</label>
+                                        </div>
+                                    </fieldset>
+                                    <button id="download-csv-button" class="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-800 text-sm">
+                                        Scarica Report
+                                    </button>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead id="sync-report-table-head" class="bg-gray-50"></thead>
+                                        <tbody id="sync-report-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                                    </table>
+                                </div>
+                                <div id="sync-pagination-controls" class="mt-4 flex items-center justify-between">
+                                    <button id="sync-prev-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed">&larr; Precedente</button>
+                                    <span id="sync-page-indicator" class="text-sm font-semibold"></span>
+                                    <button id="sync-next-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed">Successivo &rarr;</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </main>
             </div>
@@ -231,12 +277,19 @@
         const syncTabContent = document.getElementById('sync-tab-content');
         const verifyTabContent = document.getElementById('verify-tab-content');
         
+        // Nuovi elementi per le sub-schede
+        const rawImportTabButton = document.getElementById('raw-import-tab-button');
+        const syncReportTabButton = document.getElementById('sync-report-tab-button');
+        const rawImportContent = document.getElementById('raw-import-content');
+        const syncReportContent = document.getElementById('sync-report-content');
+
         syncTabButton.addEventListener('click', () => {
             syncTabButton.classList.add('active');
             verifyTabButton.classList.remove('active');
             syncTabContent.classList.remove('hidden');
             verifyTabContent.classList.add('hidden');
-            loadDataFromSupabase(); // Carica i dati da Supabase quando si attiva la scheda Sincronizzazione
+            // Quando si clicca sulla tab principale, mostra il report di sincronizzazione per default
+            showSyncReportView(); 
         });
 
         verifyTabButton.addEventListener('click', () => {
@@ -245,6 +298,26 @@
             verifyTabContent.classList.remove('hidden');
             syncTabContent.classList.add('hidden');
         });
+
+        rawImportTabButton.addEventListener('click', showRawImportView);
+        syncReportTabButton.addEventListener('click', showSyncReportView);
+
+        function showRawImportView() {
+            rawImportTabButton.classList.add('active');
+            syncReportTabButton.classList.remove('active');
+            rawImportContent.classList.remove('hidden');
+            syncReportContent.classList.add('hidden');
+            loadRawImportData(); // Carica i dati raw
+        }
+
+        function showSyncReportView() {
+            syncReportTabButton.classList.add('active');
+            rawImportTabButton.classList.remove('active');
+            syncReportContent.classList.remove('hidden');
+            rawImportContent.classList.add('hidden');
+            loadSyncReportData(); // Carica i dati consolidati del report di sincronizzazione
+        }
+
 
         // --- LOGICA DI ACCESSO CON PASSWORD ---
         async function checkPassword() {
@@ -261,7 +334,7 @@
                     passwordOverlay.classList.add('hidden');
                     appContainer.classList.remove('hidden');
                     passwordError.classList.add('hidden'); // Hide error if it was previously shown
-                    loadDataFromSupabase(); // Carica i dati dopo il login
+                    showSyncReportView(); // Carica i dati del report di sincronizzazione dopo il login
                 } else {
                     passwordError.classList.remove('hidden');
                     passwordInput.value = ''; // Clear password field
@@ -276,7 +349,16 @@
         passwordInput.addEventListener('keypress', (e) => e.key === 'Enter' && checkPassword());
 
         // --- STATO CONDIVISO ---
-        let verificationData = [];
+        let verificationData = []; // Usato per la tab "Verifica File"
+        let analysisResults = []; // Per il Report di Sincronizzazione (consolidato)
+        let rawImportData = [];   // Per i Dati Importati (Raw)
+        let duplicateRows = [];   // Per il filtro "Solo Duplicati" nel report di sincronizzazione
+        let fileDataRaw = [];     // Dati grezzi dal file Excel, usati per popolamento iniziale
+
+        let currentPage = 1; // Per la paginazione del report di sincronizzazione
+        let rawCurrentPage = 1; // Per la paginazione del report raw
+        const ROWS_PER_PAGE = 100;
+        const SUPABASE_INGEST_CHUNK_SIZE = 50; // Dimensione del chunk per l'ingestione in Supabase
 
         // --- FUNZIONE DI UTILITY PER LEGGERE I DATI DALLE RIGHE IN MODO FLESSIBILE ---
         function getValue(obj, keys) {
@@ -297,74 +379,197 @@
             return undefined;
         }
 
+        // --- NUOVO: Inizializzazione Supabase nel frontend ---
+        // QUESTE SONO LE VARIABILI CHE DEVI SOSTITUIRE CON LE TUE CREDENZIALI REALI DI SUPABASE
+        // Le trovi nella tua Dashboard Supabase, sezione "Project Settings" -> "API"
+        const SUPABASE_URL_FRONTEND = "https://wqgfgvovwzcancgdsadc.supabase.co"; // SOSTITUISCI CON IL TUO URL SUPABASE (es. https://abcdefghijk.supabase.co)
+        const SUPABASE_ANON_KEY_FRONTEND = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxZ2Zndm92d3pjYW5jZ2RzYWRjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MjE0MzI4NCwiZXhwIjoyMDY3NzE5Mjg0fQ.RRqHQQfwwFkALC6Gabz-rdVGWH17rK3Alw6ythD_ajk"; // SOSTITUISCI CON LA TUA CHIAVE ANONIMA PUBBLICA (anon public key)
+        let supabaseClient = null;
+
+        // Funzione per inizializzare il client Supabase
+        function initializeSupabaseClient() {
+            if (SUPABASE_URL_FRONTEND && SUPABASE_ANON_KEY_FRONTEND && SUPABASE_URL_FRONTEND !== "YOUR_SUPABASE_URL_HERE") {
+                if (typeof supabase !== 'undefined' && supabase.createClient) {
+                    supabaseClient = supabase.createClient(SUPABASE_URL_FRONTEND, SUPABASE_ANON_KEY_FRONTEND);
+                    console.log("Supabase client initialized in frontend.");
+                } else {
+                    console.error("Supabase library not loaded. Cannot initialize client.");
+                }
+            } else {
+                console.error("Supabase URL or Anon Key not configured in frontend. Cannot load data from Supabase.");
+            }
+        }
+        // Carica la libreria Supabase in modo asincrono
+        const supabaseScript = document.createElement('script');
+        supabaseScript.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"; // Versione 2.x.x
+        supabaseScript.onload = initializeSupabaseClient; // Chiama la funzione di inizializzazione quando lo script è caricato
+        document.head.appendChild(supabaseScript);
+        // --- FINE NUOVO ---
+
         // ===============================================================
-        // SEZIONE SINCRONIZZAZIONE
+        // SEZIONE SINCRONIZZAZIONE - LOGICHE DI CARICAMENTO E VISUALIZZAZIONE
         // ===============================================================
         {
-            const dropZone = document.getElementById('drop-zone');
-            const fileInput = document.getElementById('file-input');
-            const fileNameDisplay = document.getElementById('file-name');
-            const analyzeButton = document.getElementById('analyze-button');
-            const resultsSection = document.getElementById('results-section');
-            const summaryContainer = document.getElementById('summary');
-            const loader = document.getElementById('loader');
-            const loaderText = document.getElementById('loader-text');
-            const syncActionArea = document.getElementById('sync-action-area');
-            const syncButton = document.getElementById('sync-button');
-            const confirmSyncCheckbox = document.getElementById('confirm-sync-checkbox');
-            const syncStatusMessage = document.getElementById('sync-status-message');
-            const errorMessageBox = document.getElementById('error-message-box');
-            const errorMessageText = document.getElementById('error-message-text');
-            const progressBarContainer = document.getElementById('progress-bar-container');
-            const progressBar = document.getElementById('progress-bar');
-            const downloadCsvButton = document.getElementById('download-csv-button');
-            const tableContainer = document.getElementById('table-container');
-            const resultsTableHead = document.getElementById('results-table-head');
-            const resultsTableBody = document.getElementById('results-table-body');
-            const prevPageButton = document.getElementById('prev-page-button');
-            const nextPageButton = document.getElementById('next-page-button');
-            const pageIndicator = document.getElementById('page-indicator');
-            const filterRadios = document.querySelectorAll('input[name="filter-type"]');
-            const duplicateFilterContainer = document.getElementById('duplicate-filter-container');
-            const syncedFilterContainer = document.getElementById('synced-filter-container');
-            
-            let uploadedFile = null;
-            let analysisResults = []; // Ora conterrà i risultati dell'analisi da Shopify, prima di inviarli a Supabase
-            let duplicateRows = [];
-            let fileDataRaw = [];
-            let currentPage = 1;
-            const ROWS_PER_PAGE = 100;
-            const SUPABASE_INGEST_CHUNK_SIZE = 50; // Dimensione del chunk per l'ingestione in Supabase
+            // ... (elementi DOM già definiti) ...
 
-            // --- NUOVO: Inizializzazione Supabase nel frontend ---
-            // QUESTE SONO LE VARIABILI CHE DEVI SOSTITUIRE CON LE TUE CREDENZIALI REALI DI SUPABASE
-            // Le trovi nella tua Dashboard Supabase, sezione "Project Settings" -> "API"
-            const SUPABASE_URL_FRONTEND = "https://wqgfgvovwzcancgdsadc.supabase.co"; // SOSTITUISCI CON IL TUO URL SUPABASE (es. https://abcdefghijk.supabase.co)
-            const SUPABASE_ANON_KEY_FRONTEND = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxZ2Zndm92d3pjYW5jZ2RzYWRjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MjE0MzI4NCwiZXhwIjoyMDY3NzE5Mjg0fQ.RRqHQQfwwFkALC6Gabz-rdVGWH17rK3Alw6ythD_ajk"; // SOSTITUISCI CON LA TUA CHIAVE ANONIMA PUBBLICA (anon public key)
-            let supabaseClient = null;
+            // --- NUOVO: Funzione per caricare i dati RAW importati da Supabase ---
+            async function loadRawImportData() {
+                if (!supabaseClient) {
+                    console.warn("Supabase client not initialized. Cannot load raw data.");
+                    showErrorMessage("<strong>Errore:</strong> Impossibile caricare i dati raw. Le credenziali Supabase non sono configurate correttamente nel frontend.");
+                    return;
+                }
+                loader.classList.remove('hidden');
+                loaderText.textContent = 'Caricamento dati raw da Supabase...';
+                rawImportContent.classList.add('hidden'); // Nasconde la tabella raw mentre carica
+                hideErrorMessage();
 
-            // Funzione per inizializzare il client Supabase
-            function initializeSupabaseClient() {
-                if (SUPABASE_URL_FRONTEND && SUPABASE_ANON_KEY_FRONTEND && SUPABASE_URL_FRONTEND !== "YOUR_SUPABASE_URL_HERE") {
-                    // Solo se la libreria 'supabase' è stata caricata
-                    if (typeof supabase !== 'undefined' && supabase.createClient) {
-                        supabaseClient = supabase.createClient(SUPABASE_URL_FRONTEND, SUPABASE_ANON_KEY_FRONTEND);
-                        console.log("Supabase client initialized in frontend.");
-                    } else {
-                        console.error("Supabase library not loaded. Cannot initialize client.");
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('inventory_updates')
+                        .select(`
+                            *,
+                            products (
+                                sku_or_minsan,
+                                title
+                            )
+                        `)
+                        .order('created_at', { ascending: false }); // Ordina per i più recenti
+
+                    if (error) {
+                        console.error('Errore nel caricamento dati raw da Supabase:', error);
+                        showErrorMessage(`<strong>Errore nel caricamento dati raw da Supabase:</strong> ${error.message}`);
+                        return;
                     }
-                } else {
-                    console.error("Supabase URL or Anon Key not configured in frontend. Cannot load data from Supabase.");
+
+                    rawImportData = data.map(item => ({
+                        // Mappa i campi esattamente come sono stati salvati, per la visualizzazione raw
+                        minsan: item.products.sku_or_minsan,
+                        title: item.products.title,
+                        giacenzaFile: item.quantity_from_file,
+                        scadenzaFile: item.expiry_date_from_file,
+                        status: item.status, // Stato dell'ingestione
+                        details: item.details,
+                        Ditta: item.ditta,
+                        lotto: item.batch_number,
+                        CostoBase: item.costo_base,
+                        CostoMedio: item.costo_medio,
+                        UltimoCostoDitta: item.ultimo_costo_ditta,
+                        DataUltimoCostoDitta: item.data_ultimo_costo_ditta,
+                        PrezzoBD: item.prezzo_bd,
+                        IVAValue: item.iva_value,
+                        created_at: item.created_at // Timestamp di quando è stato ingerito
+                    }));
+
+                    rawImportContent.classList.remove('hidden'); // Mostra la tabella raw
+                    rawCurrentPage = 1;
+                    displayRawImportTablePage(rawCurrentPage);
+
+                } catch (error) {
+                    console.error("Errore durante il caricamento dati raw da Supabase:", error);
+                    showErrorMessage(`<strong>Errore nel caricamento dati raw da Supabase:</strong> ${error.message}`);
+                } finally {
+                    loader.classList.add('hidden');
                 }
             }
-            // Carica la libreria Supabase in modo asincrono
-            const supabaseScript = document.createElement('script');
-            supabaseScript.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"; // Versione 2.x.x
-            supabaseScript.onload = initializeSupabaseClient; // Chiama la funzione di inizializzazione quando lo script è caricato
-            document.head.appendChild(supabaseScript);
-            // --- FINE NUOVO ---
 
+            // --- NUOVO: Funzione per caricare i dati CONSOLIDATI del report di sincronizzazione da Supabase ---
+            async function loadSyncReportData() {
+                if (!supabaseClient) {
+                    console.warn("Supabase client not initialized. Cannot load sync report data.");
+                    showErrorMessage("<strong>Errore:</strong> Impossibile caricare il report di sincronizzazione. Le credenziali Supabase non sono configurate correttamente nel frontend.");
+                    return;
+                }
+                loader.classList.remove('hidden');
+                loaderText.textContent = 'Caricamento report di sincronizzazione da Supabase...';
+                syncReportContent.classList.add('hidden'); // Nasconde la tabella sync mentre carica
+                hideErrorMessage();
 
+                try {
+                    // Questa query è più complessa per ottenere l'ultimo stato consolidato per ogni prodotto unico
+                    // Utilizziamo una subquery o una View materializzata in Supabase per performance su grandi dataset
+                    // Per ora, carichiamo tutto e consolidiamo in JS (non ideale per dataset enormi)
+                    const { data, error } = await supabaseClient
+                        .from('inventory_updates')
+                        .select(`
+                            *,
+                            products (
+                                sku_or_minsan,
+                                title,
+                                shopify_product_id,
+                                shopify_variant_id,
+                                shopify_inventory_item_id
+                            )
+                        `)
+                        .order('created_at', { ascending: false }); // Ordina per i più recenti
+
+                    if (error) {
+                        console.error('Errore nel caricamento report di sincronizzazione da Supabase:', error);
+                        showErrorMessage(`<strong>Errore nel caricamento report di sincronizzazione da Supabase:</strong> ${error.message}`);
+                        return;
+                    }
+
+                    // Logica di consolidamento in JS per il report di sincronizzazione
+                    const consolidatedMap = new Map();
+                    data.forEach(item => {
+                        const minsan = item.products.sku_or_minsan;
+                        if (!consolidatedMap.has(minsan)) {
+                            consolidatedMap.set(minsan, {
+                                minsan: minsan,
+                                title: item.products.title,
+                                descrizione: item.products.title,
+                                giacenzaFile: 0, // Verrà sommata
+                                scadenzaFile: null, // Verrà la più breve
+                                shopify_product_id: item.products.shopify_product_id,
+                                shopify_variant_id: item.products.shopify_variant_id,
+                                shopify_inventory_item_id: item.products.shopify_inventory_item_id,
+                                inventory_quantity: item.shopify_on_hand_quantity, 
+                                committed_quantity: item.shopify_committed_quantity,
+                                available_quantity: item.shopify_available_quantity,
+                                on_hand_quantity: item.shopify_on_hand_quantity,
+                                expiry_date: item.shopify_expiry_date,
+                                status: item.status, // Ultimo stato di sync per questo prodotto
+                                details: item.details,
+                                selected: false,
+                                // Puoi decidere se mostrare i campi del lotto qui o solo nel raw report
+                                // Per il report consolidato, spesso non si mostrano dettagli specifici del lotto
+                            });
+                        }
+                        const consolidatedItem = consolidatedMap.get(minsan);
+                        consolidatedItem.giacenzaFile += item.quantity_from_file; // Somma le giacenze dei lotti
+                        
+                        // Trova la scadenza più breve
+                        if (item.expiry_date_from_file) {
+                            const currentExpiryDate = new Date(item.expiry_date_from_file);
+                            if (!consolidatedItem.scadenzaFile || currentExpiryDate < new Date(consolidatedItem.scadenzaFile)) {
+                                consolidatedItem.scadenzaFile = item.expiry_date_from_file;
+                            }
+                        }
+                        // Aggiorna lo stato e i dettagli con l'ultimo record (grazie all'ordinamento)
+                        consolidatedItem.status = item.status;
+                        consolidatedItem.details = item.details;
+                    });
+
+                    analysisResults = Array.from(consolidatedMap.values()); // Popola analysisResults con i dati consolidati
+
+                    // Ricalcola duplicateRows se necessario per il filtro, basandosi sui dati raw originali
+                    // o decidi se il filtro "duplicati" ha senso solo per la vista raw.
+                    // Per ora, duplicateRows rimane come calcolato da fileDataRaw.
+
+                    syncReportContent.classList.remove('hidden'); // Mostra la tabella sync
+                    currentPage = 1;
+                    displaySyncReportTablePage(currentPage); // Popola la tabella sync
+
+                } catch (error) {
+                    console.error("Errore durante il caricamento report di sincronizzazione da Supabase:", error);
+                    showErrorMessage(`<strong>Errore nel caricamento report di sincronizzazione da Supabase:</strong> ${error.message}`);
+                } finally {
+                    loader.classList.add('hidden');
+                }
+            }
+            // --- FINE NUOVO: Funzioni di caricamento dati da Supabase ---
+
+            // --- Funzioni di gestione file e analisi (rimangono simili) ---
             function handleFileSync(file) {
                 uploadedFile = file;
                 fileNameDisplay.textContent = file.name;
@@ -392,12 +597,10 @@
             }
 
             function excelDateToJSDate(value) {
-                // 1. Prova a gestire i numeri (comportamento originale)
+                // ... (funzione già definita) ...
                 if (typeof value === 'number') {
                     if (!value) return null;
-                    // La soglia 25569 corrisponde al 1/1/1970 (inizio dell'epoca Unix)
-                    // Excel conta i giorni dal 1/1/1900, quindi dobbiamo correggere
-                    if (value < 60) { // Excel ha un bug storico che considera il 1900 un anno bisestile
+                    if (value < 60) { 
                          value--;
                     }
                     const utc_days  = Math.floor(value - 25569);
@@ -410,47 +613,38 @@
                     return `${year}-${month}-${day}`;
                 }
 
-                // 2. Prova a gestire le stringhe (nuova logica)
                 if (typeof value === 'string' && value.trim()) {
                     let parts = [];
-                    // Riconosce sia il formato con '/' sia quello con '-'
                     if (value.includes('/')) {
                         parts = value.split('/');
                     } else if (value.includes('-')) {
                         parts = value.split('-');
                     }
 
-                    // Se la data è divisa in 3 parti (giorno, mese, anno)
                     if (parts.length === 3) {
                         let day, month, year;
-                        // Indovina il formato in base alla lunghezza dell'anno
-                        if (parts[2].length === 4) { // Formato: GG/MM/AAAA
+                        if (parts[2].length === 4) { 
                             day = parts[0];
                             month = parts[1];
                             year = parts[2];
-                        } else if (parts[0].length === 4) { // Formato: AAAA/MM/GG
+                        } else if (parts[0].length === 4) { 
                             year = parts[0];
                             month = parts[1];
                             day = parts[2];
                         }
 
                         if (year && month && day) {
-                            // Crea una stringa di data standard (ISO 8601)
                             const isoDateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
                             const d = new Date(isoDateString);
-                            // Controlla che la data sia valida (es. non 31/02/2025)
                             if (d && !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === isoDateString) {
                                  return isoDateString;
                             }
                         }
                     }
                 }
-                
-                // 3. Se l'interpretazione fallisce, ritorna null
                 return null;
             }
 
-            // Funzione per chiamare il backend (shopify-proxy.js)
             async function callShopifyBackend(payload) {
                 const response = await fetch('/.netlify/functions/shopify-proxy', {
                     method: 'POST',
@@ -463,7 +657,6 @@
                 return data;
             }
 
-            // Funzione per chiamare la nuova funzione di ingestione Supabase
             async function callSupabaseIngest(payload) {
                 const response = await fetch('/.netlify/functions/supabase-ingest', {
                     method: 'POST',
@@ -475,96 +668,6 @@
                 if (data.error) throw new Error(data.error);
                 return data;
             }
-
-            // --- NUOVO: Funzione per caricare i dati da Supabase ---
-            async function loadDataFromSupabase() {
-                if (!supabaseClient) {
-                    console.warn("Supabase client not initialized. Attempting initialization...");
-                    initializeSupabaseClient(); 
-                    if (!supabaseClient) { // Se ancora non inizializzato, esci
-                        showErrorMessage("<strong>Errore:</strong> Impossibile caricare i dati. Le credenziali Supabase non sono configurate correttamente nel frontend.");
-                        return;
-                    }
-                }
-                loader.classList.remove('hidden');
-                loaderText.textContent = 'Caricamento dati da Supabase...';
-                tableContainer.classList.add('hidden');
-                resultsSection.classList.add('hidden');
-                hideErrorMessage();
-
-                try {
-                    // Recupera i dati più recenti da inventory_updates, unendoli con i dettagli del prodotto
-                    // Ordina per data di creazione per avere i più recenti in cima
-                    const { data, error } = await supabaseClient
-                        .from('inventory_updates')
-                        .select(`
-                            *,
-                            products (
-                                sku_or_minsan,
-                                title,
-                                shopify_product_id,
-                                shopify_variant_id,
-                                shopify_inventory_item_id
-                            )
-                        `)
-                        .order('created_at', { ascending: false }); // Ordina per i più recenti
-
-                    if (error) {
-                        console.error('Errore nel caricamento dati da Supabase:', error);
-                        showErrorMessage(`<strong>Errore nel caricamento dati da Supabase:</strong> ${error.message}`);
-                        return;
-                    }
-
-                    // Mappa i dati di Supabase al formato atteso da analysisResults
-                    // Nota: I nomi delle colonne qui devono corrispondere a quelli usati in renderTable
-                    analysisResults = data.map(item => ({
-                        minsan: item.products.sku_or_minsan,
-                        title: item.products.title,
-                        descrizione: item.products.title, // Usiamo title come descrizione per coerenza
-                        giacenzaFile: item.quantity_from_file,
-                        scadenzaFile: item.expiry_date_from_file,
-                        shopify_product_id: item.products.shopify_product_id,
-                        shopify_variant_id: item.products.shopify_variant_id,
-                        shopify_inventory_item_id: item.products.shopify_inventory_item_id,
-                        inventory_quantity: item.shopify_on_hand_quantity, // Mappa on_hand_quantity a inventory_quantity per la tabella
-                        committed_quantity: item.shopify_committed_quantity,
-                        available_quantity: item.shopify_available_quantity,
-                        on_hand_quantity: item.shopify_on_hand_quantity,
-                        expiry_date: item.shopify_expiry_date,
-                        status: item.status,
-                        details: item.details,
-                        // Campi specifici del lotto
-                        Ditta: item.ditta,
-                        lotto: item.batch_number,
-                        CostoBase: item.costo_base,
-                        CostoMedio: item.costo_medio,
-                        UltimoCostoDitta: item.ultimo_costo_ditta,
-                        DataUltimoCostoDitta: item.data_ultimo_costo_ditta,
-                        PrezzoBD: item.prezzo_bd,
-                        IVAValue: item.iva_value,
-                        selected: false // Reset selezione
-                    }));
-
-                    // Aggiorna duplicateRows basandosi sui dati caricati da Supabase se necessario
-                    // Per ora, lo lasciamo come era, ma in futuro potresti voler ricalcolarlo qui
-                    // se la logica dei duplicati è importante per la visualizzazione dei filtri.
-                    // Per la visualizzazione principale, analysisResults è sufficiente.
-
-                    resultsSection.classList.remove('hidden');
-                    displaySummary(); // Questa funzione dovrà essere aggiornata per riflettere i dati da Supabase
-                    tableContainer.classList.remove('hidden');
-                    document.getElementById('filter-all').checked = true;
-                    currentPage = 1;
-                    displayTablePage(currentPage); // Popola la tabella con i dati da Supabase
-
-                } catch (error) {
-                    console.error("Errore durante il caricamento dati da Supabase:", error);
-                    showErrorMessage(`<strong>Errore nel caricamento dati da Supabase:</strong> ${error.message}`);
-                } finally {
-                    loader.classList.add('hidden');
-                }
-            }
-            // --- FINE NUOVO ---
 
 
             analyzeButton.addEventListener('click', analyzeFile);
@@ -583,18 +686,13 @@
                     const worksheet = workbook.Sheets[sheetName];
                     fileDataRaw = XLSX.utils.sheet_to_json(worksheet);
 
-                    // --- DEBUG: Log di tutti i nomi delle colonne rilevati ---
                     if (fileDataRaw.length > 0) {
                         console.log("DEBUG Frontend - Nomi delle colonne rilevati nel file Excel:", Object.keys(fileDataRaw[0]));
                     }
-                    // --- FINE DEBUG ---
 
                     window.dispatchEvent(new CustomEvent('data-loaded-for-verification', { detail: fileDataRaw }));
 
-                    // fileData conterrà tutte le righe originali del file Excel
-                    const fileData = fileDataRaw; 
-                    
-                    // La logica per duplicateRows può rimanere se serve per il summary
+                    // La logica per duplicateRows per il summary dei duplicati raw
                     const skuMapForDuplicates = new Map();
                     fileDataRaw.forEach(row => {
                         const sku = String(getValue(row, ['Minsan', 'EAN']) || '').trim();
@@ -603,7 +701,7 @@
                             skuMapForDuplicates.get(sku).push(row);
                         }
                     });
-                    duplicateRows = []; // Resetta
+                    duplicateRows = []; 
                     skuMapForDuplicates.forEach((rows, sku) => {
                         if (rows.length > 1) {
                             duplicateRows.push(...rows.map(r => ({...r, Minsan: sku}))); 
@@ -612,12 +710,15 @@
                     if (duplicateRows.length > 0) duplicateFilterContainer.classList.remove('hidden');
 
 
-                    const allSkus = fileData.map(row => String(getValue(row, ['Minsan', 'EAN']))).filter(Boolean);
-                    if (allSkus.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
+                    const allSkusFromRawFile = fileDataRaw.map(row => String(getValue(row, ['Minsan', 'EAN']))).filter(Boolean);
+                    if (allSkusFromRawFile.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
 
-                    const shopifyChunkSize = 250; // Chunk size for Shopify API calls
+                    // Estrai solo gli SKU unici per la chiamata a Shopify
+                    const uniqueSkusForShopify = Array.from(new Set(allSkusFromRawFile));
+
+                    const shopifyChunkSize = 250; 
                     const skuChunks = [];
-                    for (let i = 0; i < allSkus.length; i += shopifyChunkSize) skuChunks.push(allSkus.slice(i, i + shopifyChunkSize));
+                    for (let i = 0; i < uniqueSkusForShopify.length; i += shopifyChunkSize) skuChunks.push(uniqueSkusForShopify.slice(i, i + shopifyChunkSize));
                     
                     let allShopifyProducts = [];
                     progressBarContainer.classList.remove('hidden');
@@ -632,26 +733,37 @@
                         }
                     }
                     
-                    analysisResults = []; 
-                    let productsToIngest = []; 
-                    let toUpdateCount = 0, notFoundCount = 0, noChangeCount = 0, errorCount = 0;
+                    let productsToIngest = []; // Questo array conterrà TUTTE le righe del file Excel originale per l'ingestione
 
-                    // Iteriamo direttamente su fileData (che ora contiene tutte le righe originali)
-                    for (const row of fileData) { 
+                    // Popola productsToIngest con TUTTE le righe originali del file Excel + dati Shopify
+                    for (const row of fileDataRaw) { // Itera su fileDataRaw per l'ingestione completa
                         const minsan = String(getValue(row, ['Minsan', 'EAN']));
                         const giacenza = getValue(row, ['Giacenza', 'giacenza']);
 
                         let giacenzaFile = parseInt(giacenza, 10);
                         let scadenzaFile = typeof getValue(row, ['Scadenza', 'scadenza']) === 'number' ? excelDateToJSDate(getValue(row, ['Scadenza', 'scadenza'])) : getValue(row, ['Scadenza', 'scadenza']);
                         
-                        let resultRow = { 
+                        // Trova il prodotto Shopify corrispondente per questa riga raw
+                        const productOnShopify = allShopifyProducts.find(p => p.minsan === minsan);
+
+                        let ingestibleRow = { 
                             minsan: minsan || 'N/D', 
                             descrizione: getValue(row, ['Descrizione', 'descrizione']), 
                             giacenzaFile, 
                             scadenzaFile, 
-                            selected: false,
-                            _debug_source_row: row,
-                            // Includiamo tutti i campi direttamente dalla riga originale
+                            // Campi Shopify da aggiungere
+                            shopify_product_id: productOnShopify?.product_id,
+                            shopify_variant_id: productOnShopify?.shopify_variant_id,
+                            shopify_inventory_item_id: productOnShopify?.inventory_item_id,
+                            shopify_on_hand_quantity: productOnShopify?.on_hand_quantity,
+                            shopify_available_quantity: productOnShopify?.available_quantity,
+                            shopify_committed_quantity: productOnShopify?.committed_quantity,
+                            shopify_unavailable_quantity: productOnShopify?.unavailable_quantity,
+                            shopify_expiry_date: productOnShopify?.expiry_date,
+                            // Stato e dettagli per l'ingestione
+                            status: productOnShopify ? 'to-ingest' : 'not-found', // Nuovo stato per l'ingestione
+                            details: productOnShopify ? 'Pronto per ingestione' : 'Prodotto non trovato su Shopify.',
+                            // Includiamo tutti i campi direttamente dalla riga originale per l'ingestione completa
                             Ditta: getValue(row, ['Ditta', 'ditta']),
                             lotto: getValue(row, ['lotto', 'Lotto']),
                             CostoBase: getValue(row, ['CostoBase', 'costo_base']),
@@ -661,53 +773,7 @@
                             PrezzoBD: getValue(row, ['PrezzoBD', 'prezzo_bd']), 
                             IVAValue: getValue(row, ['IVA', 'iva']) 
                         };
-
-                        // --- DEBUG Frontend - Log per ogni riga prima dell'invio ---
-                        console.log(`DEBUG Frontend - Processando Minsan: ${minsan}, Lotto: ${resultRow.lotto}`);
-                        console.log(`DEBUG Frontend - Estratto IVAValue per questa riga:`, resultRow.IVAValue);
-                        console.log(`DEBUG Frontend - Dati completi della riga per debug:`, resultRow);
-                        // --- FINE DEBUG ---
-
-                        if (!minsan || isNaN(giacenzaFile)) {
-                            errorCount++;
-                            resultRow.status = 'error';
-                            resultRow.details = 'Dati mancanti o non numerici.';
-                        } else {
-                            const productOnShopify = allShopifyProducts.find(p => p.minsan === minsan);
-                            if (productOnShopify) {
-                                resultRow = { ...resultRow, ...productOnShopify };
-                                if (productOnShopify.inventory_quantity <= 0 && giacenzaFile < 0) {
-                                    errorCount++;
-                                    resultRow.status = 'error';
-                                    resultRow.details = 'Giacenza a zero non può essere decrementata.';
-                                } else {
-                                    const finalGiacenza = Math.max(0, giacenzaFile);
-                                    const quantityChanged = finalGiacenza !== productOnShopify.inventory_quantity;
-                                    const expiryChanged = scadenzaFile && (scadenzaFile !== productOnShopify.expiry_date);
-                                    
-                                    if (quantityChanged || expiryChanged) {
-                                        toUpdateCount++;
-                                        resultRow.status = 'to-update';
-                                        let detailsText = [];
-                                        
-                                        if (giacenzaFile < 0) detailsText.push(`Giacenza negativa (${giacenzaFile}) corretta a 0.`);
-                                        if (detailsText.length === 0) detailsText.push('Pronto per l\'aggiornamento.');
-                                        resultRow.details = detailsText.join(' ');
-
-                                    } else {
-                                        noChangeCount++;
-                                        resultRow.status = 'no-change';
-                                        resultRow.details = `Giacenza e scadenza già corrette.`;
-                                    }
-                                }
-                            } else {
-                                notFoundCount++;
-                                resultRow.status = 'not-found';
-                                resultRow.details = 'Prodotto non trovato su Shopify.';
-                            }
-                        }
-                        analysisResults.push(resultRow); 
-                        productsToIngest.push(resultRow); 
+                        productsToIngest.push(ingestibleRow); 
                     }
                     
                     // --- Invia i risultati dell'analisi a Supabase in chunks ---
@@ -734,19 +800,8 @@
                     console.log('Tutti i dati inviati a Supabase con successo. Totale prodotti ingeriti:', totalIngested);
                     // --- FINE NUOVO ---
 
-                    // --- NUOVO: Carica i dati direttamente da Supabase per la visualizzazione ---
-                    await loadDataFromSupabase(); // Ricarica analysisResults con i dati dal DB
-                    // --- FINE NUOVO ---
-
-                    resultsSection.classList.remove('hidden');
-                    displaySummary(); 
-                    if (analysisResults.length > 0) {
-                        tableContainer.classList.remove('hidden');
-                        document.getElementById('filter-all').checked = true;
-                        currentPage = 1;
-                        displayTablePage(currentPage);
-                    }
-                    if (toUpdateCount > 0) syncActionArea.classList.remove('hidden');
+                    // Dopo l'ingestione, passa automaticamente alla vista del report di sincronizzazione
+                    showSyncReportView(); 
 
                 } catch (error) {
                     console.error("Errore durante l'analisi o l'ingestione:", error);
@@ -863,50 +918,140 @@
                 summaryContainer.innerHTML = `<div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.rawTotal}</p><p class="text-sm text-gray-600">Righe Totali</p></div><div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.total}</p><p class="text-sm text-gray-600">Prodotti Unici</p></div><div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.duplicates}</p><p class="text-sm text-yellow-700">Righe Duplicate</p></div><div class="bg-blue-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-blue-800">${summary.toUpdate}</p><p class="text-sm text-blue-700">Da Aggiornare</p></div><div class="bg-green-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-green-800">${summary.synced}</p><p class="text-sm text-green-700">Sincronizzati</p></div><div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.notFound}</p><p class="text-sm text-yellow-700">Non Trovati</p></div><div class="bg-red-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-red-800">${summary.errors}</p><p class="text-sm text-red-700">Errori Dati</p></div>`;
             }
 
-            function displayTablePage(page) {
-                currentPage = page;
+            // --- NUOVO: Funzione per visualizzare la tabella del Report di Sincronizzazione ---
+            function displaySyncReportTablePage(page) {
+                currentPage = page; // Usa la variabile globale currentPage
                 const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
-                let dataToDisplay = analysisResults;
-                let isDuplicateView = false;
+                let dataToDisplay = analysisResults; // analysisResults contiene i dati consolidati
+                let isDuplicateView = false; // Non applicabile direttamente qui, i duplicati sono già consolidati
+
                 if (filterValue === 'to-update') dataToDisplay = analysisResults.filter(r => r.status === 'to-update');
                 else if (filterValue === 'error') dataToDisplay = analysisResults.filter(r => r.status === 'error');
-                else if (filterValue === 'duplicates') { dataToDisplay = duplicateRows; isDuplicateView = true; }
+                else if (filterValue === 'duplicates') { 
+                    // Il filtro duplicati qui si riferisce ai duplicati originali del file RAW
+                    // Potresti voler ricalcolare analysisResults qui per mostrare i duplicati consolidati
+                    // o semplicemente non applicare questo filtro alla vista consolidata.
+                    // Per ora, useremo duplicateRows (popolato da fileDataRaw) per questo filtro,
+                    // ma la tabella sarà renderizzata con le colonne del report di sincronizzazione.
+                    dataToDisplay = duplicateRows; // Questo mostrerà i raw duplicati ma con le intestazioni consolidate
+                    isDuplicateView = true; // Indica che stiamo mostrando i duplicati raw
+                }
                 else if (filterValue === 'synced') dataToDisplay = analysisResults.filter(r => r.status === 'success');
+                
                 const totalPages = Math.ceil(dataToDisplay.length / ROWS_PER_PAGE);
                 const paginatedItems = dataToDisplay.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
-                renderTable(paginatedItems, isDuplicateView);
-                pageIndicator.textContent = `Pagina ${page} di ${totalPages || 1}`;
-                prevPageButton.disabled = page === 1;
-                nextPageButton.disabled = page === totalPages || totalPages === 0;
+                
+                renderSyncReportTable(paginatedItems, isDuplicateView); // Renderizza la tabella di sincronizzazione
+                
+                document.getElementById('sync-page-indicator').textContent = `Pagina ${page} di ${totalPages || 1}`;
+                document.getElementById('sync-prev-page-button').disabled = page === 1;
+                document.getElementById('sync-next-page-button').disabled = page === totalPages || totalPages === 0;
                 updateUIState();
             }
 
-            function renderTable(items, isDuplicateView) {
-                resultsTableBody.innerHTML = '';
-                if (isDuplicateView) {
-                    resultsTableHead.innerHTML = `<tr><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minsan/SKU</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrizione</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giacenza</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scadenza</th></tr>`;
-                    items.forEach(res => {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `<td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${getValue(res, ['Minsan', 'EAN'])}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${getValue(res,['Descrizione','descrizione'])}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${getValue(res,['Giacenza','giacenza'])}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${excelDateToJSDate(getValue(res,['Scadenza','scadenza'])) || 'N/D'}</td>`;
-                        resultsTableBody.appendChild(row);
-                    });
-                } else {
-                    resultsTableHead.innerHTML = `<tr><th class="px-2 py-3"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 rounded"></th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minsan/SKU</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[200px]">Descrizione</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available (Shopify)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Committed</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">On Hand</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">File Quantity</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Shopify Expiry</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">File Expiry</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase text-red-600">DEBUG</th></tr>`;
-                    items.forEach(res => {
-                        const statusInfo = getStatusInfo(res.status);
-                        const row = document.createElement('tr');
-                        row.className = statusInfo.rowClass;
-                        let checkboxHTML = '<td class="px-2 py-4"></td>';
-                        if (res.status === 'to-update') {
-                            checkboxHTML = `<td class="px-2 py-4"><input type="checkbox" class="h-4 w-4 text-indigo-600 rounded row-checkbox" data-minsan="${res.minsan}" ${res.selected ? 'checked' : ''}></td>`;
-                        }
-                        const debugData = JSON.stringify(res._debug_source_row, null, 2);
-                        row.innerHTML = `${checkboxHTML}<td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${res.minsan}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.title || res.descrizione}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.inventory_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.committed_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.available_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.on_hand_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.giacenzaFile}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.expiry_date || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.scadenzaFile || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${statusInfo.badgeClass}">${statusInfo.icon} ${statusInfo.label}</span></td><td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.details || ''}</td><td class="p-2 debug-cell">${debugData}</td>`;
-                        resultsTableBody.appendChild(row);
-                    });
-                }
+            // --- NUOVO: Funzione per renderizzare la tabella del Report di Sincronizzazione ---
+            function renderSyncReportTable(items, isDuplicateView) {
+                const syncReportTableHead = document.getElementById('sync-report-table-head');
+                const syncReportTableBody = document.getElementById('sync-report-table-body');
+                syncReportTableBody.innerHTML = '';
+
+                // Intestazioni per il Report di Sincronizzazione (consolidato)
+                syncReportTableHead.innerHTML = `<tr><th class="px-2 py-3"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 rounded"></th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minsan/SKU</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[200px]">Descrizione</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available (Shopify)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Committed</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">On Hand</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giac. File (Consol.)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. Shopify</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. File (Consol.)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stato</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dettagli</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase text-red-600">DEBUG</th></tr>`;
+                
+                items.forEach(res => {
+                    const statusInfo = getStatusInfo(res.status);
+                    const row = document.createElement('tr');
+                    row.className = statusInfo.rowClass;
+                    let checkboxHTML = '<td class="px-2 py-4"></td>';
+                    if (res.status === 'to-update') {
+                        checkboxHTML = `<td class="px-2 py-4"><input type="checkbox" class="h-4 w-4 text-indigo-600 rounded row-checkbox" data-minsan="${res.minsan}" ${res.selected ? 'checked' : ''}></td>`;
+                    }
+                    const debugData = JSON.stringify(res._debug_source_row || res, null, 2); // Usa res se _debug_source_row non c'è
+                    row.innerHTML = `${checkboxHTML}<td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${res.minsan}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.title || res.descrizione}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.inventory_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.committed_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.available_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.on_hand_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.giacenzaFile}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.expiry_date || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.scadenzaFile || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${statusInfo.badgeClass}">${statusInfo.icon} ${statusInfo.label}</span></td><td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.details || ''}</td><td class="p-2 debug-cell">${debugData}</td>`;
+                    syncReportTableBody.appendChild(row);
+                });
             }
-            
+
+            // --- NUOVO: Funzione per visualizzare la tabella dei Dati Importati (Raw) ---
+            function displayRawImportTablePage(page) {
+                rawCurrentPage = page; // Usa la variabile globale rawCurrentPage
+                const rawSearchInput = document.getElementById('raw-search-input');
+                let dataToDisplay = rawImportData; 
+                const searchTerm = rawSearchInput.value.toLowerCase();
+
+                if (searchTerm) {
+                    dataToDisplay = rawImportData.filter(item => 
+                        Object.values(item).some(val => 
+                            String(val).toLowerCase().includes(searchTerm)
+                        )
+                    );
+                }
+                
+                const totalPages = Math.ceil(dataToDisplay.length / ROWS_PER_PAGE);
+                const paginatedItems = dataToDisplay.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
+                
+                renderRawImportTable(paginatedItems); 
+                
+                document.getElementById('raw-page-indicator').textContent = `Pagina ${page} di ${totalPages || 1}`;
+                document.getElementById('raw-prev-page-button').disabled = page === 1;
+                document.getElementById('raw-next-page-button').disabled = page === totalPages || totalPages === 0;
+            }
+
+            // --- NUOVO: Funzione per renderizzare la tabella dei Dati Importati (Raw) ---
+            function renderRawImportTable(items) {
+                const rawImportTableHead = document.getElementById('raw-import-table-head');
+                const rawImportTableBody = document.getElementById('raw-import-table-body');
+                rawImportTableBody.innerHTML = '';
+
+                if (items.length === 0) {
+                    rawImportTableHead.innerHTML = '';
+                    rawImportTableBody.innerHTML = '<tr><td colspan="15" class="text-center py-4 text-gray-500">Nessun dato raw da visualizzare.</td></tr>';
+                    return;
+                }
+
+                // Intestazioni per i Dati Importati (Raw) - tutte le colonne del file Excel + dati Shopify
+                const headers = [
+                    'Minsan/SKU', 'Descrizione', 'Ditta', 'Lotto', 'Giacenza File', 'Scadenza File',
+                    'Costo Base', 'Costo Medio', 'Ultimo Costo Ditta', 'Data Ultimo Costo Ditta',
+                    'Prezzo BD', 'IVA Value',
+                    'Shopify Product ID', 'Shopify Variant ID', 'Shopify Inventory Item ID',
+                    'Shopify On Hand', 'Shopify Available', 'Shopify Committed', 'Shopify Unavailable', 'Shopify Expiry',
+                    'Stato Ingestione', 'Dettagli Ingestione', 'Ingested At'
+                ];
+                rawImportTableHead.innerHTML = `<tr>${headers.map(h => `<th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">${h}</th>`).join('')}</tr>`;
+
+                items.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${item.minsan ?? 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.descrizione ?? 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.Ditta ?? 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.lotto ?? 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.giacenzaFile ?? 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.scadenzaFile || 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.CostoBase ?? 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.CostoMedio ?? 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.UltimoCostoDitta ?? 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.DataUltimoCostoDitta || 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.PrezzoBD ?? 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.IVAValue ?? 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_product_id ? item.shopify_product_id.split('/').pop() : 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_variant_id ? item.shopify_variant_id.split('/').pop() : 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_inventory_item_id ? item.shopify_inventory_item_id.split('/').pop() : 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_on_hand_quantity ?? 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_available_quantity ?? 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_committed_quantity ?? 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_unavailable_quantity ?? 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_expiry_date || 'N/D'}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${getStatusInfo(item.status).badgeClass}">${getStatusInfo(item.status).icon} ${getStatusInfo(item.status).label}</span></td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${item.details || ''}</td>
+                        <td class="px-3 py-4 whitespace-nowrap text-xs">${new Date(item.created_at).toLocaleString()}</td>
+                    `;
+                    rawImportTableBody.appendChild(row);
+                });
+            }
+            // --- FINE NUOVO: Funzioni di renderizzazione tabelle ---
+
             function updateUIState() {
                 const itemsToUpdateSelected = analysisResults.filter(r => r.selected).length > 0;
                 const totalToUpdate = analysisResults.filter(r => r.status === 'to-update').length;
@@ -921,49 +1066,119 @@
             }
 
             function getStatusInfo(status) {
-                const icons = { success: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`, 'to-update': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 20h5v-5M20 4h-5v5"></path></svg>`, 'no-change': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'not-found': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, error: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>` };
+                const icons = { success: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`, 'to-update': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 20h5v-5M20 4h-5v5"></path></svg>`, 'no-change': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'not-found': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, error: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'to-ingest': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>` }; // Aggiunto icona per 'to-ingest'
                 switch (status) {
                     case 'success': return { label: 'Sincronizzato', badgeClass: 'bg-green-100 text-green-800', icon: icons.success, rowClass: 'bg-green-50' };
                     case 'to-update': return { label: 'Da Aggiornare', badgeClass: 'bg-blue-100 text-blue-800', icon: icons['to-update'], rowClass: 'bg-blue-50' };
                     case 'no-change': return { label: 'Nessuna Modifica', badgeClass: 'bg-gray-100 text-gray-800', icon: icons['no-change'], rowClass: '' };
                     case 'not-found': return { label: 'Non Trovato', badgeClass: 'bg-yellow-100 text-yellow-800', icon: icons['not-found'], rowClass: 'bg-yellow-50' };
                     case 'error': return { label: 'Errore', badgeClass: 'bg-red-100 text-red-800', icon: icons.error, rowClass: 'bg-red-50' };
+                    case 'to-ingest': return { label: 'Da Ingerire', badgeClass: 'bg-purple-100 text-purple-800', icon: icons['to-ingest'], rowClass: 'bg-purple-50' }; // Nuovo stato
                     default: return { label: 'Sconosciuto', badgeClass: 'bg-gray-100 text-gray-800', icon: '', rowClass: '' };
                 }
             }
             
-            confirmSyncCheckbox.addEventListener('change', updateUIState);
-            nextPageButton.addEventListener('click', () => {
+            // Event Listeners per la paginazione e i filtri del report di sincronizzazione
+            document.getElementById('sync-prev-page-button').addEventListener('click', () => { if (currentPage > 1) displaySyncReportTablePage(currentPage - 1); });
+            document.getElementById('sync-next-page-button').addEventListener('click', () => {
                 const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
                 let dataToPaginate = analysisResults;
                 if (filterValue === 'to-update') dataToPaginate = analysisResults.filter(r => r.status === 'to-update');
                 else if (filterValue === 'error') dataToPaginate = analysisResults.filter(r => r.status === 'error');
-                else if (filterValue === 'duplicates') dataToPaginate = duplicateRows;
+                else if (filterValue === 'duplicates') dataToPaginate = duplicateRows; // Questo filtro si applica ancora ai raw duplicati
                 const totalPages = Math.ceil(dataToPaginate.length / ROWS_PER_PAGE);
-                if (currentPage < totalPages) displayTablePage(currentPage + 1);
+                if (currentPage < totalPages) displaySyncReportTablePage(currentPage + 1);
             });
-            filterRadios.forEach(radio => radio.addEventListener('change', () => { currentPage = 1; displayTablePage(currentPage); }));
-            resultsTableHead.addEventListener('change', (e) => {
+            filterRadios.forEach(radio => radio.addEventListener('change', () => { currentPage = 1; displaySyncReportTablePage(currentPage); }));
+            document.getElementById('sync-report-table-head').addEventListener('change', (e) => {
                 if (e.target.id === 'select-all-checkbox') {
                     const isChecked = e.target.checked;
                     analysisResults.forEach(res => { if (res.status === 'to-update') res.selected = isChecked; });
-                    displayTablePage(currentPage);
+                    displaySyncReportTablePage(currentPage);
                 }
             });
             syncButton.addEventListener('click', syncFile);
-            downloadCsvButton.addEventListener('click', downloadCSV);
-            resultsTableBody.addEventListener('change', (e) => {
+            document.getElementById('download-csv-button').addEventListener('click', downloadCSV);
+            document.getElementById('sync-report-table-body').addEventListener('change', (e) => {
                 if (e.target.classList.contains('row-checkbox')) {
                     const item = analysisResults.find(r => r.minsan === e.target.dataset.minsan);
                     if (item) item.selected = e.target.checked;
                     updateUIState();
                 }
             });
-            prevPageButton.addEventListener('click', () => { if (currentPage > 1) displayTablePage(currentPage - 1); });
+
+            // Event Listeners per la paginazione e la ricerca del report raw
+            document.getElementById('raw-prev-page-button').addEventListener('click', () => { if (rawCurrentPage > 1) displayRawImportTablePage(rawCurrentPage - 1); });
+            document.getElementById('raw-next-page-button').addEventListener('click', () => {
+                const rawSearchInput = document.getElementById('raw-search-input');
+                let dataToPaginate = rawImportData;
+                const searchTerm = rawSearchInput.value.toLowerCase();
+                if (searchTerm) {
+                    dataToPaginate = rawImportData.filter(item => 
+                        Object.values(item).some(val => 
+                            String(val).toLowerCase().includes(searchTerm)
+                        )
+                    );
+                }
+                const totalPages = Math.ceil(dataToPaginate.length / ROWS_PER_PAGE);
+                if (rawCurrentPage < totalPages) displayRawImportTablePage(rawCurrentPage + 1);
+            });
+            document.getElementById('raw-search-input').addEventListener('input', () => { rawCurrentPage = 1; displayRawImportTablePage(rawCurrentPage); });
+            document.getElementById('download-raw-csv-button').addEventListener('click', downloadRawCSV);
+
+            // Funzione per scaricare il report raw
+            function downloadRawCSV() {
+                if (rawImportData.length === 0) return;
+                const headers = [
+                    'Minsan_SKU', 'Descrizione', 'Ditta', 'Lotto', 'Giacenza_File', 'Scadenza_File',
+                    'Costo_Base', 'Costo_Medio', 'Ultimo_Costo_Ditta', 'Data_Ultimo_Costo_Ditta',
+                    'Prezzo_BD', 'IVA_Value',
+                    'Shopify_Product_ID', 'Shopify_Variant_ID', 'Shopify_Inventory_Item_ID',
+                    'Shopify_On_Hand', 'Shopify_Available', 'Shopify_Committed', 'Shopify_Unavailable', 'Shopify_Expiry',
+                    'Stato_Ingestione', 'Dettagli_Ingestione', 'Ingested_At'
+                ];
+                const csvRows = [headers.join(';')];
+                for (const res of rawImportData) {
+                    const row = [
+                        res.minsan ?? '', 
+                        `"${(res.title || res.descrizione || '').replace(/"/g, '""')}"`,
+                        res.Ditta ?? '',
+                        res.lotto ?? '',
+                        res.giacenzaFile ?? '',
+                        res.scadenzaFile || '',
+                        res.CostoBase ?? '',
+                        res.CostoMedio ?? '',
+                        res.UltimoCostoDitta ?? '',
+                        res.DataUltimoCostoDitta || '',
+                        res.PrezzoBD ?? '',
+                        res.IVAValue ?? '',
+                        res.shopify_product_id ? res.shopify_product_id.split('/').pop() : '',
+                        res.shopify_variant_id ? res.shopify_variant_id.split('/').pop() : '',
+                        res.shopify_inventory_item_id ? res.shopify_inventory_item_id.split('/').pop() : '',
+                        res.shopify_on_hand_quantity ?? '',
+                        res.shopify_available_quantity ?? '',
+                        res.shopify_committed_quantity ?? '',
+                        res.shopify_unavailable_quantity ?? '',
+                        res.shopify_expiry_date || '',
+                        getStatusInfo(res.status).label,
+                        `"${(res.details || '').replace(/"/g, '""')}"`,
+                        new Date(res.created_at).toLocaleString()
+                    ];
+                    csvRows.push(row.join(';'));
+                }
+                const csvString = csvRows.join('\n');
+                const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'report_raw_import.csv';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
         }
 
         // ===============================================================
-        // SEZIONE VERIFICA FILE
+        // SEZIONE VERIFICA FILE (rimane invariata)
         // ===============================================================
         {
             const verifyPlaceholder = document.getElementById('verify-placeholder');
