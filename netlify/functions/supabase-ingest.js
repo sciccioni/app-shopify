@@ -58,7 +58,8 @@ exports.handler = async function(event) {
                 CostoMedio,
                 UltimoCostoDitta,
                 DataUltimoCostoDitta,
-                PrezzoBDIVA
+                PrezzoBD, // Ora PrezzoBD
+                IVAValue   // Ora IVAValue
             } = productData;
 
             try {
@@ -66,7 +67,14 @@ exports.handler = async function(event) {
                 const parsedCostoBase = parseNumericValue(CostoBase);
                 const parsedCostoMedio = parseNumericValue(CostoMedio);
                 const parsedUltimoCostoDitta = parseNumericValue(UltimoCostoDitta);
-                const parsedPrezzoBDIVA = parseNumericValue(PrezzoBDIVA);
+                const parsedPrezzoBD = parseNumericValue(PrezzoBD); // Parsa PrezzoBD
+                const parsedIVAValue = parseNumericValue(IVAValue);   // Parsa IVAValue
+
+                // --- DEBUG LOGS ---
+                console.log(`DEBUG Ingestione per Minsan: ${minsan}`);
+                console.log(`Originale PrezzoBD: ${PrezzoBD}, Parsato: ${parsedPrezzoBD}`);
+                console.log(`Originale IVAValue: ${IVAValue}, Parsato: ${parsedIVAValue}`);
+                // --- FINE DEBUG LOGS ---
 
                 // 1. Inserisci o aggiorna il prodotto nella tabella 'products'
                 const { data: product, error: productError } = await supabase
@@ -84,7 +92,8 @@ exports.handler = async function(event) {
                         costo_medio: parsedCostoMedio,
                         ultimo_costo_ditta: parsedUltimoCostoDitta,
                         data_ultimo_costo_ditta: DataUltimoCostoDitta, // Assicurati che il formato sia compatibile con DATE
-                        prezzo_b_diva: parsedPrezzoBDIVA
+                        prezzo_bd: parsedPrezzoBD, // Salva in prezzo_bd
+                        iva_value: parsedIVAValue   // Salva in iva_value
                     }, { onConflict: 'sku_or_minsan', ignoreDuplicates: false })
                     .select();
 
