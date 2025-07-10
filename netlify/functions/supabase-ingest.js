@@ -51,15 +51,15 @@ exports.handler = async function(event) {
                 status, 
                 details, 
                 _debug_source_row,
-                // Nuovi campi dal file Excel
+                // Nuovi campi dal file Excel, ora gestiti per entrambe le tabelle
                 Ditta,
                 lotto,
                 CostoBase,
                 CostoMedio,
                 UltimoCostoDitta,
                 DataUltimoCostoDitta,
-                PrezzoBD, // Ora PrezzoBD
-                IVAValue   // Ora IVAValue
+                PrezzoBD, 
+                IVAValue   
             } = productData;
 
             try {
@@ -67,8 +67,8 @@ exports.handler = async function(event) {
                 const parsedCostoBase = parseNumericValue(CostoBase);
                 const parsedCostoMedio = parseNumericValue(CostoMedio);
                 const parsedUltimoCostoDitta = parseNumericValue(UltimoCostoDitta);
-                const parsedPrezzoBD = parseNumericValue(PrezzoBD); // Parsa PrezzoBD
-                const parsedIVAValue = parseNumericValue(IVAValue);   // Parsa IVAValue
+                const parsedPrezzoBD = parseNumericValue(PrezzoBD); 
+                const parsedIVAValue = parseNumericValue(IVAValue);   
 
                 // --- DEBUG LOGS ---
                 console.log(`DEBUG Ingestione per Minsan: ${minsan}`);
@@ -77,6 +77,7 @@ exports.handler = async function(event) {
                 // --- FINE DEBUG LOGS ---
 
                 // 1. Inserisci o aggiorna il prodotto nella tabella 'products'
+                // Questa tabella contiene i dati anagrafici unici del prodotto (un record per Minsan)
                 const { data: product, error: productError } = await supabase
                     .from('products')
                     .upsert({
@@ -86,14 +87,14 @@ exports.handler = async function(event) {
                         shopify_variant_id,
                         shopify_inventory_item_id,
                         last_ingested_at: new Date().toISOString(),
-                        // Includi i nuovi campi per la tabella products
+                        // Salva i campi relativi all'anagrafica del prodotto
                         ditta: Ditta,
                         costo_base: parsedCostoBase,
                         costo_medio: parsedCostoMedio,
                         ultimo_costo_ditta: parsedUltimoCostoDitta,
-                        data_ultimo_costo_ditta: DataUltimoCostoDitta, // Assicurati che il formato sia compatibile con DATE
-                        prezzo_bd: parsedPrezzoBD, // Salva in prezzo_bd
-                        iva_value: parsedIVAValue   // Salva in iva_value
+                        data_ultimo_costo_ditta: DataUltimoCostoDitta, 
+                        prezzo_bd: parsedPrezzoBD, 
+                        iva_value: parsedIVAValue   
                     }, { onConflict: 'sku_or_minsan', ignoreDuplicates: false })
                     .select();
 
@@ -105,10 +106,12 @@ exports.handler = async function(event) {
                 const productId = product[0].id;
 
                 // 2. Inserisci un nuovo record in 'inventory_updates'
+                // Questa tabella memorizza ogni riga del file Excel come un record separato,
+                // inclusi i duplicati per lo stesso prodotto ma con lotti diversi.
                 const { data: inventoryUpdate, error: updateError } = await supabase
                     .from('inventory_updates')
                     .insert({
-                        product_id: productId,
+                        product_id: productId, // Collega al prodotto principale
                         quantity_from_file: giacenzaFile,
                         expiry_date_from_file: scadenzaFile,
                         shopify_on_hand_quantity,
@@ -119,13 +122,20 @@ exports.handler = async function(event) {
                         status,
                         details,
                         last_sync_attempt_at: new Date().toISOString(),
-                        // Includi il nuovo campo per la tabella inventory_updates
-                        batch_number: lotto // Mappa 'lotto' a 'batch_number'
+                        // Includi tutti i nuovi campi specifici del lotto qui
+                        batch_number: lotto, // Mappa 'lotto' a 'batch_number'
+                        ditta: Ditta, // Duplica per lo storico del lotto
+                        costo_base: parsedCostoBase, // Duplica per lo storico del lotto
+                        costo_medio: parsedCostoMedio, // Duplica per lo storico del lotto
+                        ultimo_costo_ditta: parsedUltimoCostoDitta, // Duplica per lo storico del lotto
+                        data_ultimo_costo_ditta: DataUltimoCostoDitta, // Duplica per lo storico del lotto
+                        prezzo_bd: parsedPrezzoBD, // Duplica per lo storico del lotto
+                        iva_value: parsedIVAValue // Duplica per lo storico del lotto
                     });
 
                 if (updateError) {
                     console.error('Errore insert inventory_update:', updateError);
-                    throw new Error(`Errore insert update per ${minsan}: ${updateError.message}`);
+                    throw new new Error(`Errore insert update per ${minsan}: ${updateError.message}`);
                 }
 
                 return { minsan, status: 'success', message: 'Dati ingeriti con successo in Supabase.' };
