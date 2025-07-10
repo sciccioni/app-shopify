@@ -236,6 +236,7 @@
             verifyTabButton.classList.remove('active');
             syncTabContent.classList.remove('hidden');
             verifyTabContent.classList.add('hidden');
+            loadDataFromSupabase(); // Carica i dati da Supabase quando si attiva la scheda Sincronizzazione
         });
 
         verifyTabButton.addEventListener('click', () => {
@@ -260,6 +261,7 @@
                     passwordOverlay.classList.add('hidden');
                     appContainer.classList.remove('hidden');
                     passwordError.classList.add('hidden'); // Hide error if it was previously shown
+                    loadDataFromSupabase(); // Carica i dati dopo il login
                 } else {
                     passwordError.classList.remove('hidden');
                     passwordInput.value = ''; // Clear password field
@@ -333,6 +335,31 @@
             let currentPage = 1;
             const ROWS_PER_PAGE = 100;
             const SUPABASE_INGEST_CHUNK_SIZE = 50; // Dimensione del chunk per l'ingestione in Supabase
+
+            // --- NUOVO: Inizializzazione Supabase nel frontend ---
+            // Queste variabili devono essere accessibili globalmente o passate
+            // Per semplicità, le assumiamo disponibili tramite un'iniezione di script o variabili globali nel contesto Canvas
+            // In un'applicazione reale, useresti un file di configurazione o variabili d'ambiente esposte in modo sicuro.
+            const SUPABASE_URL_FRONTEND = "YOUR_SUPABASE_URL_HERE"; // SOSTITUISCI CON IL TUO URL SUPABASE
+            const SUPABASE_ANON_KEY_FRONTEND = "YOUR_SUPABASE_ANON_KEY_HERE"; // SOSTITUISCI CON LA TUA CHIAVE ANONIMA
+            let supabaseClient = null;
+
+            // Funzione per inizializzare il client Supabase
+            function initializeSupabaseClient() {
+                if (SUPABASE_URL_FRONTEND && SUPABASE_ANON_KEY_FRONTEND && SUPABASE_URL_FRONTEND !== "YOUR_SUPABASE_URL_HERE") {
+                    supabaseClient = supabase.createClient(SUPABASE_URL_FRONTEND, SUPABASE_ANON_KEY_FRONTEND);
+                    console.log("Supabase client initialized in frontend.");
+                } else {
+                    console.error("Supabase URL or Anon Key not configured in frontend. Cannot load data from Supabase.");
+                }
+            }
+            // Carica la libreria Supabase
+            const supabaseScript = document.createElement('script');
+            supabaseScript.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"; // Versione 2.x.x
+            supabaseScript.onload = initializeSupabaseClient;
+            document.head.appendChild(supabaseScript);
+            // --- FINE NUOVO ---
+
 
             function handleFileSync(file) {
                 uploadedFile = file;
@@ -445,6 +472,92 @@
                 return data;
             }
 
+            // --- NUOVO: Funzione per caricare i dati da Supabase ---
+            async function loadDataFromSupabase() {
+                if (!supabaseClient) {
+                    console.warn("Supabase client not initialized. Cannot load data.");
+                    return;
+                }
+                loader.classList.remove('hidden');
+                loaderText.textContent = 'Caricamento dati da Supabase...';
+                tableContainer.classList.add('hidden');
+                resultsSection.classList.add('hidden');
+                hideErrorMessage();
+
+                try {
+                    // Recupera i dati più recenti da inventory_updates, unendoli con i dettagli del prodotto
+                    // Ordina per data di creazione per avere i più recenti in cima
+                    const { data, error } = await supabaseClient
+                        .from('inventory_updates')
+                        .select(`
+                            *,
+                            products (
+                                sku_or_minsan,
+                                title,
+                                shopify_product_id,
+                                shopify_variant_id,
+                                shopify_inventory_item_id
+                            )
+                        `)
+                        .order('created_at', { ascending: false }); // Ordina per i più recenti
+
+                    if (error) {
+                        console.error('Errore nel caricamento dati da Supabase:', error);
+                        showErrorMessage(`<strong>Errore nel caricamento dati da Supabase:</strong> ${error.message}`);
+                        return;
+                    }
+
+                    // Mappa i dati di Supabase al formato atteso da analysisResults
+                    // Nota: I nomi delle colonne qui devono corrispondere a quelli usati in renderTable
+                    analysisResults = data.map(item => ({
+                        minsan: item.products.sku_or_minsan,
+                        title: item.products.title,
+                        descrizione: item.products.title, // Usiamo title come descrizione per coerenza
+                        giacenzaFile: item.quantity_from_file,
+                        scadenzaFile: item.expiry_date_from_file,
+                        shopify_product_id: item.products.shopify_product_id,
+                        shopify_variant_id: item.products.shopify_variant_id,
+                        shopify_inventory_item_id: item.products.shopify_inventory_item_id,
+                        inventory_quantity: item.shopify_on_hand_quantity, // Mappa on_hand_quantity a inventory_quantity per la tabella
+                        committed_quantity: item.shopify_committed_quantity,
+                        available_quantity: item.shopify_available_quantity,
+                        on_hand_quantity: item.shopify_on_hand_quantity,
+                        expiry_date: item.shopify_expiry_date,
+                        status: item.status,
+                        details: item.details,
+                        // Campi specifici del lotto
+                        Ditta: item.ditta,
+                        lotto: item.batch_number,
+                        CostoBase: item.costo_base,
+                        CostoMedio: item.costo_medio,
+                        UltimoCostoDitta: item.ultimo_costo_ditta,
+                        DataUltimoCostoDitta: item.data_ultimo_costo_ditta,
+                        PrezzoBD: item.prezzo_bd,
+                        IVAValue: item.iva_value,
+                        selected: false // Reset selezione
+                    }));
+
+                    // Aggiorna duplicateRows basandosi sui dati caricati da Supabase se necessario
+                    // Per ora, lo lasciamo come era, ma in futuro potresti voler ricalcolarlo qui
+                    // se la logica dei duplicati è importante per la visualizzazione dei filtri.
+                    // Per la visualizzazione principale, analysisResults è sufficiente.
+
+                    resultsSection.classList.remove('hidden');
+                    displaySummary(); // Questa funzione dovrà essere aggiornata per riflettere i dati da Supabase
+                    tableContainer.classList.remove('hidden');
+                    document.getElementById('filter-all').checked = true;
+                    currentPage = 1;
+                    displayTablePage(currentPage); // Popola la tabella con i dati da Supabase
+
+                } catch (error) {
+                    console.error("Errore durante il caricamento dati da Supabase:", error);
+                    showErrorMessage(`<strong>Errore nel caricamento dati da Supabase:</strong> ${error.message}`);
+                } finally {
+                    loader.classList.add('hidden');
+                }
+            }
+            // --- FINE NUOVO ---
+
 
             analyzeButton.addEventListener('click', analyzeFile);
 
@@ -470,8 +583,7 @@
 
                     window.dispatchEvent(new CustomEvent('data-loaded-for-verification', { detail: fileDataRaw }));
 
-                    // Rimuoviamo la logica di consolidamento per fileData
-                    // Ora, fileData conterrà tutte le righe originali del file Excel
+                    // fileData conterrà tutte le righe originali del file Excel
                     const fileData = fileDataRaw; 
                     
                     // La logica per duplicateRows può rimanere se serve per il summary
@@ -570,12 +682,6 @@
                                         resultRow.status = 'to-update';
                                         let detailsText = [];
                                         
-                                        // Questa parte della logica di consolidamento dettagli non è più rilevante per l'ingestione di singole righe,
-                                        // ma può essere mantenuta per la visualizzazione dei "duplicateRows" nel summary se desiderato.
-                                        // Se row.isDuplicate è ancora un flag, assicurati che sia impostato correttamente se lo usi.
-                                        // Per ora, lo rimuovo da qui per evitare confusione con la logica di ingestione per riga singola.
-                                        // if (row.isDuplicate) { ... } 
-
                                         if (giacenzaFile < 0) detailsText.push(`Giacenza negativa (${giacenzaFile}) corretta a 0.`);
                                         if (detailsText.length === 0) detailsText.push('Pronto per l\'aggiornamento.');
                                         resultRow.details = detailsText.join(' ');
@@ -620,8 +726,12 @@
                     console.log('Tutti i dati inviati a Supabase con successo. Totale prodotti ingeriti:', totalIngested);
                     // --- FINE NUOVO ---
 
+                    // --- NUOVO: Carica i dati direttamente da Supabase per la visualizzazione ---
+                    await loadDataFromSupabase(); // Ricarica analysisResults con i dati dal DB
+                    // --- FINE NUOVO ---
+
                     resultsSection.classList.remove('hidden');
-                    displaySummary();
+                    displaySummary(); 
                     if (analysisResults.length > 0) {
                         tableContainer.classList.remove('hidden');
                         document.getElementById('filter-all').checked = true;
