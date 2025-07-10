@@ -72,7 +72,7 @@
                 <div id="drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
                     <input type="file" id="file-input" class="hidden" accept=".xlsx, .xls">
                     <div class="flex flex-col items-center">
-                        <svg class="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h10a4 4 0 014 4v6a4 4 0 01-4 4H7z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M16 16v-4a4 4 0 00-4-4H8a4 4 0 00-4 4v4m16 0l-3-3m-13 3l3-3"></path></svg>
+                        <svg class="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h10a4 4 0 014 4v6a4 4 0 01-4 4H7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 16v-4a4 4 0 00-4-4H8a4 4 0 00-4 4v4m16 0l-3-3m-13 3l3-3"></path></svg>
                         <p class="text-gray-600">Trascina qui il file o <span class="font-semibold text-indigo-600">clicca per selezionarlo</span>.</p>
                         <p id="file-name" class="text-sm text-gray-500 mt-2"></p>
                     </div>
@@ -88,7 +88,7 @@
                 <div id="sync-action-area" class="mt-6 p-4 border-t border-b border-gray-200 hidden">
                     <div class="flex flex-col md:flex-row items-center justify-center gap-4">
                         <div class="flex items-center">
-                            <input id="confirm-sync-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600"><label for="confirm-sync-checkbox" class="ml-2 block text-sm text-gray-900">Confermo di voler aggiornare.</label>
+                            <input id="confirm-sync-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600"><label for="confirm-sync-checkbox" class="ml-2 block text-sm text-gray-900">Confermo di voler aggiornare i prodotti.</label>
                         </div>
                         <button id="sync-button" class="bg-green-600 text-white font-bold py-3 px-6 rounded-lg" disabled>Sincronizza Selezionati</button>
                     </div>
@@ -96,7 +96,7 @@
                 </div>
                 <div id="sync-report-table-container" class="mt-6">
                     <div class="flex justify-between items-center mb-4">
-                        <fieldset id="filter-fieldset" class="flex items-center space-x-4"></fieldset>
+                        <fieldset id="filter-fieldset" class="flex flex-wrap items-center gap-x-4 gap-y-2"></fieldset>
                         <button id="download-csv-button" class="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Scarica Report</button>
                     </div>
                     <div class="overflow-x-auto">
@@ -114,7 +114,7 @@
             </div>
         </main>
     </template>
-
+    
     <template id="sync-row-template">
         <tr>
             <td class="px-2 py-4 align-middle"><input type="checkbox" class="h-4 w-4 text-indigo-600 rounded row-checkbox" data-sku=""></td>
@@ -135,8 +135,25 @@
     </template>
     
     <template id="verify-content-template">
-        </template>
-
+        <main class="space-y-8">
+            <div id="verify-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div id="verify-placeholder"><h2 class="text-xl font-semibold mb-2">Verifica Contenuto File</h2><p class="text-gray-600">Carica un file nella scheda "Sincronizzazione" per attivare la ricerca qui.</p></div>
+                <div id="verify-controls" class="hidden">
+                    <h2 class="text-xl font-semibold mb-4">Cerca nel File Caricato</h2>
+                    <div class="flex gap-4"><input type="search" id="search-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Scrivi qui per cercare..."></div>
+                    <div id="verify-table-container" class="mt-6">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead id="verify-table-head" class="bg-gray-50"></thead>
+                                <tbody id="verify-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                            </table>
+                        </div>
+                        <p id="verify-no-results" class="text-center text-gray-500 mt-4 hidden">Nessun risultato trovato.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </template>
 
     <script>
     'use strict';
@@ -144,7 +161,7 @@
     // SCRIPT PRINCIPALE DELL'APPLICAZIONE
     // ========================================================
 
-    // --- Dichiarazione delle variabili globali ---
+    // --- Variabili Globali ---
     let supabaseClient;
     let passwordOverlay, passwordInput, loginButton, passwordError, appContainer, mainContentArea;
     let uploadedFile;
@@ -176,6 +193,23 @@
         }
     }
 
+    // --- Funzioni di Chiamata API ---
+    async function callApi(endpoint, payload) {
+        try {
+            const response = await fetch(`/.netlify/functions/${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || `Errore server: ${response.statusText}`);
+            return data;
+        } catch (error) {
+            showErrorMessage(`Errore di comunicazione con il server (${endpoint}): ${error.message}`);
+            throw error;
+        }
+    }
+    
     // --- Logica Principale dell'App ---
     async function analyzeFile() {
         hideErrorMessage();
@@ -189,6 +223,7 @@
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             fileDataRaw = XLSX.utils.sheet_to_json(worksheet);
+            window.dispatchEvent(new CustomEvent('data-loaded-for-verification', { detail: fileDataRaw }));
 
             const allSkus = fileDataRaw.map(row => String(getValue(row, ['Minsan', 'EAN']) || '')).filter(Boolean);
             if (allSkus.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
@@ -210,6 +245,7 @@
                         sku: sku,
                         title: shopifyProduct ? shopifyProduct.title : (getValue(row, ['Descrizione']) || 'N/D'),
                         inventory_item_id: shopifyProduct ? shopifyProduct.inventory_item_id : null,
+                        product_id: shopifyProduct ? shopifyProduct.product_id : null,
                         inventory_quantity: shopifyProduct ? shopifyProduct.inventory_quantity : null,
                         giacenzaFile: 0,
                         scadenze: [],
@@ -226,10 +262,14 @@
 
             analysisResults = Array.from(consolidatedMap.values()).map(record => {
                 record.scadenzaFile = record.scadenze.length > 0 ? record.scadenze.sort()[0] : null;
-                record.details = record.inventory_quantity === record.giacenzaFile ? 'Giacenza Corretta' : record.details;
-                if (record.details !== 'Giacenza Corretta' && record.status !== 'not-found') record.status = 'to-update';
-                else if (record.details === 'Giacenza Corretta') record.status = 'no-change';
-                record.selected = (record.status === 'to-update'); // Seleziona di default quelli da aggiornare
+                const quantityDiffers = record.inventory_quantity !== record.giacenzaFile;
+                if (record.status === 'to-update' && !quantityDiffers) {
+                    record.status = 'no-change';
+                    record.details = 'Giacenza Corretta';
+                } else if (record.status === 'to-update' && quantityDiffers) {
+                    record.details = `Da aggiornare: File(${record.giacenzaFile}) vs Shopify(${record.inventory_quantity})`;
+                }
+                record.selected = (record.status === 'to-update');
                 return record;
             });
 
@@ -245,9 +285,49 @@
         }
     }
     
-    async function syncFile() { /* ... Incolla qui la tua funzione syncFile ... */ }
-    function downloadCSV() { /* ... Incolla qui la tua funzione downloadCSV ... */ }
-    
+    async function syncFile() {
+        hideErrorMessage();
+        const itemsToUpdate = analysisResults.filter(r => r.selected && r.status === 'to-update');
+        if (itemsToUpdate.length === 0) return showErrorMessage("Nessun prodotto valido selezionato per l'aggiornamento.");
+
+        document.getElementById('sync-button').disabled = true;
+        document.getElementById('confirm-sync-checkbox').disabled = true;
+        showLoader(`Sincronizzazione di ${itemsToUpdate.length} prodotti...`);
+
+        try {
+            const payload = {
+                type: 'sync',
+                items: itemsToUpdate.map(item => ({
+                    inventoryItemId: item.inventory_item_id,
+                    quantity: Math.max(0, item.giacenzaFile),
+                }))
+            };
+            const result = await callApi('shopify-proxy', payload);
+            
+            const statusMessage = document.getElementById('sync-status-message');
+            if (result.success) {
+                statusMessage.textContent = `${itemsToUpdate.length} prodotti sincronizzati con successo!`;
+                statusMessage.className = 'mt-4 text-center font-semibold text-green-700';
+                itemsToUpdate.forEach(item => {
+                    const original = analysisResults.find(r => r.sku === item.sku);
+                    original.status = 'success';
+                    original.selected = false;
+                    original.inventory_quantity = original.giacenzaFile;
+                });
+            } else {
+                 throw new Error(result.error || 'Errore sconosciuto durante la sincronizzazione.');
+            }
+
+        } catch (error) {
+            showErrorMessage(`Errore di sincronizzazione: ${error.message}`);
+        } finally {
+            hideLoader();
+            document.getElementById('sync-status-message').classList.remove('hidden');
+            displaySyncReportTablePage(currentPage);
+            updateUIState();
+        }
+    }
+
     // --- Funzioni di Rendering e UI ---
     function displaySummary() {
         const summaryContainer = document.getElementById('summary');
@@ -260,26 +340,80 @@
             noChange: analysisResults.filter(r => r.status === 'no-change').length,
         };
         summaryContainer.innerHTML = `
-            <div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.total}</p><p class="text-sm text-gray-600">Prodotti Unici</p></div>
-            <div class="bg-blue-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-blue-800">${summary.toUpdate}</p><p class="text-sm text-blue-700">Da Aggiornare</p></div>
-            <div class="bg-green-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-green-800">${summary.synced}</p><p class="text-sm text-green-700">Sincronizzati</p></div>
-            <div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.notFound}</p><p class="text-sm text-yellow-700">Non Trovati</p></div>
-            <div class="bg-gray-200 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-gray-800">${summary.noChange}</p><p class="text-sm text-gray-700">Invariati</p></div>
+            <div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.total || 0}</p><p class="text-sm text-gray-600">Prodotti Unici</p></div>
+            <div class="bg-blue-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-blue-800">${summary.toUpdate || 0}</p><p class="text-sm text-blue-700">Da Aggiornare</p></div>
+            <div class="bg-green-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-green-800">${summary.synced || 0}</p><p class="text-sm text-green-700">Sincronizzati</p></div>
+            <div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.notFound || 0}</p><p class="text-sm text-yellow-700">Non Trovati</p></div>
+            <div class="bg-gray-200 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-gray-800">${summary.noChange || 0}</p><p class="text-sm text-gray-700">Invariati</p></div>
         `;
     }
 
-    function renderSyncReportTable(items) { /* ... Incolla qui la tua funzione renderSyncReportTable ... */ }
-    function displaySyncReportTablePage(page) { /* ... Incolla qui la tua funzione displaySyncReportTablePage ... */ }
-    function updateUIState() { /* ... Incolla qui la tua funzione updateUIState ... */ }
+    function renderSyncReportTable(items) {
+        const tableBody = document.getElementById('sync-report-table-body');
+        const template = document.getElementById('sync-row-template');
+        if (!tableBody || !template) return;
+        tableBody.innerHTML = '';
 
-    // --- Funzioni di Inizializzazione e Gestione Eventi ---
-    function initializeSupabaseClient() {
-        if (SUPABASE_URL_FRONTEND && SUPABASE_ANON_KEY_FRONTEND) {
-            supabaseClient = supabase.createClient(SUPABASE_URL_FRONTEND, SUPABASE_ANON_KEY_FRONTEND);
-            console.log("✅ Supabase client INIZIALIZZATO.");
+        items.forEach(res => {
+            const clone = template.content.cloneNode(true);
+            const get = (selector) => clone.querySelector(selector);
+            const statusInfo = getStatusInfo(res.status);
+            
+            get('tr').className = statusInfo.rowClass;
+            const checkbox = get('.row-checkbox');
+            if (res.status === 'to-update') { checkbox.dataset.sku = res.sku; checkbox.checked = res.selected; } 
+            else { checkbox.parentElement.innerHTML = ''; }
+            
+            get('.sku').textContent = res.sku;
+            get('.title').textContent = res.title;
+            get('.inventory_quantity').textContent = res.inventory_quantity !== null ? res.inventory_quantity : 'N/D';
+            get('.giacenzaFile').textContent = res.giacenzaFile;
+            get('.expiry_date').textContent = res.expiry_date || 'N/D';
+            get('.scadenzaFile').textContent = res.scadenzaFile || 'N/D';
+            get('.details').textContent = res.details || '';
+            get('.status-badge').className = `inline-flex items-center px-2 py-0.5 rounded-full text-xs ${statusInfo.badgeClass}`;
+            get('.status-icon-placeholder').innerHTML = statusInfo.icon;
+            get('.status-label').textContent = ` ${statusInfo.label}`;
+            get('.debug-cell').textContent = JSON.stringify(res, null, 2);
+
+            tableBody.appendChild(clone);
+        });
+    }
+
+    function displaySyncReportTablePage(page) {
+        currentPage = page;
+        const filterValue = document.querySelector('#filter-fieldset input[name="filter-type"]:checked').value;
+        let dataToDisplay = analysisResults;
+        if (filterValue !== 'all') {
+            dataToDisplay = analysisResults.filter(r => r.status === filterValue);
+        }
+        
+        const totalPages = Math.ceil(dataToDisplay.length / ROWS_PER_PAGE);
+        const paginatedItems = dataToDisplay.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
+        
+        renderSyncReportTable(paginatedItems);
+        
+        document.getElementById('sync-page-indicator').textContent = `Pagina ${page} di ${totalPages || 1}`;
+        document.getElementById('sync-prev-page-button').disabled = page === 1;
+        document.getElementById('sync-next-page-button').disabled = page === totalPages || totalPages === 0;
+        updateUIState();
+    }
+    
+    function updateUIState() {
+        const itemsToUpdate = analysisResults.filter(r => r.status === 'to-update').length > 0;
+        const itemsSelected = analysisResults.some(r => r.selected);
+        const syncButton = document.getElementById('sync-button');
+        const confirmCheckbox = document.getElementById('confirm-sync-checkbox');
+        
+        document.getElementById('sync-action-area').classList.toggle('hidden', !itemsToUpdate);
+        if (syncButton && confirmCheckbox) {
+            syncButton.disabled = !itemsSelected || !confirmCheckbox.checked;
+            confirmCheckbox.disabled = !itemsSelected;
+            if(!itemsSelected) confirmCheckbox.checked = false;
         }
     }
 
+    // --- Inizializzazione e Gestione Eventi ---
     async function checkPassword() {
         passwordError.classList.add('hidden');
         loginButton.disabled = true;
@@ -315,21 +449,39 @@
         showSyncView();
     }
 
-    function setupTabEvents() { /* ... Incolla qui la tua funzione setupTabEvents ... */ }
+    function setupTabEvents() {
+        document.getElementById('sync-tab-button').addEventListener('click', showSyncView);
+        document.getElementById('verify-tab-button').addEventListener('click', showVerifyView);
+    }
     
     function showSyncView() {
+        document.getElementById('sync-tab-button').classList.add('active');
+        document.getElementById('verify-tab-button').classList.remove('active');
+        document.getElementById('sync-tab-content').classList.remove('hidden');
+        document.getElementById('verify-tab-content').classList.add('hidden');
+        
         const syncTabContent = document.getElementById('sync-tab-content');
         syncTabContent.innerHTML = '';
         syncTabContent.appendChild(document.getElementById('sync-content-template').content.cloneNode(true));
+        
         setupSyncViewEvents();
     }
     
+    function showVerifyView() {
+        document.getElementById('sync-tab-button').classList.remove('active');
+        document.getElementById('verify-tab-button').classList.add('active');
+        document.getElementById('sync-tab-content').classList.add('hidden');
+        document.getElementById('verify-tab-content').classList.remove('hidden');
+        
+        const verifyTabContent = document.getElementById('verify-tab-content');
+        verifyTabContent.innerHTML = '';
+        verifyTabContent.appendChild(document.getElementById('verify-content-template').content.cloneNode(true));
+        // Aggiungi qui gli event listener per la tab di verifica
+    }
+
     function setupSyncViewEvents() {
         document.getElementById('analyze-button').addEventListener('click', analyzeFile);
-        document.getElementById('sync-button').addEventListener('click', syncFile);
-        document.getElementById('confirm-sync-checkbox').addEventListener('change', updateUIState);
-        document.getElementById('download-csv-button').addEventListener('click', downloadCSV);
-
+        
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
         dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
@@ -337,6 +489,9 @@
         dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
         dropZone.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+        
+        document.getElementById('sync-button').addEventListener('click', syncFile);
+        document.getElementById('confirm-sync-checkbox').addEventListener('change', updateUIState);
     }
     
     function handleFile(file) {
