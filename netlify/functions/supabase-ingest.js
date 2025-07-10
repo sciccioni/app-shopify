@@ -1,62 +1,49 @@
 // supabase-ingest.js
 import { createClient } from '@supabase/supabase-js';
 
-// Queste variabili d'ambiente devono essere configurate su Netlify
-// SUPABASE_URL e SUPABASE_ANON_KEY sono disponibili nella dashboard del tuo progetto Supabase
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
-// Inizializza il client Supabase
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 exports.handler = async function(event) {
-    console.log('Ingest Function Started');
     if (event.httpMethod !== 'POST') {
-        console.warn('Method Not Allowed:', event.httpMethod);
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
     try {
         const payload = JSON.parse(event.body);
-        const { productsToIngest } = payload;
-        console.log('Received payload with productsToIngest count:', productsToIngest ? productsToIngest.length : 0);
+        const { productsToIngest } = payload; // productsToIngest sarà ora un singolo chunk
 
         if (!productsToIngest || !Array.isArray(productsToIngest) || productsToIngest.length === 0) {
-            console.error('No products provided for ingestion.');
             return { statusCode: 400, body: JSON.stringify({ error: 'Nessun prodotto fornito per l\'ingestione.' }) };
         }
 
-        const ingestionResults = [];
-
-        for (const productData of productsToIngest) {
+        const ingestionPromises = productsToIngest.map(async (productData) => {
             const { minsan, title, giacenzaFile, scadenzaFile, shopify_product_id, shopify_variant_id, shopify_inventory_item_id, shopify_on_hand_quantity, shopify_available_quantity, shopify_committed_quantity, shopify_unavailable_quantity, shopify_expiry_date, status, details, _debug_source_row } = productData;
 
             try {
                 // 1. Inserisci o aggiorna il prodotto nella tabella 'products'
-                // Utilizziamo upsert per gestire sia nuovi prodotti che aggiornamenti
-                console.log(`Processing product: ${minsan}`);
                 const { data: product, error: productError } = await supabase
                     .from('products')
                     .upsert({
                         sku_or_minsan: minsan,
-                        title: title || _debug_source_row?.Descrizione || '', // Usa il titolo da Shopify o la descrizione dal file
+                        title: title || _debug_source_row?.Descrizione || '', 
                         shopify_product_id,
                         shopify_variant_id,
                         shopify_inventory_item_id,
                         last_ingested_at: new Date().toISOString()
-                    }, { onConflict: 'sku_or_minsan', ignoreDuplicates: false }) // Aggiorna se SKU esiste
-                    .select(); // Richiedi i dati inseriti/aggiornati
+                    }, { onConflict: 'sku_or_minsan', ignoreDuplicates: false })
+                    .select();
 
                 if (productError) {
-                    console.error('Errore upsert prodotto in Supabase:', productError);
+                    console.error('Errore upsert prodotto:', productError);
                     throw new Error(`Errore upsert prodotto ${minsan}: ${productError.message}`);
                 }
-                console.log(`Product upserted: ${minsan}, Supabase ID: ${product[0].id}`);
 
-                const productId = product[0].id; // Ottieni l'ID del prodotto da Supabase
+                const productId = product[0].id;
 
                 // 2. Inserisci un nuovo record in 'inventory_updates'
-                // Questo crea uno storico di ogni tentativo di aggiornamento
                 const { data: inventoryUpdate, error: updateError } = await supabase
                     .from('inventory_updates')
                     .insert({
@@ -68,26 +55,26 @@ exports.handler = async function(event) {
                         shopify_committed_quantity,
                         shopify_unavailable_quantity,
                         shopify_expiry_date,
-                        status, // Lo stato iniziale dall'analisi (es. 'to-update', 'not-found', 'error')
+                        status,
                         details,
                         last_sync_attempt_at: new Date().toISOString()
                     });
 
                 if (updateError) {
-                    console.error('Errore insert inventory_update in Supabase:', updateError);
+                    console.error('Errore insert inventory_update:', updateError);
                     throw new Error(`Errore insert update per ${minsan}: ${updateError.message}`);
                 }
-                console.log(`Inventory update record created for product ID: ${productId}`);
 
-                ingestionResults.push({ minsan, status: 'success', message: 'Dati ingeriti con successo in Supabase.' });
+                return { minsan, status: 'success', message: 'Dati ingeriti con successo in Supabase.' };
 
             } catch (itemError) {
                 console.error(`Errore durante l'ingestione per ${minsan}:`, itemError);
-                ingestionResults.push({ minsan, status: 'error', message: itemError.message });
+                return { minsan, status: 'error', message: itemError.message };
             }
-        }
+        });
 
-        console.log('Ingestion Function Finished Successfully.');
+        const ingestionResults = await Promise.all(ingestionPromises); // Esegui tutte le promesse in parallelo
+
         return {
             statusCode: 200,
             body: JSON.stringify({ success: true, results: ingestionResults })
@@ -95,10 +82,9 @@ exports.handler = async function(event) {
 
     } catch (error) {
         console.error('Errore generale nella funzione di ingestione:', error);
-        // Assicurati che l'errore sia sempre un oggetto JSON valido
         return {
             statusCode: 500,
-            body: JSON.stringify({ error: `Errore del server durante l'ingestione: ${error.message || error}` })
+            body: JSON.stringify({ error: `Errore del server durante l'ingestione: ${error.message}` })
         };
     }
 };
