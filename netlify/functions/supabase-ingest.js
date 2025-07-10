@@ -10,15 +10,19 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 exports.handler = async function(event) {
+    console.log('Ingest Function Started');
     if (event.httpMethod !== 'POST') {
+        console.warn('Method Not Allowed:', event.httpMethod);
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
     try {
         const payload = JSON.parse(event.body);
         const { productsToIngest } = payload;
+        console.log('Received payload with productsToIngest count:', productsToIngest ? productsToIngest.length : 0);
 
         if (!productsToIngest || !Array.isArray(productsToIngest) || productsToIngest.length === 0) {
+            console.error('No products provided for ingestion.');
             return { statusCode: 400, body: JSON.stringify({ error: 'Nessun prodotto fornito per l\'ingestione.' }) };
         }
 
@@ -30,6 +34,7 @@ exports.handler = async function(event) {
             try {
                 // 1. Inserisci o aggiorna il prodotto nella tabella 'products'
                 // Utilizziamo upsert per gestire sia nuovi prodotti che aggiornamenti
+                console.log(`Processing product: ${minsan}`);
                 const { data: product, error: productError } = await supabase
                     .from('products')
                     .upsert({
@@ -43,9 +48,10 @@ exports.handler = async function(event) {
                     .select(); // Richiedi i dati inseriti/aggiornati
 
                 if (productError) {
-                    console.error('Errore upsert prodotto:', productError);
+                    console.error('Errore upsert prodotto in Supabase:', productError);
                     throw new Error(`Errore upsert prodotto ${minsan}: ${productError.message}`);
                 }
+                console.log(`Product upserted: ${minsan}, Supabase ID: ${product[0].id}`);
 
                 const productId = product[0].id; // Ottieni l'ID del prodotto da Supabase
 
@@ -68,9 +74,10 @@ exports.handler = async function(event) {
                     });
 
                 if (updateError) {
-                    console.error('Errore insert inventory_update:', updateError);
+                    console.error('Errore insert inventory_update in Supabase:', updateError);
                     throw new Error(`Errore insert update per ${minsan}: ${updateError.message}`);
                 }
+                console.log(`Inventory update record created for product ID: ${productId}`);
 
                 ingestionResults.push({ minsan, status: 'success', message: 'Dati ingeriti con successo in Supabase.' });
 
@@ -80,6 +87,7 @@ exports.handler = async function(event) {
             }
         }
 
+        console.log('Ingestion Function Finished Successfully.');
         return {
             statusCode: 200,
             body: JSON.stringify({ success: true, results: ingestionResults })
@@ -87,9 +95,10 @@ exports.handler = async function(event) {
 
     } catch (error) {
         console.error('Errore generale nella funzione di ingestione:', error);
+        // Assicurati che l'errore sia sempre un oggetto JSON valido
         return {
             statusCode: 500,
-            body: JSON.stringify({ error: `Errore del server durante l'ingestione: ${error.message}` })
+            body: JSON.stringify({ error: `Errore del server durante l'ingestione: ${error.message || error}` })
         };
     }
 };
