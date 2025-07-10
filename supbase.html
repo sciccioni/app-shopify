@@ -379,7 +379,6 @@
         if (!tableBody || !template) return;
         
         tableBody.innerHTML = '';
-
         items.forEach(res => {
             const clone = template.content.cloneNode(true);
             const get = (selector) => clone.querySelector(selector);
@@ -401,7 +400,6 @@
             get('.status-icon-placeholder').innerHTML = statusInfo.icon;
             get('.status-label').textContent = ` ${statusInfo.label}`;
             get('.debug-cell').textContent = JSON.stringify(res, null, 2);
-
             tableBody.appendChild(clone);
         });
     }
@@ -411,7 +409,6 @@
         const filterEl = document.querySelector('#filter-fieldset input[name="filter-type"]:checked');
         if (!filterEl) return;
         const filterValue = filterEl.value;
-
         let dataToDisplay = analysisResults;
         if (filterValue !== 'all') {
             dataToDisplay = analysisResults.filter(r => r.status === filterValue);
