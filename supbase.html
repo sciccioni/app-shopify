@@ -7,6 +7,7 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -113,22 +114,22 @@
                 <main class="space-y-8">
                     <div id="error-message-box" class="error-box p-4 rounded-md hidden" role="alert">
                        <p id="error-message-text" class="text-sm"></p>
-                   </div>
-   
-                   <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                       <h2 class="text-xl font-semibold mb-4">1. Carica File</h2>
-                       <div id="drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
-                           <input type="file" id="file-input" class="hidden" accept=".xlsx, .xls">
-                           <div class="flex flex-col items-center">
-                               <svg class="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h10a4 4 0 014 4v6a4 4 0 01-4 4H7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 16v-4a4 4 0 00-4-4H8a4 4 0 00-4 4v4m16 0l-3-3m-13 3l3-3"></path></svg>
-                               <p class="text-gray-600">Trascina qui il file o <span class="font-semibold text-indigo-600">clicca per selezionarlo</span>.</p>
-                               <p id="file-name" class="text-sm text-gray-500 mt-2"></p>
-                           </div>
-                       </div>
-                       <button id="analyze-button" class="mt-4 w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors" disabled>
-                           Analizza File
-                       </button>
-                   </div>
+                    </div>
+    
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h2 class="text-xl font-semibold mb-4">1. Carica File</h2>
+                        <div id="drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
+                            <input type="file" id="file-input" class="hidden" accept=".xlsx, .xls">
+                            <div class="flex flex-col items-center">
+                                <svg class="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h10a4 4 0 014 4v6a4 4 0 01-4 4H7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 16v-4a4 4 0 00-4-4H8a4 4 0 00-4 4v4m16 0l-3-3m-13 3l3-3"></path></svg>
+                                <p class="text-gray-600">Trascina qui il file o <span class="font-semibold text-indigo-600">clicca per selezionarlo</span>.</p>
+                                <p id="file-name" class="text-sm text-gray-500 mt-2"></p>
+                            </div>
+                        </div>
+                        <button id="analyze-button" class="mt-4 w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors" disabled>
+                            Analizza File
+                        </button>
+                    </div>
 
                     <div id="loader" class="text-center p-8 hidden">
                         <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -137,7 +138,7 @@
                         </svg>
                         <p id="loader-text" class="mt-2 text-gray-600">Elaborazione in corso...</p>
                     </div>
-   
+    
                     <div id="results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden">
                         <div class="border-b border-gray-200 mb-4">
                             <nav class="flex -mb-px">
@@ -237,13 +238,13 @@
 
             <div id="verify-tab-content" class="hidden">
                  <main class="space-y-8">
-                    <div id="verify-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <div id="verify-placeholder">
-                            <h2 class="text-xl font-semibold mb-2">Verifica Contenuto File</h2>
-                            <p class="text-gray-600">Carica un file nella scheda "Sincronizzazione" per attivare la ricerca qui.</p>
-                        </div>
-                        <div id="verify-controls" class="hidden">
-                             <h2 class="text-xl font-semibold mb-4">Cerca nel File Caricato</h2>
+                     <div id="verify-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                         <div id="verify-placeholder">
+                             <h2 class="text-xl font-semibold mb-2">Verifica Contenuto File</h2>
+                             <p class="text-gray-600">Carica un file nella scheda "Sincronizzazione" per attivare la ricerca qui.</p>
+                         </div>
+                         <div id="verify-controls" class="hidden">
+                              <h2 class="text-xl font-semibold mb-4">Cerca nel File Caricato</h2>
                             <div class="flex gap-4">
                                 <input type="search" id="search-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Scrivi qui per cercare in qualsiasi colonna...">
                             </div>
@@ -312,8 +313,8 @@
         function excelDateToJSDate(value) {
             if (typeof value === 'number') {
                 if (!value) return null;
-                if (value < 60) { 
-                     value--;
+                if (value < 60) {  
+                    value--;
                 }
                 const utc_days  = Math.floor(value - 25569);
                 const utc_value = utc_days * 86400;                                     
@@ -355,6 +356,8 @@
                 }
                 return null;
             }
+            return null;
+        }
 
         // Funzione per chiamare il backend (shopify-proxy.js)
         async function callShopifyBackend(payload) {
@@ -448,7 +451,15 @@
                     DataUltimoCostoDitta: item.data_ultimo_costo_ditta,
                     PrezzoBD: item.prezzo_bd,
                     IVAValue: item.iva_value,
-                    created_at: item.created_at
+                    created_at: item.created_at,
+                    shopify_product_id: item.products.shopify_product_id,
+                    shopify_variant_id: item.products.shopify_variant_id,
+                    shopify_inventory_item_id: item.products.shopify_inventory_item_id,
+                    shopify_on_hand_quantity: item.shopify_on_hand_quantity,
+                    shopify_available_quantity: item.shopify_available_quantity,
+                    shopify_committed_quantity: item.shopify_committed_quantity,
+                    shopify_unavailable_quantity: item.shopify_unavailable_quantity,
+                    shopify_expiry_date: item.shopify_expiry_date
                 }));
 
                 rawImportContent.classList.remove('hidden');
@@ -564,9 +575,6 @@
             fileNameDisplay.textContent = file.name;
             analyzeButton.disabled = false;
         }
-
-        // Funzioni per chiamare il backend (rimangono invariate)
-        // analyzeButton.addEventListener('click', analyzeFile); // Spostato all'interno di window.onload
 
         async function analyzeFile() {
             hideErrorMessage();
@@ -723,7 +731,7 @@
                 const chunk = itemChunks[i];
                 loaderText.textContent = `Sincronizzazione pacchetto ${i + 1} di ${itemChunks.length}...`;
                 try {
-                    const payload = { type: 'sync', items: chunk.map(item => ({ productId: item.product_id, inventoryItemId: item.inventory_item_id, quantity: Math.max(0, item.giacenzaFile), expiryDate: item.scadenzaFile || null })) };
+                    const payload = { type: 'sync', items: chunk.map(item => ({ productId: item.shopify_product_id, inventoryItemId: item.shopify_inventory_item_id, quantity: Math.max(0, item.giacenzaFile), expiryDate: item.scadenzaFile || null })) };
                     const result = await callShopifyBackend(payload); 
                     if (result.success) {
                         chunk.forEach(item => {
@@ -750,7 +758,7 @@
                     console.error(`Errore aggiornamento pacchetto ${i + 1}:`, error);
                 }
                 if(itemChunks.length > 1) {
-                     await new Promise(resolve => setTimeout(resolve, 500));
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 }
             }
             
@@ -850,7 +858,11 @@
                     checkboxHTML = `<td class="px-2 py-4"><input type="checkbox" class="h-4 w-4 text-indigo-600 rounded row-checkbox" data-minsan="${res.minsan}" ${res.selected ? 'checked' : ''}></td>`;
                 }
                 const debugData = JSON.stringify(res._debug_source_row || res, null, 2); 
+                
+                // This line was identified as potentially problematic due to complex interpolation.
+                // We ensure it is correctly formed.
                 row.innerHTML = `${checkboxHTML}<td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${res.minsan}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.title || res.descrizione}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.inventory_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.committed_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.available_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.on_hand_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.giacenzaFile}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.expiry_date || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.scadenzaFile || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${statusInfo.badgeClass}">${statusInfo.icon} ${statusInfo.label}</span></td><td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.details || ''}</td><td class="p-2 debug-cell">${debugData}</td>`;
+                
                 syncReportTableBody.appendChild(row);
             });
         }
@@ -924,7 +936,7 @@
         }
 
         function getStatusInfo(status) {
-            const icons = { success: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`, 'to-update': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 20h5v-5M20 4h-5v5"></path></svg>`, 'no-change': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'not-found': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, error: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'to-ingest': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>` }; // Aggiunto icona per 'to-ingest'
+            const icons = { success: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`, 'to-update': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 20h5v-5M20 4h-5v5"></path></svg>`, 'no-change': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'not-found': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, error: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'to-ingest': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>` }; // Aggiunto icona per 'to-ingest'
             switch (status) {
                 case 'success': return { label: 'Sincronizzato', badgeClass: 'bg-green-100 text-green-800', icon: icons.success, rowClass: 'bg-green-50' };
                 case 'to-update': return { label: 'Da Aggiornare', badgeClass: 'bg-blue-100 text-blue-800', icon: icons['to-update'], rowClass: 'bg-blue-50' };
@@ -933,6 +945,83 @@
                 case 'error': return { label: 'Errore', badgeClass: 'bg-red-100 text-red-800', icon: icons.error, rowClass: 'bg-red-50' };
                 case 'to-ingest': return { label: 'Da Ingerire', badgeClass: 'bg-purple-100 text-purple-800', icon: icons['to-ingest'], rowClass: 'bg-purple-50' }; // Nuovo stato
                 default: return { label: 'Sconosciuto', badgeClass: 'bg-gray-100 text-gray-800', icon: '', rowClass: '' };
+            }
+        }
+
+        // --- Altre Funzioni di Utilità ---
+        function updateProgressBar(current, total) {
+            const percentage = (current / total) * 100;
+            progressBar.style.width = `${percentage}%`;
+        }
+        function hideErrorMessage() {
+            errorMessageBox.classList.add('hidden');
+            errorMessageText.textContent = '';
+        }
+        function showErrorMessage(message) {
+            errorMessageText.innerHTML = message;
+            errorMessageBox.classList.remove('hidden');
+        }
+        function displayRawImportTablePage(page) {
+            rawCurrentPage = page;
+            const searchTerm = rawSearchInput.value.toLowerCase();
+            let dataToDisplay = rawImportData;
+
+            if (searchTerm) {
+                dataToDisplay = rawImportData.filter(item => 
+                    Object.values(item).some(val => 
+                        String(val).toLowerCase().includes(searchTerm)
+                    )
+                );
+            }
+            
+            const totalPages = Math.ceil(dataToDisplay.length / ROWS_PER_PAGE);
+            const paginatedItems = dataToDisplay.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
+            
+            renderRawImportTable(paginatedItems);
+            
+            rawPageIndicator.textContent = `Pagina ${page} di ${totalPages || 1}`;
+            rawPrevPageButton.disabled = page === 1;
+            rawNextPageButton.disabled = page === totalPages || totalPages === 0;
+        }
+
+        // Funzione per mostrare la vista del report di sincronizzazione e caricare i dati
+        function showSyncReportView() {
+            rawImportTabButton.classList.remove('active');
+            syncReportTabButton.classList.add('active');
+            rawImportContent.classList.add('hidden');
+            syncReportContent.classList.remove('hidden');
+            resultsSection.classList.remove('hidden');
+            
+            // Carica i dati consolidati da Supabase quando si passa a questa scheda
+            loadSyncReportData();
+        }
+
+        // Funzione per mostrare la vista dei dati raw importati e caricare i dati
+        function showRawImportView() {
+            syncReportTabButton.classList.remove('active');
+            rawImportTabButton.classList.add('active');
+            syncReportContent.classList.add('hidden');
+            rawImportContent.classList.remove('hidden');
+            resultsSection.classList.remove('hidden');
+
+            // Carica i dati raw da Supabase quando si passa a questa scheda
+            loadRawImportData();
+        }
+
+        // Funzioni per l'autenticazione
+        const CORRECT_PASSWORD = "giacenze_password"; // Sostituisci con la tua password reale
+
+        function checkPassword() {
+            const enteredPassword = passwordInput.value;
+            if (enteredPassword === CORRECT_PASSWORD) {
+                passwordOverlay.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+                initializeSupabaseClient();
+                // Dopo il login, prova a caricare i dati del report di sincronizzazione
+                showSyncReportView();
+            } else {
+                passwordError.classList.remove('hidden');
+                passwordInput.value = '';
             }
         }
         
@@ -1113,6 +1202,89 @@
                 link.click();
                 document.body.removeChild(link);
             }
+
+            // Aggiungi drag and drop per il file
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('drag-over');
+            });
+            dropZone.addEventListener('dragleave', (e) => {
+                dropZone.classList.remove('drag-over');
+            });
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('drag-over');
+                const file = e.dataTransfer.files[0];
+                if (file) {
+                    handleFileSync(file);
+                }
+            });
+            dropZone.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    handleFileSync(file);
+                }
+            });
+            
+            // Inizializzazione della scheda Verifica File
+            const verifySearchInput = document.getElementById('search-input');
+            const verifyTableBody = document.getElementById('verify-table-body');
+            const verifyTableHead = document.getElementById('verify-table-head');
+            const verifyControls = document.getElementById('verify-controls');
+            const verifyPlaceholder = document.getElementById('verify-placeholder');
+            const verifyNoResults = document.getElementById('verify-no-results');
+
+            let filteredVerificationData = [];
+
+            function renderVerifyTable(data) {
+                verifyTableBody.innerHTML = '';
+                if (data.length === 0) {
+                    verifyNoResults.classList.remove('hidden');
+                    return;
+                }
+                verifyNoResults.classList.add('hidden');
+
+                // Generate headers dynamically from the first item
+                if (data.length > 0) {
+                    const headers = Object.keys(data[0]);
+                    verifyTableHead.innerHTML = `<tr>${headers.map(h => `<th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">${h}</th>`).join('')}</tr>`;
+                    
+                    data.forEach(item => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = headers.map(header => 
+                            `<td class="px-3 py-4 whitespace-nowrap text-xs">${item[header] ?? ''}</td>`
+                        ).join('');
+                        verifyTableBody.appendChild(row);
+                    });
+                }
+            }
+
+            function filterVerificationData(searchTerm) {
+                const term = searchTerm.toLowerCase();
+                if (!term) {
+                    filteredVerificationData = [...verificationData];
+                } else {
+                    filteredVerificationData = verificationData.filter(item => 
+                        Object.values(item).some(val => String(val).toLowerCase().includes(term))
+                    );
+                }
+                renderVerifyTable(filteredVerificationData.slice(0, 50)); // Display only the first 50 results
+            }
+
+            verifySearchInput.addEventListener('input', (e) => {
+                filterVerificationData(e.target.value);
+            });
+
+            window.addEventListener('data-loaded-for-verification', (e) => {
+                verificationData = e.detail;
+                if (verificationData.length > 0) {
+                    verifyPlaceholder.classList.add('hidden');
+                    verifyControls.classList.remove('hidden');
+                    verifySearchInput.value = '';
+                    filterVerificationData('');
+                }
+            });
         }
     </script>
 </body>
