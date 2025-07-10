@@ -144,7 +144,7 @@
                             </div>
                             <p id="sync-status-message" class="mt-4 text-center font-semibold hidden"></p>
                         </div>
-                        <div id="table-container" class="hidden mt-6">
+                           <div id="table-container" class="hidden mt-6">
                            <div class="flex justify-between items-center mb-4">
                                <fieldset class="flex items-center space-x-4">
                                    <legend class="sr-only">Filtri</legend>
@@ -331,6 +331,7 @@
             let fileDataRaw = [];
             let currentPage = 1;
             const ROWS_PER_PAGE = 100;
+            const SUPABASE_INGEST_CHUNK_SIZE = 50; // Dimensione del chunk per l'ingestione in Supabase
 
             function handleFileSync(file) {
                 uploadedFile = file;
@@ -513,15 +514,15 @@
                     const allSkus = fileData.map(row => String(getValue(row, ['Minsan', 'EAN']))).filter(Boolean);
                     if (allSkus.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
 
-                    const chunkSize = 250;
+                    const shopifyChunkSize = 250; // Chunk size for Shopify API calls
                     const skuChunks = [];
-                    for (let i = 0; i < allSkus.length; i += chunkSize) skuChunks.push(allSkus.slice(i, i + chunkSize));
+                    for (let i = 0; i < allSkus.length; i += shopifyChunkSize) skuChunks.push(allSkus.slice(i, i + shopifyChunkSize));
                     
                     let allShopifyProducts = [];
                     progressBarContainer.classList.remove('hidden');
+                    loaderText.textContent = `Analisi dati Shopify (0/${skuChunks.length} pacchetti)...`;
                     for (let i = 0; i < skuChunks.length; i++) {
-                        loaderText.textContent = `Analisi pacchetto ${i + 1} di ${skuChunks.length}...`;
-                        // Chiamata al backend Shopify per ottenere i dati attuali
+                        loaderText.textContent = `Analisi dati Shopify (${i + 1}/${skuChunks.length} pacchetti)...`;
                         const shopifyProductsChunk = await callShopifyBackend({ type: 'analyze', skus: skuChunks[i] });
                         allShopifyProducts = allShopifyProducts.concat(shopifyProductsChunk);
                         updateProgressBar(i + 1, skuChunks.length);
@@ -530,8 +531,8 @@
                         }
                     }
                     
-                    analysisResults = []; // Resetta i risultati dell'analisi per la nuova elaborazione
-                    let productsToIngest = []; // Array per i prodotti da inviare a Supabase
+                    analysisResults = []; 
+                    let productsToIngest = []; 
                     let toUpdateCount = 0, notFoundCount = 0, noChangeCount = 0, errorCount = 0;
 
                     for (const row of fileData) {
@@ -601,21 +602,32 @@
                                 resultRow.details = 'Prodotto non trovato su Shopify.';
                             }
                         }
-                        analysisResults.push(resultRow); // Aggiungi al risultato dell'analisi per la visualizzazione
-                        productsToIngest.push(resultRow); // Aggiungi alla lista per l'ingestione in Supabase
+                        analysisResults.push(resultRow); 
+                        productsToIngest.push(resultRow); 
                     }
                     
-                    // --- NUOVO: Invia i risultati dell'analisi a Supabase ---
-                    loaderText.textContent = 'Salvataggio dati su Supabase...';
-                    const ingestResponse = await callSupabaseIngest({ productsToIngest });
-                    if (ingestResponse.success) {
-                        console.log('Dati inviati a Supabase con successo:', ingestResponse.results);
-                        // Qui potresti aggiornare lo stato dei prodotti in analysisResults
-                        // basandoti sulla risposta di ingestResponse.results se necessario,
-                        // ma per ora manteniamo analysisResults come i risultati dell'analisi Shopify.
-                    } else {
-                        throw new Error(ingestResponse.error || 'Errore durante il salvataggio su Supabase.');
+                    // --- NUOVO: Invia i risultati dell'analisi a Supabase in chunks ---
+                    const supabaseIngestChunks = [];
+                    for (let i = 0; i < productsToIngest.length; i += SUPABASE_INGEST_CHUNK_SIZE) {
+                        supabaseIngestChunks.push(productsToIngest.slice(i, i + SUPABASE_INGEST_CHUNK_SIZE));
                     }
+
+                    progressBarContainer.classList.remove('hidden');
+                    loaderText.textContent = `Salvataggio dati su Supabase (0/${supabaseIngestChunks.length} pacchetti)...`;
+                    let totalIngested = 0;
+                    for (let i = 0; i < supabaseIngestChunks.length; i++) {
+                        loaderText.textContent = `Salvataggio dati su Supabase (${i + 1}/${supabaseIngestChunks.length} pacchetti)...`;
+                        const ingestResponse = await callSupabaseIngest({ productsToIngest: supabaseIngestChunks[i] });
+                        if (!ingestResponse.success) {
+                            throw new Error(ingestResponse.error || `Errore durante il salvataggio del pacchetto ${i + 1} su Supabase.`);
+                        }
+                        totalIngested += supabaseIngestChunks[i].length;
+                        updateProgressBar(i + 1, supabaseIngestChunks.length);
+                        if (supabaseIngestChunks.length > 1) {
+                            await new Promise(resolve => setTimeout(resolve, 500)); // Breve pausa tra i chunk
+                        }
+                    }
+                    console.log('Tutti i dati inviati a Supabase con successo. Totale prodotti ingeriti:', totalIngested);
                     // --- FINE NUOVO ---
 
                     resultsSection.classList.remove('hidden');
@@ -660,9 +672,8 @@
                     const chunk = itemChunks[i];
                     loaderText.textContent = `Sincronizzazione pacchetto ${i + 1} di ${itemChunks.length}...`;
                     try {
-                        // Questa chiamata rimane al shopify-proxy per l'aggiornamento effettivo su Shopify
                         const payload = { type: 'sync', items: chunk.map(item => ({ productId: item.product_id, inventoryItemId: item.inventory_item_id, quantity: Math.max(0, item.giacenzaFile), expiryDate: item.scadenzaFile || null })) };
-                        const result = await callShopifyBackend(payload); // Usa callShopifyBackend
+                        const result = await callShopifyBackend(payload); 
                         if (result.success) {
                             chunk.forEach(item => {
                                 const originalItem = analysisResults.find(r => r.minsan === item.minsan);
@@ -682,6 +693,7 @@
                                 originalItem.status = 'error';
                                 originalItem.details = `Errore API: ${error.message}`;
                             }
+                            // TODO: Aggiornare lo stato di sincronizzazione in Supabase in caso di errore qui
                         });
                         failureCount += chunk.length;
                         console.error(`Errore aggiornamento pacchetto ${i + 1}:`, error);
@@ -771,7 +783,6 @@
                         resultsTableBody.appendChild(row);
                     });
                 } else {
-                    // Modifica qui per i nomi delle colonne in inglese
                     resultsTableHead.innerHTML = `<tr><th class="px-2 py-3"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 rounded"></th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minsan/SKU</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[200px]">Descrizione</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available (Shopify)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Committed</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">On Hand</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">File Quantity</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Shopify Expiry</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">File Expiry</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase text-red-600">DEBUG</th></tr>`;
                     items.forEach(res => {
                         const statusInfo = getStatusInfo(res.status);
@@ -814,16 +825,6 @@
             }
             
             confirmSyncCheckbox.addEventListener('change', updateUIState);
-            syncButton.addEventListener('click', syncFile);
-            downloadCsvButton.addEventListener('click', downloadCSV);
-            resultsTableBody.addEventListener('change', (e) => {
-                if (e.target.classList.contains('row-checkbox')) {
-                    const item = analysisResults.find(r => r.minsan === e.target.dataset.minsan);
-                    if (item) item.selected = e.target.checked;
-                    updateUIState();
-                }
-            });
-            prevPageButton.addEventListener('click', () => { if (currentPage > 1) displayTablePage(currentPage - 1); });
             nextPageButton.addEventListener('click', () => {
                 const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
                 let dataToPaginate = analysisResults;
@@ -841,6 +842,16 @@
                     displayTablePage(currentPage);
                 }
             });
+            syncButton.addEventListener('click', syncFile);
+            downloadCsvButton.addEventListener('click', downloadCSV);
+            resultsTableBody.addEventListener('change', (e) => {
+                if (e.target.classList.contains('row-checkbox')) {
+                    const item = analysisResults.find(r => r.minsan === e.target.dataset.minsan);
+                    if (item) item.selected = e.target.checked;
+                    updateUIState();
+                }
+            });
+            prevPageButton.addEventListener('click', () => { if (currentPage > 1) displayTablePage(currentPage - 1); });
         }
 
         // ===============================================================
