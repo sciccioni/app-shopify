@@ -2,9 +2,16 @@
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+// NON usare SUPABASE_ANON_KEY per le scritture da backend
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY; // NUOVA VARIABILE
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Inizializza il client Supabase con la chiave service_role
+// La chiave service_role bypassa le policy RLS
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    auth: {
+        persistSession: false // Importante per funzioni server-side
+    }
+});
 
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') {
@@ -13,7 +20,7 @@ exports.handler = async function(event) {
 
     try {
         const payload = JSON.parse(event.body);
-        const { productsToIngest } = payload; // productsToIngest sarà ora un singolo chunk
+        const { productsToIngest } = payload;
 
         if (!productsToIngest || !Array.isArray(productsToIngest) || productsToIngest.length === 0) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Nessun prodotto fornito per l\'ingestione.' }) };
@@ -73,7 +80,7 @@ exports.handler = async function(event) {
             }
         });
 
-        const ingestionResults = await Promise.all(ingestionPromises); // Esegui tutte le promesse in parallelo
+        const ingestionResults = await Promise.all(ingestionPromises);
 
         return {
             statusCode: 200,
