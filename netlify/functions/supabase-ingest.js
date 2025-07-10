@@ -2,14 +2,11 @@
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-// NON usare SUPABASE_ANON_KEY per le scritture da backend
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY; // NUOVA VARIABILE
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY; 
 
-// Inizializza il client Supabase con la chiave service_role
-// La chiave service_role bypassa le policy RLS
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
     auth: {
-        persistSession: false // Importante per funzioni server-side
+        persistSession: false 
     }
 });
 
@@ -20,14 +17,38 @@ exports.handler = async function(event) {
 
     try {
         const payload = JSON.parse(event.body);
-        const { productsToIngest } = payload;
+        const { productsToIngest } = payload; 
 
         if (!productsToIngest || !Array.isArray(productsToIngest) || productsToIngest.length === 0) {
             return { statusCode: 400, body: JSON.stringify({ error: 'Nessun prodotto fornito per l\'ingestione.' }) };
         }
 
         const ingestionPromises = productsToIngest.map(async (productData) => {
-            const { minsan, title, giacenzaFile, scadenzaFile, shopify_product_id, shopify_variant_id, shopify_inventory_item_id, shopify_on_hand_quantity, shopify_available_quantity, shopify_committed_quantity, shopify_unavailable_quantity, shopify_expiry_date, status, details, _debug_source_row } = productData;
+            const { 
+                minsan, 
+                title, 
+                giacenzaFile, 
+                scadenzaFile, 
+                shopify_product_id, 
+                shopify_variant_id, 
+                shopify_inventory_item_id, 
+                shopify_on_hand_quantity, 
+                shopify_available_quantity, 
+                shopify_committed_quantity, 
+                shopify_unavailable_quantity, 
+                shopify_expiry_date, 
+                status, 
+                details, 
+                _debug_source_row,
+                // Nuovi campi dal file Excel
+                Ditta,
+                lotto,
+                CostoBase,
+                CostoMedio,
+                UltimoCostoDitta,
+                DataUltimoCostoDitta,
+                PrezzoBDIVA
+            } = productData;
 
             try {
                 // 1. Inserisci o aggiorna il prodotto nella tabella 'products'
@@ -39,7 +60,14 @@ exports.handler = async function(event) {
                         shopify_product_id,
                         shopify_variant_id,
                         shopify_inventory_item_id,
-                        last_ingested_at: new Date().toISOString()
+                        last_ingested_at: new Date().toISOString(),
+                        // Includi i nuovi campi per la tabella products
+                        ditta: Ditta,
+                        costo_base: CostoBase,
+                        costo_medio: CostoMedio,
+                        ultimo_costo_ditta: UltimoCostoDitta,
+                        data_ultimo_costo_ditta: DataUltimoCostoDitta, // Assicurati che il formato sia compatibile con DATE
+                        prezzo_b_diva: PrezzoBDIVA
                     }, { onConflict: 'sku_or_minsan', ignoreDuplicates: false })
                     .select();
 
@@ -64,7 +92,9 @@ exports.handler = async function(event) {
                         shopify_expiry_date,
                         status,
                         details,
-                        last_sync_attempt_at: new Date().toISOString()
+                        last_sync_attempt_at: new Date().toISOString(),
+                        // Includi il nuovo campo per la tabella inventory_updates
+                        batch_number: lotto // Mappa 'lotto' a 'batch_number'
                     });
 
                 if (updateError) {
