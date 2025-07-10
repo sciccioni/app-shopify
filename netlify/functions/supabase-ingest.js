@@ -10,6 +10,17 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
     }
 });
 
+// Funzione di utilità per convertire stringhe numeriche con virgola in numeri con punto
+function parseNumericValue(value) {
+    if (typeof value === 'string') {
+        // Sostituisci la virgola con il punto e poi converti in numero
+        const parsed = parseFloat(value.replace(',', '.'));
+        return isNaN(parsed) ? null : parsed; // Restituisce null se non è un numero valido
+    }
+    // Se è già un numero, restituiscilo così com'è. Se è null/undefined, restituiscilo.
+    return value;
+}
+
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
@@ -51,6 +62,12 @@ exports.handler = async function(event) {
             } = productData;
 
             try {
+                // Conversione dei valori numerici prima dell'upsert
+                const parsedCostoBase = parseNumericValue(CostoBase);
+                const parsedCostoMedio = parseNumericValue(CostoMedio);
+                const parsedUltimoCostoDitta = parseNumericValue(UltimoCostoDitta);
+                const parsedPrezzoBDIVA = parseNumericValue(PrezzoBDIVA);
+
                 // 1. Inserisci o aggiorna il prodotto nella tabella 'products'
                 const { data: product, error: productError } = await supabase
                     .from('products')
@@ -63,11 +80,11 @@ exports.handler = async function(event) {
                         last_ingested_at: new Date().toISOString(),
                         // Includi i nuovi campi per la tabella products
                         ditta: Ditta,
-                        costo_base: CostoBase,
-                        costo_medio: CostoMedio,
-                        ultimo_costo_ditta: UltimoCostoDitta,
+                        costo_base: parsedCostoBase,
+                        costo_medio: parsedCostoMedio,
+                        ultimo_costo_ditta: parsedUltimoCostoDitta,
                         data_ultimo_costo_ditta: DataUltimoCostoDitta, // Assicurati che il formato sia compatibile con DATE
-                        prezzo_b_diva: PrezzoBDIVA
+                        prezzo_b_diva: parsedPrezzoBDIVA
                     }, { onConflict: 'sku_or_minsan', ignoreDuplicates: false })
                     .select();
 
