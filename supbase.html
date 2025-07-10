@@ -37,9 +37,9 @@
             <div class="space-y-4">
                 <div>
                     <label for="password-input" class="sr-only">Password</label>
-                    <input type="password" id="password-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" placeholder="Password">
+                    <input type="password" id="password-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Password">
                 </div>
-                <button id="login-button" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors">Accedi</button>
+                <button id="login-button" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg">Accedi</button>
             </div>
             <p id="password-error" class="text-red-500 text-sm text-center mt-4 hidden">Password non corretta. Riprova.</p>
         </div>
@@ -49,10 +49,9 @@
         <div class="container mx-auto p-4 md:p-8 max-w-7xl">
             <header class="mb-4">
                 <h1 class="text-3xl font-bold text-gray-900">App Sincronizzazione e Verifica</h1>
-                <p class="text-gray-600 mt-1">Usa le schede qui sotto per sincronizzare i dati con Shopify o per verificare il contenuto di un file.</p>
+                <p class="text-gray-600 mt-1">Usa le schede qui sotto per sincronizzare i dati o per verificare il contenuto di un file.</p>
             </header>
-            <div id="main-content-area">
-                </div>
+            <div id="main-content-area"></div>
         </div>
     </div>
     
@@ -75,36 +74,43 @@
                 <div id="drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
                     <input type="file" id="file-input" class="hidden" accept=".xlsx, .xls">
                     <div class="flex flex-col items-center">
-                        <svg class="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h10a4 4 0 014 4v6a4 4 0 01-4 4H7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 16v-4a4 4 0 00-4-4H8a4 4 0 00-4 4v4m16 0l-3-3m-13 3l3-3"></path></svg>
+                        <svg class="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h10a4 4 0 014 4v6a4 4 0 01-4 4H7z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M16 16v-4a4 4 0 00-4-4H8a4 4 0 00-4 4v4m16 0l-3-3m-13 3l3-3"></path></svg>
                         <p class="text-gray-600">Trascina qui il file o <span class="font-semibold text-indigo-600">clicca per selezionarlo</span>.</p>
                         <p id="file-name" class="text-sm text-gray-500 mt-2"></p>
                     </div>
                 </div>
-                <button id="analyze-button" class="mt-4 w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors" disabled>Analizza File</button>
+                <button id="analyze-button" class="mt-4 w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg" disabled>Analizza File</button>
             </div>
             <div id="loader" class="text-center p-8 hidden">
-                <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                <p id="loader-text" class="mt-2 text-gray-600">Elaborazione in corso...</p>
+                 <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <p id="loader-text" class="mt-2 text-gray-600"></p>
             </div>
-            <div id="results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden"></div>
-        </main>
-    </template>
-    
-    <template id="verify-content-template">
-        <main class="space-y-8">
-            <div id="verify-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                <div id="verify-placeholder"><h2 class="text-xl font-semibold mb-2">Verifica Contenuto File</h2><p class="text-gray-600">Carica un file nella scheda "Sincronizzazione" per attivare la ricerca qui.</p></div>
-                <div id="verify-controls" class="hidden">
-                    <h2 class="text-xl font-semibold mb-4">Cerca nel File Caricato</h2>
-                    <div class="flex gap-4"><input type="search" id="search-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Scrivi qui per cercare..."></div>
-                    <div id="verify-table-container" class="mt-6">
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead id="verify-table-head" class="bg-gray-50"></thead>
-                                <tbody id="verify-table-body" class="bg-white divide-y divide-gray-200"></tbody>
-                            </table>
+            <div id="results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden">
+                <div id="summary" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6"></div>
+                <div id="sync-action-area" class="mt-6 p-4 border-t border-b border-gray-200 hidden">
+                    <div class="flex flex-col md:flex-row items-center justify-center gap-4">
+                        <div class="flex items-center">
+                            <input id="confirm-sync-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600"><label for="confirm-sync-checkbox" class="ml-2 block text-sm text-gray-900">Confermo di voler aggiornare i prodotti.</label>
                         </div>
-                        <p id="verify-no-results" class="text-center text-gray-500 mt-4 hidden">Nessun risultato trovato.</p>
+                        <button id="sync-button" class="bg-green-600 text-white font-bold py-3 px-6 rounded-lg" disabled>Sincronizza Selezionati</button>
+                    </div>
+                    <p id="sync-status-message" class="mt-4 text-center font-semibold hidden"></p>
+                </div>
+                <div id="sync-report-table-container" class="mt-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <fieldset id="filter-fieldset" class="flex items-center space-x-4"></fieldset>
+                        <button id="download-csv-button" class="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Scarica Report</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead id="sync-report-table-head" class="bg-gray-50"></thead>
+                            <tbody id="sync-report-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                    <div id="sync-pagination-controls" class="mt-4 flex items-center justify-between">
+                        <button id="sync-prev-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg">&larr; Precedente</button>
+                        <span id="sync-page-indicator" class="text-sm font-semibold"></span>
+                        <button id="sync-next-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg">Successivo &rarr;</button>
                     </div>
                 </div>
             </div>
@@ -117,7 +123,6 @@
             <td class="px-3 py-4 whitespace-nowrap text-xs font-medium minsan"></td>
             <td class="px-3 py-4 text-xs min-w-[200px] title"></td>
             <td class="px-3 py-4 whitespace-nowrap text-xs inventory_quantity"></td>
-            <td class="px-3 py-4 whitespace-nowrap text-xs on_hand_quantity"></td>
             <td class="px-3 py-4 whitespace-nowrap text-xs font-semibold giacenzaFile"></td>
             <td class="px-3 py-4 whitespace-nowrap text-xs expiry_date"></td>
             <td class="px-3 py-4 whitespace-nowrap text-xs font-semibold scadenzaFile"></td>
@@ -132,16 +137,16 @@
     </template>
 
     <script>
-    // ===================================================================================
+    // ========================================================
     // SCRIPT PRINCIPALE DELL'APPLICAZIONE
-    // ===================================================================================
+    // ========================================================
 
     // --- Dichiarazione delle variabili globali ---
     let supabaseClient;
     let passwordOverlay, passwordInput, loginButton, passwordError, appContainer, mainContentArea;
     let uploadedFile;
-    let verificationData = [], analysisResults = [], rawImportData = [], duplicateRows = [], fileDataRaw = [];
-    let currentPage = 1, rawCurrentPage = 1;
+    let analysisResults = [], fileDataRaw = [], duplicateRows = [];
+    let currentPage = 1;
     const ROWS_PER_PAGE = 100;
 
     // --- Credenziali ---
@@ -149,117 +154,230 @@
     const SUPABASE_ANON_KEY_FRONTEND = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxZ2Zndm92d3pjYW5jZ2RzYWRjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MjE0MzI4NCwiZXhwIjoyMDY3NzE5Mjg0fQ.RRqHQQfwwFkALC6Gabz-rdVGWH17rK3Alw6ythD_ajk";
 
     // --- Funzioni di Utilità ---
-    function getValue(obj, keys) { /* ... logica getValue ... */ }
-    function excelDateToJSDate(serial) { /* ... logica excelDateToJSDate ... */ }
-    function getStatusInfo(status) { /* ... logica getStatusInfo ... */ }
-    function updateProgressBar(current, total) { /* ... logica updateProgressBar ... */ }
-    function hideErrorMessage() { /* ... logica hideErrorMessage ... */ }
-    function showErrorMessage(message) { /* ... logica showErrorMessage ... */ }
-
-    // --- Funzioni di Chiamata API ---
-    async function callShopifyBackend(payload) { /* ... logica callShopifyBackend ... */ }
-    async function callSupabaseIngest(payload) { /* ... logica callSupabaseIngest ... */ }
-
-    // --- Funzioni Logiche Principali dell'App ---
-    async function loadSyncReportData() { /* ... logica loadSyncReportData ... */ }
-    async function analyzeFile() { /* ... logica analyzeFile ... */ }
-    async function syncFile() { /* ... logica syncFile ... */ }
-    function downloadCSV() { /* ... logica downloadCSV ... */ }
+    const getValue = (obj, keys) => { for (const key of keys) { if (obj && obj[key] !== undefined && obj[key] !== null) return obj[key]; } return undefined; };
+    function excelDateToJSDate(serial) { if (typeof serial !== 'number' || !serial) return null; if (serial < 60) serial--; const date = new Date(Math.round((serial - 25569) * 86400 * 1000)); return date.toISOString().split('T')[0]; }
+    const showErrorMessage = (message) => { const box = document.getElementById('error-message-box'); const txt = document.getElementById('error-message-text'); if(box && txt) { txt.innerHTML = message; box.classList.remove('hidden'); } };
+    const hideErrorMessage = () => { const box = document.getElementById('error-message-box'); if(box) box.classList.add('hidden'); };
+    const showLoader = (text) => { const l = document.getElementById('loader'); const lt = document.getElementById('loader-text'); if(l && lt) { lt.textContent = text; l.classList.remove('hidden'); } };
+    const hideLoader = () => { const l = document.getElementById('loader'); if(l) l.classList.add('hidden'); };
     
-    // --- Funzioni di Rendering UI ---
-    function renderSyncReportTable(items) { /* ... logica renderSyncReportTable ... */ }
-    function displaySyncReportTablePage(page) { /* ... logica displaySyncReportTablePage ... */ }
-    function displaySummary() { /* ... logica displaySummary ... */ }
-    // Aggiungi qui altre funzioni di rendering se necessario
-
-    // --- Funzioni di Inizializzazione e Gestione Eventi ---
-    function initializeSupabaseClient() {
-        if (SUPABASE_URL_FRONTEND && SUPABASE_ANON_KEY_FRONTEND) {
-            supabaseClient = supabase.createClient(SUPABASE_URL_FRONTEND, SUPABASE_ANON_KEY_FRONTEND);
-            console.log("✅ Supabase client INIZIALIZZATO.");
-        } else {
-            console.error("❌ URL o Chiave Supabase non configurati.");
-        }
-    }
-
-    async function checkPassword() {
-        passwordError.classList.add('hidden');
-        loginButton.disabled = true;
-        loginButton.textContent = "Verifico...";
+    // --- Funzioni di Chiamata API ---
+    async function callApi(endpoint, payload) {
         try {
-            const response = await fetch('/.netlify/functions/check-password', {
+            const response = await fetch(`/.netlify/functions/${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password: passwordInput.value }),
+                body: JSON.stringify(payload),
             });
-            const result = await response.json();
-            if (response.ok && result.success === true) {
-                console.log("✅ Password corretta.");
-                passwordOverlay.classList.add('hidden');
-                appContainer.classList.remove('hidden');
-                initializeSupabaseClient();
-                loadMainUI();
-            } else {
-                throw new Error("Password non corretta");
-            }
-        } catch (err) {
-            console.error("❌ Errore di autenticazione:", err);
-            passwordError.classList.remove('hidden');
-            passwordInput.value = '';
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || `Errore server: ${response.statusText}`);
+            if (data.error) throw new Error(data.error);
+            return data;
+        } catch (error) {
+            showErrorMessage(`Errore di comunicazione con il server (${endpoint}): ${error.message}`);
+            throw error;
+        }
+    }
+    const callShopifyBackend = (payload) => callApi('shopify-proxy', payload);
+    const callSupabaseIngest = (payload) => callApi('supabase-ingest', payload);
+
+    // --- Logica Principale dell'App ---
+    async function analyzeFile() {
+        hideErrorMessage();
+        document.getElementById('results-section').classList.add('hidden');
+        showLoader('Analisi del file in corso...');
+        document.getElementById('analyze-button').disabled = true;
+
+        try {
+            const data = await uploadedFile.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            fileDataRaw = XLSX.utils.sheet_to_json(worksheet);
+
+            const allSkus = fileDataRaw.map(row => String(getValue(row, ['Minsan', 'EAN']) || '')).filter(Boolean);
+            if (allSkus.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
+
+            showLoader(`Analisi di ${allSkus.length} prodotti su Shopify...`);
+            const shopifyProducts = await callShopifyBackend({ type: 'analyze', skus: [...new Set(allSkus)] });
+
+            const consolidatedMap = new Map();
+            fileDataRaw.forEach(row => {
+                const sku = String(getValue(row, ['Minsan', 'EAN']) || '').trim();
+                if (!sku) return;
+                
+                const shopifyProduct = shopifyProducts.find(p => p.sku === sku);
+                const quantity = parseInt(getValue(row, ['Giacenza']), 10) || 0;
+
+                if (!consolidatedMap.has(sku)) {
+                    consolidatedMap.set(sku, {
+                        sku: sku,
+                        title: shopifyProduct ? shopifyProduct.title : (getValue(row, ['Descrizione']) || 'N/D'),
+                        inventory_item_id: shopifyProduct ? shopifyProduct.inventory_item_id : null,
+                        inventory_quantity: shopifyProduct ? shopifyProduct.inventory_quantity : null,
+                        giacenzaFile: 0,
+                        scadenze: [],
+                        status: shopifyProduct ? 'to-update' : 'not-found',
+                        details: shopifyProduct ? '' : 'Prodotto non trovato su Shopify.',
+                        selected: false,
+                    });
+                }
+                const record = consolidatedMap.get(sku);
+                record.giacenzaFile += quantity;
+                const scadenza = excelDateToJSDate(getValue(row, ['Scadenza']));
+                if (scadenza) record.scadenze.push(scadenza);
+            });
+
+            analysisResults = Array.from(consolidatedMap.values()).map(record => {
+                record.scadenzaFile = record.scadenze.length > 0 ? record.scadenze.sort()[0] : null;
+                record.details = record.inventory_quantity === record.giacenzaFile ? 'Giacenza Corretta' : record.details;
+                if (record.details !== 'Giacenza Corretta' && record.status !== 'not-found') record.status = 'to-update';
+                else if (record.details === 'Giacenza Corretta') record.status = 'no-change';
+                return record;
+            });
+
+            displaySummary();
+            displaySyncReportTablePage(1);
+            document.getElementById('results-section').classList.remove('hidden');
+
+        } catch (error) {
+            showErrorMessage(`Errore di analisi: ${error.message}`);
         } finally {
-            loginButton.disabled = false;
-            loginButton.textContent = "Accedi";
+            hideLoader();
+            document.getElementById('analyze-button').disabled = false;
+        }
+    }
+    
+    async function syncFile() {
+        hideErrorMessage();
+        const itemsToUpdate = analysisResults.filter(r => r.selected && r.status === 'to-update');
+        if (itemsToUpdate.length === 0) {
+            showErrorMessage("Nessun prodotto valido selezionato per l'aggiornamento.");
+            return;
+        }
+
+        document.getElementById('sync-button').disabled = true;
+        document.getElementById('confirm-sync-checkbox').disabled = true;
+        showLoader(`Sincronizzazione di ${itemsToUpdate.length} prodotti...`);
+
+        try {
+            const payload = {
+                type: 'sync',
+                items: itemsToUpdate.map(item => ({
+                    inventoryItemId: item.inventory_item_id,
+                    quantity: Math.max(0, item.giacenzaFile),
+                }))
+            };
+            const result = await callShopifyBackend(payload);
+            
+            if (result.success) {
+                 document.getElementById('sync-status-message').textContent = `${itemsToUpdate.length} prodotti sincronizzati con successo!`;
+                 document.getElementById('sync-status-message').className = 'mt-4 text-center font-semibold text-green-700';
+                 // Aggiorna lo stato locale
+                 itemsToUpdate.forEach(item => {
+                    const original = analysisResults.find(r => r.sku === item.sku);
+                    original.status = 'success';
+                    original.selected = false;
+                    original.inventory_quantity = original.giacenzaFile;
+                 });
+                 displaySyncReportTablePage(currentPage);
+            } else {
+                 throw new Error(result.error || 'Errore sconosciuto durante la sincronizzazione.');
+            }
+
+        } catch (error) {
+            showErrorMessage(`Errore di sincronizzazione: ${error.message}`);
+        } finally {
+            hideLoader();
+             document.getElementById('sync-status-message').classList.remove('hidden');
+            updateUIState();
         }
     }
 
+    // --- Funzioni di Rendering e UI ---
+    function displaySummary() { /* ... logica displaySummary ... */ }
+    function renderSyncReportTable(items) {
+        const tableBody = document.getElementById('sync-report-table-body');
+        const template = document.getElementById('sync-row-template');
+        if (!tableBody || !template) return;
+        tableBody.innerHTML = '';
+
+        items.forEach(res => {
+            const clone = template.content.cloneNode(true);
+            const get = (selector) => clone.querySelector(selector);
+            
+            const statusInfo = getStatusInfo(res.status);
+            get('tr').className = statusInfo.rowClass;
+            
+            const checkbox = get('.row-checkbox');
+            if (res.status === 'to-update') { checkbox.dataset.sku = res.sku; checkbox.checked = res.selected; } 
+            else { checkbox.parentElement.innerHTML = ''; }
+            
+            get('.minsan').textContent = res.sku;
+            get('.title').textContent = res.title;
+            get('.inventory_quantity').textContent = res.inventory_quantity !== null ? res.inventory_quantity : 'N/D';
+            get('.giacenzaFile').textContent = res.giacenzaFile;
+            get('.expiry_date').textContent = res.expiry_date || 'N/D';
+            get('.scadenzaFile').textContent = res.scadenzaFile || 'N/D';
+            get('.details').textContent = res.details || '';
+            
+            get('.status-badge').className = `inline-flex items-center px-2 py-0.5 rounded-full text-xs ${statusInfo.badgeClass}`;
+            get('.status-icon-placeholder').innerHTML = statusInfo.icon;
+            get('.status-label').textContent = ` ${statusInfo.label}`;
+            get('.debug-cell').textContent = JSON.stringify(res, null, 2);
+
+            tableBody.appendChild(clone);
+        });
+    }
+
+    function displaySyncReportTablePage(page) {
+        currentPage = page;
+        const dataToDisplay = analysisResults; // Aggiungere logica filtri qui se serve
+        const totalPages = Math.ceil(dataToDisplay.length / ROWS_PER_PAGE);
+        const paginatedItems = dataToDisplay.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
+        renderSyncReportTable(paginatedItems);
+        document.getElementById('sync-page-indicator').textContent = `Pagina ${page} di ${totalPages || 1}`;
+        document.getElementById('sync-prev-page-button').disabled = page === 1;
+        document.getElementById('sync-next-page-button').disabled = page === totalPages || totalPages === 0;
+        updateUIState();
+    }
+    
+    function updateUIState() {
+        const itemsToUpdate = analysisResults.filter(r => r.status === 'to-update').length > 0;
+        const itemsSelected = analysisResults.some(r => r.selected);
+        const syncButton = document.getElementById('sync-button');
+        const confirmCheckbox = document.getElementById('confirm-sync-checkbox');
+        
+        document.getElementById('sync-action-area').classList.toggle('hidden', !itemsToUpdate);
+        if (syncButton) {
+            syncButton.disabled = !itemsSelected || !confirmCheckbox.checked;
+        }
+        if (confirmCheckbox) {
+             confirmCheckbox.disabled = !itemsSelected;
+        }
+    }
+
+    // --- Inizializzazione e Gestione Eventi ---
+    function initializeSupabaseClient() { /* ... logica initializeSupabaseClient ... */ }
+    async function checkPassword() { /* ... logica checkPassword ... */ }
+
     function loadMainUI() {
-        console.log("▶️ Caricamento UI principale...");
-        const mainTabsTemplate = document.getElementById('main-tabs-template');
-        const mainContentClone = mainTabsTemplate.content.cloneNode(true);
         mainContentArea.innerHTML = '';
-        mainContentArea.appendChild(mainContentClone);
+        mainContentArea.appendChild(document.getElementById('main-tabs-template').content.cloneNode(true));
         setupTabEvents();
         showSyncView();
     }
 
-    function setupTabEvents() {
-        const syncTabButton = document.getElementById('sync-tab-button');
-        const verifyTabButton = document.getElementById('verify-tab-button');
-        const syncTabContent = document.getElementById('sync-tab-content');
-        const verifyTabContent = document.getElementById('verify-tab-content');
-        syncTabButton.addEventListener('click', () => {
-            syncTabButton.classList.add('active');
-            verifyTabButton.classList.remove('active');
-            syncTabContent.classList.remove('hidden');
-            verifyTabContent.classList.add('hidden');
-            showSyncView();
-        });
-        verifyTabButton.addEventListener('click', () => {
-            verifyTabButton.classList.add('active');
-            syncTabButton.classList.remove('active');
-            verifyTabContent.classList.remove('hidden');
-            syncTabContent.classList.add('hidden');
-            showVerifyView();
-        });
-    }
+    function setupTabEvents() { /* ... logica setupTabEvents ... */ }
     
     function showSyncView() {
         const syncTabContent = document.getElementById('sync-tab-content');
-        const syncContentTemplate = document.getElementById('sync-content-template');
         syncTabContent.innerHTML = '';
-        syncTabContent.appendChild(syncContentTemplate.content.cloneNode(true));
+        syncTabContent.appendChild(document.getElementById('sync-content-template').content.cloneNode(true));
         setupSyncViewEvents();
-        loadSyncReportData();
+        // Qui non carichiamo dati, aspettiamo l'upload del file
     }
     
-    function showVerifyView() {
-        const verifyTabContent = document.getElementById('verify-tab-content');
-        const verifyContentTemplate = document.getElementById('verify-content-template');
-        verifyTabContent.innerHTML = '';
-        verifyTabContent.appendChild(verifyContentTemplate.content.cloneNode(true));
-        // Aggiungi qui gli event listener per la tab di verifica
-    }
-
     function setupSyncViewEvents() {
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
@@ -271,39 +389,44 @@
         fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
         analyzeButton.addEventListener('click', analyzeFile);
     }
+
+    function setupSyncReportEvents() {
+        document.getElementById('sync-button').addEventListener('click', syncFile);
+        document.getElementById('confirm-sync-checkbox').addEventListener('change', updateUIState);
+        document.getElementById('download-csv-button').addEventListener('click', downloadCSV);
+
+        const tableBody = document.getElementById('sync-report-table-body');
+        tableBody.addEventListener('change', (e) => {
+            if (e.target.classList.contains('row-checkbox')) {
+                const sku = e.target.dataset.sku;
+                const item = analysisResults.find(r => r.sku === sku);
+                if (item) {
+                    item.selected = e.target.checked;
+                    updateUIState();
+                }
+            }
+        });
+        
+        // Aggiungi qui altri eventi per filtri e paginazione
+    }
     
     function handleFile(file) {
         uploadedFile = file;
         document.getElementById('file-name').textContent = file.name;
         document.getElementById('analyze-button').disabled = false;
     }
-    
-    // (Incolla qui il codice completo delle funzioni che ho omesso con /* ... */)
-    // Ad esempio:
-    function getStatusInfo(status) {
-        const icons = { success: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`, 'to-update': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 20h5v-5M20 4h-5v5"></path></svg>`, 'no-change': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'not-found': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, error: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'to-ingest': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>` };
-        switch (status) {
-            case 'success': return { label: 'Sincronizzato', badgeClass: 'bg-green-100 text-green-800', icon: icons.success, rowClass: 'bg-green-50' };
-            case 'to-update': return { label: 'Da Aggiornare', badgeClass: 'bg-blue-100 text-blue-800', icon: icons['to-update'], rowClass: 'bg-blue-50' };
-            default: return { label: status || 'Sconosciuto', badgeClass: 'bg-gray-100 text-gray-800', icon: '', rowClass: '' };
-        }
-    }
-
 
     // --- Punto di Ingresso Principale ---
     window.onload = function() {
-        console.log("🚀 Pagina caricata. Inizializzazione script.");
         passwordOverlay = document.getElementById('password-overlay');
         passwordInput = document.getElementById('password-input');
         loginButton = document.getElementById('login-button');
         passwordError = document.getElementById('password-error');
         appContainer = document.getElementById('app-container');
         mainContentArea = document.getElementById('main-content-area');
+        
         loginButton.addEventListener('click', checkPassword);
-        passwordInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') checkPassword();
-        });
-        console.log("🔒 App in attesa di password.");
+        passwordInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') checkPassword(); });
     };
     </script>
 </body>
