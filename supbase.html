@@ -510,7 +510,9 @@
                                 CostoMedio: getValue(firstRow, ['CostoMedio', 'costo_medio']),
                                 UltimoCostoDitta: getValue(firstRow, ['UltimoCostoDitta', 'ultimo_costo_ditta']),
                                 DataUltimoCostoDitta: excelDateToJSDate(getValue(firstRow, ['DataUltimoCostoDitta', 'data_ultimo_costo_ditta'])),
-                                PrezzoBDIVA: getValue(firstRow, ['PrezzoBDIVA', 'prezzo_b_diva'])
+                                // Estraiamo PrezzoBD e IVAValue separatamente
+                                PrezzoBD: getValue(firstRow, ['PrezzoBD', 'prezzo_bd', 'PrezzoBDIVA']), // Mappa PrezzoBDIVA a PrezzoBD
+                                IVAValue: getValue(firstRow, ['IVA', 'iva']) // Assumi che ci sia una colonna IVA separata
                             };
                             fileData.push(consolidatedRow);
                         } else {
@@ -525,7 +527,9 @@
                                 CostoMedio: getValue(singleRow, ['CostoMedio', 'costo_medio']),
                                 UltimoCostoDitta: getValue(singleRow, ['UltimoCostoDitta', 'ultimo_costo_ditta']),
                                 DataUltimoCostoDitta: excelDateToJSDate(getValue(singleRow, ['DataUltimoCostoDitta', 'data_ultimo_costo_ditta'])),
-                                PrezzoBDIVA: getValue(singleRow, ['PrezzoBDIVA', 'prezzo_b_diva'])
+                                // Estraiamo PrezzoBD e IVAValue separatamente
+                                PrezzoBD: getValue(singleRow, ['PrezzoBD', 'prezzo_bd', 'PrezzoBDIVA']), // Mappa PrezzoBDIVA a PrezzoBD
+                                IVAValue: getValue(singleRow, ['IVA', 'iva']) // Assumi che ci sia una colonna IVA separata
                             });
                         }
                     });
@@ -578,7 +582,8 @@
                             CostoMedio: getValue(row, ['CostoMedio', 'costo_medio']),
                             UltimoCostoDitta: getValue(row, ['UltimoCostoDitta', 'ultimo_costo_ditta']),
                             DataUltimoCostoDitta: excelDateToJSDate(getValue(row, ['DataUltimoCostoDitta', 'data_ultimo_costo_ditta'])),
-                            PrezzoBDIVA: getValue(row, ['PrezzoBDIVA', 'prezzo_b_diva'])
+                            PrezzoBD: getValue(row, ['PrezzoBD', 'prezzo_bd', 'PrezzoBDIVA']), // Mappa PrezzoBDIVA a PrezzoBD
+                            IVAValue: getValue(row, ['IVA', 'iva']) // Assumi che ci sia una colonna IVA separata
                         };
 
                         if (!minsan || isNaN(giacenzaFile)) {
