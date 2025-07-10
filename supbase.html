@@ -408,7 +408,10 @@
 
     function displaySyncReportTablePage(page) {
         currentPage = page;
-        const filterValue = document.querySelector('#filter-fieldset input[name="filter-type"]:checked').value;
+        const filterEl = document.querySelector('#filter-fieldset input[name="filter-type"]:checked');
+        if (!filterEl) return;
+        const filterValue = filterEl.value;
+
         let dataToDisplay = analysisResults;
         if (filterValue !== 'all') {
             dataToDisplay = analysisResults.filter(r => r.status === filterValue);
@@ -539,7 +542,7 @@
         if(filteredData.length > 0) {
             const headers = Object.keys(filteredData[0]);
             tableHead.innerHTML = `<tr>${headers.map(h => `<th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">${h}</th>`).join('')}</tr>`;
-            filteredData.slice(0, 100).forEach(item => { // Mostra solo le prime 100 righe
+            filteredData.slice(0, 100).forEach(item => {
                 const row = document.createElement('tr');
                 row.innerHTML = headers.map(header => `<td class="px-3 py-4 whitespace-nowrap text-xs">${item[header] || ''}</td>`).join('');
                 tableBody.appendChild(row);
@@ -573,8 +576,18 @@
             }
         });
 
-        document.getElementById('sync-prev-page-button').addEventListener('click', () => displaySyncReportTablePage(currentPage - 1));
-        document.getElementById('sync-next-page-button').addEventListener('click', () => displaySyncReportTablePage(currentPage + 1));
+        document.getElementById('sync-prev-page-button').addEventListener('click', () => { if (currentPage > 1) displaySyncReportTablePage(currentPage - 1); });
+        document.getElementById('sync-next-page-button').addEventListener('click', () => { displaySyncReportTablePage(currentPage + 1); });
+
+        const filterContainer = document.getElementById('filter-fieldset');
+        const filters = [ {value: 'all', label: 'Tutti'}, {value: 'to-update', label: 'Da Aggiornare'}, {value: 'error', label: 'Errori'} ];
+        filterContainer.innerHTML = filters.map(f => `
+            <div class="flex items-center">
+                <input id="filter-${f.value}" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="${f.value}" ${f.value === 'all' ? 'checked' : ''}>
+                <label for="filter-${f.value}" class="ml-2 block text-sm font-medium">${f.label}</label>
+            </div>
+        `).join('');
+        filterContainer.addEventListener('change', () => displaySyncReportTablePage(1));
     }
     
     function handleFile(file) {
