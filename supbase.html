@@ -465,6 +465,7 @@
 
                     const skuMap = new Map();
                     fileDataRaw.forEach(row => {
+                        // Utilizziamo Minsan o EAN come chiave per la mappatura
                         const sku = String(getValue(row, ['Minsan', 'EAN']) || '').trim();
                         if (sku) {
                             if (!skuMap.has(sku)) skuMap.set(sku, []);
@@ -501,11 +502,31 @@
                                 Scadenza: finalExpiry,
                                 Descrizione: getValue(firstRow, ['Descrizione', 'descrizione']),
                                 isDuplicate: true,
-                                duplicateDetails: { giacenze, scadenze }
+                                duplicateDetails: { giacenze, scadenze },
+                                // Includiamo i nuovi campi qui
+                                Ditta: getValue(firstRow, ['Ditta', 'ditta']),
+                                lotto: getValue(firstRow, ['lotto', 'Lotto']),
+                                CostoBase: getValue(firstRow, ['CostoBase', 'costo_base']),
+                                CostoMedio: getValue(firstRow, ['CostoMedio', 'costo_medio']),
+                                UltimoCostoDitta: getValue(firstRow, ['UltimoCostoDitta', 'ultimo_costo_ditta']),
+                                DataUltimoCostoDitta: excelDateToJSDate(getValue(firstRow, ['DataUltimoCostoDitta', 'data_ultimo_costo_ditta'])),
+                                PrezzoBDIVA: getValue(firstRow, ['PrezzoBDIVA', 'prezzo_b_diva'])
                             };
                             fileData.push(consolidatedRow);
                         } else {
-                            fileData.push(rows[0]);
+                            const singleRow = rows[0];
+                            fileData.push({
+                                ...singleRow,
+                                Minsan: sku,
+                                // Includiamo i nuovi campi anche per le righe singole
+                                Ditta: getValue(singleRow, ['Ditta', 'ditta']),
+                                lotto: getValue(singleRow, ['lotto', 'Lotto']),
+                                CostoBase: getValue(singleRow, ['CostoBase', 'costo_base']),
+                                CostoMedio: getValue(singleRow, ['CostoMedio', 'costo_medio']),
+                                UltimoCostoDitta: getValue(singleRow, ['UltimoCostoDitta', 'ultimo_costo_ditta']),
+                                DataUltimoCostoDitta: excelDateToJSDate(getValue(singleRow, ['DataUltimoCostoDitta', 'data_ultimo_costo_ditta'])),
+                                PrezzoBDIVA: getValue(singleRow, ['PrezzoBDIVA', 'prezzo_b_diva'])
+                            });
                         }
                     });
 
@@ -538,19 +559,26 @@
                     for (const row of fileData) {
                         const minsan = String(getValue(row, ['Minsan', 'EAN']));
                         const giacenza = getValue(row, ['Giacenza', 'giacenza']);
-                        const descrizione = getValue(row, ['Descrizione', 'descrizione']);
-                        const scadenza = getValue(row, ['Scadenza', 'scadenza']);
+                        // I campi del file sono già stati estratti in fileData
 
                         let giacenzaFile = parseInt(giacenza, 10);
-                        let scadenzaFile = typeof scadenza === 'number' ? excelDateToJSDate(scadenza) : scadenza;
+                        let scadenzaFile = typeof getValue(row, ['Scadenza', 'scadenza']) === 'number' ? excelDateToJSDate(getValue(row, ['Scadenza', 'scadenza'])) : getValue(row, ['Scadenza', 'scadenza']);
                         
                         let resultRow = { 
                             minsan: minsan || 'N/D', 
-                            descrizione, 
+                            descrizione: getValue(row, ['Descrizione', 'descrizione']), 
                             giacenzaFile, 
                             scadenzaFile, 
                             selected: false,
-                            _debug_source_row: row 
+                            _debug_source_row: row,
+                            // Includiamo i nuovi campi estratti qui
+                            Ditta: getValue(row, ['Ditta', 'ditta']),
+                            lotto: getValue(row, ['lotto', 'Lotto']),
+                            CostoBase: getValue(row, ['CostoBase', 'costo_base']),
+                            CostoMedio: getValue(row, ['CostoMedio', 'costo_medio']),
+                            UltimoCostoDitta: getValue(row, ['UltimoCostoDitta', 'ultimo_costo_ditta']),
+                            DataUltimoCostoDitta: excelDateToJSDate(getValue(row, ['DataUltimoCostoDitta', 'data_ultimo_costo_ditta'])),
+                            PrezzoBDIVA: getValue(row, ['PrezzoBDIVA', 'prezzo_b_diva'])
                         };
 
                         if (!minsan || isNaN(giacenzaFile)) {
@@ -606,7 +634,7 @@
                         productsToIngest.push(resultRow); 
                     }
                     
-                    // --- NUOVO: Invia i risultati dell'analisi a Supabase in chunks ---
+                    // --- Invia i risultati dell'analisi a Supabase in chunks ---
                     const supabaseIngestChunks = [];
                     for (let i = 0; i < productsToIngest.length; i += SUPABASE_INGEST_CHUNK_SIZE) {
                         supabaseIngestChunks.push(productsToIngest.slice(i, i + SUPABASE_INGEST_CHUNK_SIZE));
