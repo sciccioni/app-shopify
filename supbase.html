@@ -337,26 +337,30 @@
             const SUPABASE_INGEST_CHUNK_SIZE = 50; // Dimensione del chunk per l'ingestione in Supabase
 
             // --- NUOVO: Inizializzazione Supabase nel frontend ---
-            // Queste variabili devono essere accessibili globalmente o passate
-            // Per semplicità, le assumiamo disponibili tramite un'iniezione di script o variabili globali nel contesto Canvas
-            // In un'applicazione reale, useresti un file di configurazione o variabili d'ambiente esposte in modo sicuro.
-            const SUPABASE_URL_FRONTEND = "YOUR_SUPABASE_URL_HERE"; // SOSTITUISCI CON IL TUO URL SUPABASE
-            const SUPABASE_ANON_KEY_FRONTEND = "YOUR_SUPABASE_ANON_KEY_HERE"; // SOSTITUISCI CON LA TUA CHIAVE ANONIMA
+            // QUESTE SONO LE VARIABILI CHE DEVI SOSTITUIRE CON LE TUE CREDENZIALI REALI DI SUPABASE
+            // Le trovi nella tua Dashboard Supabase, sezione "Project Settings" -> "API"
+            const SUPABASE_URL_FRONTEND = "https://wqgfgvovwzcancgdsadc.supabase.co"; // SOSTITUISCI CON IL TUO URL SUPABASE (es. https://abcdefghijk.supabase.co)
+            const SUPABASE_ANON_KEY_FRONTEND = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxZ2Zndm92d3pjYW5jZ2RzYWRjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MjE0MzI4NCwiZXhwIjoyMDY3NzE5Mjg0fQ.RRqHQQfwwFkALC6Gabz-rdVGWH17rK3Alw6ythD_ajk"; // SOSTITUISCI CON LA TUA CHIAVE ANONIMA PUBBLICA (anon public key)
             let supabaseClient = null;
 
             // Funzione per inizializzare il client Supabase
             function initializeSupabaseClient() {
                 if (SUPABASE_URL_FRONTEND && SUPABASE_ANON_KEY_FRONTEND && SUPABASE_URL_FRONTEND !== "YOUR_SUPABASE_URL_HERE") {
-                    supabaseClient = supabase.createClient(SUPABASE_URL_FRONTEND, SUPABASE_ANON_KEY_FRONTEND);
-                    console.log("Supabase client initialized in frontend.");
+                    // Solo se la libreria 'supabase' è stata caricata
+                    if (typeof supabase !== 'undefined' && supabase.createClient) {
+                        supabaseClient = supabase.createClient(SUPABASE_URL_FRONTEND, SUPABASE_ANON_KEY_FRONTEND);
+                        console.log("Supabase client initialized in frontend.");
+                    } else {
+                        console.error("Supabase library not loaded. Cannot initialize client.");
+                    }
                 } else {
                     console.error("Supabase URL or Anon Key not configured in frontend. Cannot load data from Supabase.");
                 }
             }
-            // Carica la libreria Supabase
+            // Carica la libreria Supabase in modo asincrono
             const supabaseScript = document.createElement('script');
             supabaseScript.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"; // Versione 2.x.x
-            supabaseScript.onload = initializeSupabaseClient;
+            supabaseScript.onload = initializeSupabaseClient; // Chiama la funzione di inizializzazione quando lo script è caricato
             document.head.appendChild(supabaseScript);
             // --- FINE NUOVO ---
 
@@ -475,8 +479,12 @@
             // --- NUOVO: Funzione per caricare i dati da Supabase ---
             async function loadDataFromSupabase() {
                 if (!supabaseClient) {
-                    console.warn("Supabase client not initialized. Cannot load data.");
-                    return;
+                    console.warn("Supabase client not initialized. Attempting initialization...");
+                    initializeSupabaseClient(); 
+                    if (!supabaseClient) { // Se ancora non inizializzato, esci
+                        showErrorMessage("<strong>Errore:</strong> Impossibile caricare i dati. Le credenziali Supabase non sono configurate correttamente nel frontend.");
+                        return;
+                    }
                 }
                 loader.classList.remove('hidden');
                 loaderText.textContent = 'Caricamento dati da Supabase...';
