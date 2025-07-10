@@ -487,8 +487,8 @@
                 }
 
                 rawImportData = data.map(item => ({
-                    minsan: item.products?.sku_or_minsan,
-                    title: item.products?.title,
+                    minsan: item.products ? item.products.sku_or_minsan : null,
+                    title: item.products ? item.products.title : null,
                     giacenzaFile: item.quantity_from_file,
                     scadenzaFile: item.expiry_date_from_file,
                     status: item.status,
@@ -670,9 +670,9 @@
                         descrizione: getValue(row, ['Descrizione', 'descrizione']), 
                         giacenzaFile: parseInt(getValue(row, ['Giacenza', 'giacenza']), 10), 
                         scadenzaFile: excelDateToJSDate(getValue(row, ['Scadenza', 'scadenza'])), 
-                        shopify_product_id: productOnShopify?.product_id,
-                        shopify_variant_id: productOnShopify?.shopify_variant_id,
-                        shopify_inventory_item_id: productOnShopify?.inventory_item_id,
+                        shopify_product_id: productOnShopify ? productOnShopify.product_id : null,
+                        shopify_variant_id: productOnShopify ? productOnShopify.shopify_variant_id : null,
+                        shopify_inventory_item_id: productOnShopify ? productOnShopify.inventory_item_id : null,
                         status: productOnShopify ? 'to-ingest' : 'not-found', 
                         details: productOnShopify ? 'Pronto per ingestione' : 'Prodotto non trovato su Shopify.',
                         Ditta: getValue(row, ['Ditta', 'ditta']),
@@ -797,7 +797,7 @@
                 if (filterValue === 'duplicates') {
                     row = [getValue(res,['Minsan','EAN']), `"${getValue(res,['Descrizione','descrizione']) || ''}"`, getValue(res,['Giacenza','giacenza']), excelDateToJSDate(getValue(res,['Scadenza','scadenza'])) || 'N/D'];
                 } else {
-                    row = [res.minsan || '', `"${(res.title || res.descrizione || '').replace(/"/g, '""')}"`, res.inventory_quantity ?? 'N/D', res.giacenzaFile, res.expiry_date || 'N/D', res.scadenzaFile || 'N/D', res.status, `"${(res.details || '').replace(/"/g, '""')}"`];
+                    row = [res.minsan || '', `"${(res.title || res.descrizione || '').replace(/"/g, '""')}"`, res.inventory_quantity !== undefined ? res.inventory_quantity : 'N/D', res.giacenzaFile, res.expiry_date || 'N/D', res.scadenzaFile || 'N/D', res.status, `"${(res.details || '').replace(/"/g, '""')}"`];
                 }
                 csvRows.push(row.join(';'));
             }
@@ -862,10 +862,10 @@
 
                 clone.querySelector('.minsan').textContent = res.minsan;
                 clone.querySelector('.title').textContent = res.title || res.descrizione;
-                clone.querySelector('.inventory_quantity').textContent = res.inventory_quantity ?? 'N/D';
-                clone.querySelector('.committed_quantity').textContent = res.committed_quantity ?? 'N/D';
-                clone.querySelector('.available_quantity').textContent = res.available_quantity ?? 'N/D';
-                clone.querySelector('.on_hand_quantity').textContent = res.on_hand_quantity ?? 'N/D';
+                clone.querySelector('.inventory_quantity').textContent = res.inventory_quantity !== undefined ? res.inventory_quantity : 'N/D';
+                clone.querySelector('.committed_quantity').textContent = res.committed_quantity !== undefined ? res.committed_quantity : 'N/D';
+                clone.querySelector('.available_quantity').textContent = res.available_quantity !== undefined ? res.available_quantity : 'N/D';
+                clone.querySelector('.on_hand_quantity').textContent = res.on_hand_quantity !== undefined ? res.on_hand_quantity : 'N/D';
                 clone.querySelector('.giacenzaFile').textContent = res.giacenzaFile;
                 clone.querySelector('.expiry_date').textContent = res.expiry_date || 'N/D';
                 clone.querySelector('.scadenzaFile').textContent = res.scadenzaFile || 'N/D';
@@ -905,18 +905,18 @@
                 const clone = template.content.cloneNode(true);
                 const statusInfo = getStatusInfo(item.status);
                 
-                clone.querySelector('.minsan').textContent = item.minsan ?? 'N/D';
-                clone.querySelector('.title').textContent = item.title || item.descrizione ?? 'N/D';
-                clone.querySelector('.ditta').textContent = item.Ditta ?? 'N/D';
-                clone.querySelector('.lotto').textContent = item.lotto ?? 'N/D';
-                clone.querySelector('.giacenzaFile').textContent = item.giacenzaFile ?? 'N/D';
+                clone.querySelector('.minsan').textContent = item.minsan || 'N/D';
+                clone.querySelector('.title').textContent = item.title || item.descrizione || 'N/D';
+                clone.querySelector('.ditta').textContent = item.Ditta || 'N/D';
+                clone.querySelector('.lotto').textContent = item.lotto || 'N/D';
+                clone.querySelector('.giacenzaFile').textContent = item.giacenzaFile !== undefined ? item.giacenzaFile : 'N/D';
                 clone.querySelector('.scadenzaFile').textContent = item.scadenzaFile || 'N/D';
-                clone.querySelector('.costoBase').textContent = item.CostoBase ?? 'N/D';
-                clone.querySelector('.costoMedio').textContent = item.CostoMedio ?? 'N/D';
-                clone.querySelector('.ultimoCostoDitta').textContent = item.UltimoCostoDitta ?? 'N/D';
+                clone.querySelector('.costoBase').textContent = item.CostoBase || 'N/D';
+                clone.querySelector('.costoMedio').textContent = item.CostoMedio || 'N/D';
+                clone.querySelector('.ultimoCostoDitta').textContent = item.UltimoCostoDitta || 'N/D';
                 clone.querySelector('.dataUltimoCostoDitta').textContent = item.DataUltimoCostoDitta || 'N/D';
-                clone.querySelector('.prezzoBD').textContent = item.PrezzoBD ?? 'N/D';
-                clone.querySelector('.ivaValue').textContent = item.IVAValue ?? 'N/D';
+                clone.querySelector('.prezzoBD').textContent = item.PrezzoBD || 'N/D';
+                clone.querySelector('.ivaValue').textContent = item.IVAValue || 'N/D';
                 clone.querySelector('.details').textContent = item.details || '';
                 clone.querySelector('.ingested_at').textContent = new Date(item.created_at).toLocaleString();
 
@@ -1147,7 +1147,7 @@
                 verifyTableHead.innerHTML = `<tr>${headers.map(h => `<th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">${h}</th>`).join('')}</tr>`;
                 data.forEach(item => {
                     const row = document.createElement('tr');
-                    row.innerHTML = headers.map(header => `<td class="px-3 py-4 whitespace-nowrap text-xs">${item[header] ?? ''}</td>`).join('');
+                    row.innerHTML = headers.map(header => `<td class="px-3 py-4 whitespace-nowrap text-xs">${item[header] || ''}</td>`).join('');
                     verifyTableBody.appendChild(row);
                 });
             }
