@@ -51,103 +51,260 @@
                 <h1 class="text-3xl font-bold text-gray-900">App Sincronizzazione e Verifica</h1>
                 <p class="text-gray-600 mt-1">Usa le schede qui sotto per sincronizzare i dati con Shopify o per verificare il contenuto di un file.</p>
             </header>
-            </div>
+            <div id="main-content-area">
+                </div>
+        </div>
     </div>
     
-    <template id="sync-row-template">
-        </template>
-    <template id="raw-row-template">
-        </template>
+    <template id="main-tabs-template">
+        <div class="border-b border-gray-200 mb-6">
+            <nav class="flex -mb-px">
+                <button id="sync-tab-button" class="tab-button active">Sincronizzazione</button>
+                <button id="verify-tab-button" class="tab-button">Verifica File</button>
+            </nav>
+        </div>
+        <div id="sync-tab-content"></div>
+        <div id="verify-tab-content" class="hidden"></div>
+    </template>
 
+    <template id="sync-content-template">
+        <main class="space-y-8">
+            <div id="error-message-box" class="error-box p-4 rounded-md hidden" role="alert"><p id="error-message-text" class="text-sm"></p></div>
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <h2 class="text-xl font-semibold mb-4">1. Carica File</h2>
+                <div id="drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
+                    <input type="file" id="file-input" class="hidden" accept=".xlsx, .xls">
+                    <div class="flex flex-col items-center">
+                        <svg class="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h10a4 4 0 014 4v6a4 4 0 01-4 4H7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 16v-4a4 4 0 00-4-4H8a4 4 0 00-4 4v4m16 0l-3-3m-13 3l3-3"></path></svg>
+                        <p class="text-gray-600">Trascina qui il file o <span class="font-semibold text-indigo-600">clicca per selezionarlo</span>.</p>
+                        <p id="file-name" class="text-sm text-gray-500 mt-2"></p>
+                    </div>
+                </div>
+                <button id="analyze-button" class="mt-4 w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors" disabled>Analizza File</button>
+            </div>
+            <div id="loader" class="text-center p-8 hidden">
+                <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <p id="loader-text" class="mt-2 text-gray-600">Elaborazione in corso...</p>
+            </div>
+            <div id="results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden"></div>
+        </main>
+    </template>
+    
+    <template id="verify-content-template">
+        <main class="space-y-8">
+            <div id="verify-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div id="verify-placeholder"><h2 class="text-xl font-semibold mb-2">Verifica Contenuto File</h2><p class="text-gray-600">Carica un file nella scheda "Sincronizzazione" per attivare la ricerca qui.</p></div>
+                <div id="verify-controls" class="hidden">
+                    <h2 class="text-xl font-semibold mb-4">Cerca nel File Caricato</h2>
+                    <div class="flex gap-4"><input type="search" id="search-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Scrivi qui per cercare..."></div>
+                    <div id="verify-table-container" class="mt-6">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead id="verify-table-head" class="bg-gray-50"></thead>
+                                <tbody id="verify-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                            </table>
+                        </div>
+                        <p id="verify-no-results" class="text-center text-gray-500 mt-4 hidden">Nessun risultato trovato.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </template>
+    
+    <template id="sync-row-template">
+        <tr>
+            <td class="px-2 py-4 align-middle"><input type="checkbox" class="h-4 w-4 text-indigo-600 rounded row-checkbox" data-minsan=""></td>
+            <td class="px-3 py-4 whitespace-nowrap text-xs font-medium minsan"></td>
+            <td class="px-3 py-4 text-xs min-w-[200px] title"></td>
+            <td class="px-3 py-4 whitespace-nowrap text-xs inventory_quantity"></td>
+            <td class="px-3 py-4 whitespace-nowrap text-xs on_hand_quantity"></td>
+            <td class="px-3 py-4 whitespace-nowrap text-xs font-semibold giacenzaFile"></td>
+            <td class="px-3 py-4 whitespace-nowrap text-xs expiry_date"></td>
+            <td class="px-3 py-4 whitespace-nowrap text-xs font-semibold scadenzaFile"></td>
+            <td class="px-3 py-4 whitespace-nowrap text-xs status-cell">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs status-badge">
+                    <span class="status-icon-placeholder"></span><span class="status-label"></span>
+                </span>
+            </td>
+            <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600 details"></td>
+            <td class="p-2 debug-cell"></td>
+        </tr>
+    </template>
 
     <script>
-        // --- Credenziali e Client Supabase ---
-        const SUPABASE_URL_FRONTEND = "https://wqgfgvovwzcancgdsadc.supabase.co"; 
-        const SUPABASE_ANON_KEY_FRONTEND = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxZ2Zndm92d3pjYW5jZ2RzYWRjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MjE0MzI4NCwiZXhwIjoyMDY3NzE5Mjg0fQ.RRqHQQfwwFkALC6Gabz-rdVGWH17rK3Alw6ythD_ajk";
-        let supabaseClient = null;
+    // ===================================================================================
+    // SCRIPT PRINCIPALE DELL'APPLICAZIONE
+    // ===================================================================================
 
-        function initializeSupabaseClient() {
-            if (SUPABASE_URL_FRONTEND && SUPABASE_ANON_KEY_FRONTEND) {
-                if (typeof supabase !== 'undefined' && supabase.createClient) {
-                    supabaseClient = supabase.createClient(SUPABASE_URL_FRONTEND, SUPABASE_ANON_KEY_FRONTEND);
-                    console.log("Supabase client INIZIALIZZATO.");
-                } else {
-                    console.error("Libreria Supabase non trovata.");
-                }
-            } else {
-                console.error("URL o Chiave Supabase non configurati.");
-            }
+    // --- Dichiarazione delle variabili globali ---
+    let supabaseClient;
+    let passwordOverlay, passwordInput, loginButton, passwordError, appContainer, mainContentArea;
+    let uploadedFile;
+    let verificationData = [], analysisResults = [], rawImportData = [], duplicateRows = [], fileDataRaw = [];
+    let currentPage = 1, rawCurrentPage = 1;
+    const ROWS_PER_PAGE = 100;
+
+    // --- Credenziali ---
+    const SUPABASE_URL_FRONTEND = "https://wqgfgvovwzcancgdsadc.supabase.co";
+    const SUPABASE_ANON_KEY_FRONTEND = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxZ2Zndm92d3pjYW5jZ2RzYWRjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MjE0MzI4NCwiZXhwIjoyMDY3NzE5Mjg0fQ.RRqHQQfwwFkALC6Gabz-rdVGWH17rK3Alw6ythD_ajk";
+
+    // --- Funzioni di Utilità ---
+    function getValue(obj, keys) { /* ... logica getValue ... */ }
+    function excelDateToJSDate(serial) { /* ... logica excelDateToJSDate ... */ }
+    function getStatusInfo(status) { /* ... logica getStatusInfo ... */ }
+    function updateProgressBar(current, total) { /* ... logica updateProgressBar ... */ }
+    function hideErrorMessage() { /* ... logica hideErrorMessage ... */ }
+    function showErrorMessage(message) { /* ... logica showErrorMessage ... */ }
+
+    // --- Funzioni di Chiamata API ---
+    async function callShopifyBackend(payload) { /* ... logica callShopifyBackend ... */ }
+    async function callSupabaseIngest(payload) { /* ... logica callSupabaseIngest ... */ }
+
+    // --- Funzioni Logiche Principali dell'App ---
+    async function loadSyncReportData() { /* ... logica loadSyncReportData ... */ }
+    async function analyzeFile() { /* ... logica analyzeFile ... */ }
+    async function syncFile() { /* ... logica syncFile ... */ }
+    function downloadCSV() { /* ... logica downloadCSV ... */ }
+    
+    // --- Funzioni di Rendering UI ---
+    function renderSyncReportTable(items) { /* ... logica renderSyncReportTable ... */ }
+    function displaySyncReportTablePage(page) { /* ... logica displaySyncReportTablePage ... */ }
+    function displaySummary() { /* ... logica displaySummary ... */ }
+    // Aggiungi qui altre funzioni di rendering se necessario
+
+    // --- Funzioni di Inizializzazione e Gestione Eventi ---
+    function initializeSupabaseClient() {
+        if (SUPABASE_URL_FRONTEND && SUPABASE_ANON_KEY_FRONTEND) {
+            supabaseClient = supabase.createClient(SUPABASE_URL_FRONTEND, SUPABASE_ANON_KEY_FRONTEND);
+            console.log("✅ Supabase client INIZIALIZZATO.");
+        } else {
+            console.error("❌ URL o Chiave Supabase non configurati.");
         }
-        
-        // --- Logica di Autenticazione ---
-        async function checkPassword() {
-            const passwordInput = document.getElementById('password-input');
-            const loginButton = document.getElementById('login-button');
-            const passwordError = document.getElementById('password-error');
-            const passwordOverlay = document.getElementById('password-overlay');
-            const appContainer = document.getElementById('app-container');
-            const enteredPassword = passwordInput.value;
+    }
 
-            passwordError.classList.add('hidden');
-            loginButton.disabled = true;
-            loginButton.textContent = "Verifico...";
-
-            try {
-                // Chiama la funzione serverless "guardiano"
-                const response = await fetch('/.netlify/functions/check-password', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password: enteredPassword }),
-                });
-
-                const result = await response.json();
-
-                if (response.ok && result.success === true) {
-                    // Password CORRETTA!
-                    passwordOverlay.classList.add('hidden');
-                    appContainer.classList.remove('hidden');
-                    
-                    // Ora che l'accesso è verificato, inizializziamo Supabase
-                    initializeSupabaseClient();
-                    
-                    // E carichiamo la prima vista dati
-                    showSyncReportView(); 
-                } else {
-                    // Password SBAGLIATA
-                    throw new Error("Password non corretta");
-                }
-            } catch (err) {
-                passwordError.classList.remove('hidden');
-                passwordInput.value = '';
-            } finally {
-                loginButton.disabled = false;
-                loginButton.textContent = "Accedi";
-            }
-        }
-
-        // --- Tutte le altre funzioni della tua APP ---
-        // (loadRawImportData, loadSyncReportData, renderSyncReportTable, etc.)
-        // Queste funzioni dipendono da `supabaseClient` e verranno chiamate
-        // solo dopo che `initializeSupabaseClient` è stato eseguito con successo.
-        // ...
-        // INCOLLA QUI TUTTO IL RESTO DEL TUO CODICE JAVASCRIPT
-        // (le funzioni per analizzare, visualizzare, sincronizzare, etc.)
-        // ...
-
-
-        // --- Esecuzione al caricamento della pagina ---
-        window.onload = function() {
-            const loginButton = document.getElementById('login-button');
-            const passwordInput = document.getElementById('password-input');
-            
-            loginButton.addEventListener('click', checkPassword);
-            passwordInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') checkPassword();
+    async function checkPassword() {
+        passwordError.classList.add('hidden');
+        loginButton.disabled = true;
+        loginButton.textContent = "Verifico...";
+        try {
+            const response = await fetch('/.netlify/functions/check-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: passwordInput.value }),
             });
+            const result = await response.json();
+            if (response.ok && result.success === true) {
+                console.log("✅ Password corretta.");
+                passwordOverlay.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+                initializeSupabaseClient();
+                loadMainUI();
+            } else {
+                throw new Error("Password non corretta");
+            }
+        } catch (err) {
+            console.error("❌ Errore di autenticazione:", err);
+            passwordError.classList.remove('hidden');
+            passwordInput.value = '';
+        } finally {
+            loginButton.disabled = false;
+            loginButton.textContent = "Accedi";
+        }
+    }
 
-            // ... Aggiungi qui gli altri event listener per i bottoni e le tab
-            // che si trovano DENTRO #app-container ...
-        };
+    function loadMainUI() {
+        console.log("▶️ Caricamento UI principale...");
+        const mainTabsTemplate = document.getElementById('main-tabs-template');
+        const mainContentClone = mainTabsTemplate.content.cloneNode(true);
+        mainContentArea.innerHTML = '';
+        mainContentArea.appendChild(mainContentClone);
+        setupTabEvents();
+        showSyncView();
+    }
+
+    function setupTabEvents() {
+        const syncTabButton = document.getElementById('sync-tab-button');
+        const verifyTabButton = document.getElementById('verify-tab-button');
+        const syncTabContent = document.getElementById('sync-tab-content');
+        const verifyTabContent = document.getElementById('verify-tab-content');
+        syncTabButton.addEventListener('click', () => {
+            syncTabButton.classList.add('active');
+            verifyTabButton.classList.remove('active');
+            syncTabContent.classList.remove('hidden');
+            verifyTabContent.classList.add('hidden');
+            showSyncView();
+        });
+        verifyTabButton.addEventListener('click', () => {
+            verifyTabButton.classList.add('active');
+            syncTabButton.classList.remove('active');
+            verifyTabContent.classList.remove('hidden');
+            syncTabContent.classList.add('hidden');
+            showVerifyView();
+        });
+    }
+    
+    function showSyncView() {
+        const syncTabContent = document.getElementById('sync-tab-content');
+        const syncContentTemplate = document.getElementById('sync-content-template');
+        syncTabContent.innerHTML = '';
+        syncTabContent.appendChild(syncContentTemplate.content.cloneNode(true));
+        setupSyncViewEvents();
+        loadSyncReportData();
+    }
+    
+    function showVerifyView() {
+        const verifyTabContent = document.getElementById('verify-tab-content');
+        const verifyContentTemplate = document.getElementById('verify-content-template');
+        verifyTabContent.innerHTML = '';
+        verifyTabContent.appendChild(verifyContentTemplate.content.cloneNode(true));
+        // Aggiungi qui gli event listener per la tab di verifica
+    }
+
+    function setupSyncViewEvents() {
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const analyzeButton = document.getElementById('analyze-button');
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+        analyzeButton.addEventListener('click', analyzeFile);
+    }
+    
+    function handleFile(file) {
+        uploadedFile = file;
+        document.getElementById('file-name').textContent = file.name;
+        document.getElementById('analyze-button').disabled = false;
+    }
+    
+    // (Incolla qui il codice completo delle funzioni che ho omesso con /* ... */)
+    // Ad esempio:
+    function getStatusInfo(status) {
+        const icons = { success: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`, 'to-update': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 20h5v-5M20 4h-5v5"></path></svg>`, 'no-change': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'not-found': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, error: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'to-ingest': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>` };
+        switch (status) {
+            case 'success': return { label: 'Sincronizzato', badgeClass: 'bg-green-100 text-green-800', icon: icons.success, rowClass: 'bg-green-50' };
+            case 'to-update': return { label: 'Da Aggiornare', badgeClass: 'bg-blue-100 text-blue-800', icon: icons['to-update'], rowClass: 'bg-blue-50' };
+            default: return { label: status || 'Sconosciuto', badgeClass: 'bg-gray-100 text-gray-800', icon: '', rowClass: '' };
+        }
+    }
+
+
+    // --- Punto di Ingresso Principale ---
+    window.onload = function() {
+        console.log("🚀 Pagina caricata. Inizializzazione script.");
+        passwordOverlay = document.getElementById('password-overlay');
+        passwordInput = document.getElementById('password-input');
+        loginButton = document.getElementById('login-button');
+        passwordError = document.getElementById('password-error');
+        appContainer = document.getElementById('app-container');
+        mainContentArea = document.getElementById('main-content-area');
+        loginButton.addEventListener('click', checkPassword);
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') checkPassword();
+        });
+        console.log("🔒 App in attesa di password.");
+    };
     </script>
 </body>
 </html>
