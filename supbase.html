@@ -114,7 +114,7 @@
             </div>
         </main>
     </template>
-    
+
     <template id="sync-row-template">
         <tr>
             <td class="px-2 py-4 align-middle"><input type="checkbox" class="h-4 w-4 text-indigo-600 rounded row-checkbox" data-sku=""></td>
@@ -133,6 +133,10 @@
             <td class="p-2 debug-cell"></td>
         </tr>
     </template>
+    
+    <template id="verify-content-template">
+        </template>
+
 
     <script>
     'use strict';
@@ -156,32 +160,123 @@
     const getValue = (obj, keys) => { for (const key of keys) { if (obj && obj[key] !== undefined && obj[key] !== null) return obj[key]; } return undefined; };
     function excelDateToJSDate(serial) { if (typeof serial !== 'number' || !serial) return null; if (serial < 60) serial--; const date = new Date(Math.round((serial - 25569) * 86400 * 1000)); return date.toISOString().split('T')[0]; }
     const showErrorMessage = (message) => { const box = document.getElementById('error-message-box'); const txt = document.getElementById('error-message-text'); if(box && txt) { txt.innerHTML = message; box.classList.remove('hidden'); } };
-    const hideErrorMessage = () => { const box = document.getElementById('error-message-box'); if(box) box.classList.add('hidden'); };
+    const hideErrorMessage = () => { const box = document.getElementById('error-message-box'); if(box) {box.classList.add('hidden');} };
     const showLoader = (text) => { const l = document.getElementById('loader'); const lt = document.getElementById('loader-text'); if(l && lt) { lt.textContent = text; l.classList.remove('hidden'); } };
-    const hideLoader = () => { const l = document.getElementById('loader'); if(l) l.classList.add('hidden'); };
-
-    // --- Funzioni di Chiamata API ---
-    async function callApi(endpoint, payload) { /*...*/ } // Incolla la funzione callApi completa qui
+    const hideLoader = () => { const l = document.getElementById('loader'); if(l) {l.classList.add('hidden');} };
+    
+    function getStatusInfo(status) {
+        const icons = { success: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg>`, 'to-update': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 20h5v-5M20 4h-5v5"></path></svg>`, 'no-change': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'not-found': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, error: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>` };
+        switch (status) {
+            case 'success': return { label: 'Sincronizzato', badgeClass: 'bg-green-100 text-green-800', icon: icons.success, rowClass: 'bg-green-50' };
+            case 'to-update': return { label: 'Da Aggiornare', badgeClass: 'bg-blue-100 text-blue-800', icon: icons['to-update'], rowClass: 'bg-blue-50' };
+            case 'no-change': return { label: 'Invariato', badgeClass: 'bg-gray-100 text-gray-800', icon: icons['no-change'], rowClass: '' };
+            case 'not-found': return { label: 'Non Trovato', badgeClass: 'bg-yellow-100 text-yellow-800', icon: icons['not-found'], rowClass: 'bg-yellow-50' };
+            case 'error': return { label: 'Errore', badgeClass: 'bg-red-100 text-red-800', icon: icons.error, rowClass: 'bg-red-50' };
+            default: return { label: status || 'Sconosciuto', badgeClass: 'bg-gray-100 text-gray-800', icon: '', rowClass: '' };
+        }
+    }
 
     // --- Logica Principale dell'App ---
-    async function analyzeFile() { /*...*/ }
-    async function syncFile() { /*...*/ }
-    function downloadCSV() { /*...*/ }
+    async function analyzeFile() {
+        hideErrorMessage();
+        document.getElementById('results-section').classList.add('hidden');
+        showLoader('Analisi del file in corso...');
+        document.getElementById('analyze-button').disabled = true;
+
+        try {
+            const data = await uploadedFile.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            fileDataRaw = XLSX.utils.sheet_to_json(worksheet);
+
+            const allSkus = fileDataRaw.map(row => String(getValue(row, ['Minsan', 'EAN']) || '')).filter(Boolean);
+            if (allSkus.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
+
+            showLoader(`Analisi di ${allSkus.length} prodotti su Shopify...`);
+            const shopifyData = await callApi('shopify-proxy', { type: 'analyze', skus: [...new Set(allSkus)] });
+            const shopifyMap = new Map(shopifyData.map(p => [p.sku, p]));
+            
+            const consolidatedMap = new Map();
+            fileDataRaw.forEach(row => {
+                const sku = String(getValue(row, ['Minsan', 'EAN']) || '').trim();
+                if (!sku) return;
+                
+                const shopifyProduct = shopifyMap.get(sku);
+                const quantity = parseInt(getValue(row, ['Giacenza']), 10) || 0;
+
+                if (!consolidatedMap.has(sku)) {
+                    consolidatedMap.set(sku, {
+                        sku: sku,
+                        title: shopifyProduct ? shopifyProduct.title : (getValue(row, ['Descrizione']) || 'N/D'),
+                        inventory_item_id: shopifyProduct ? shopifyProduct.inventory_item_id : null,
+                        inventory_quantity: shopifyProduct ? shopifyProduct.inventory_quantity : null,
+                        giacenzaFile: 0,
+                        scadenze: [],
+                        status: shopifyProduct ? 'to-update' : 'not-found',
+                        details: shopifyProduct ? '' : 'Prodotto non trovato su Shopify.',
+                        selected: false,
+                    });
+                }
+                const record = consolidatedMap.get(sku);
+                record.giacenzaFile += quantity;
+                const scadenza = excelDateToJSDate(getValue(row, ['Scadenza']));
+                if (scadenza) record.scadenze.push(scadenza);
+            });
+
+            analysisResults = Array.from(consolidatedMap.values()).map(record => {
+                record.scadenzaFile = record.scadenze.length > 0 ? record.scadenze.sort()[0] : null;
+                record.details = record.inventory_quantity === record.giacenzaFile ? 'Giacenza Corretta' : record.details;
+                if (record.details !== 'Giacenza Corretta' && record.status !== 'not-found') record.status = 'to-update';
+                else if (record.details === 'Giacenza Corretta') record.status = 'no-change';
+                record.selected = (record.status === 'to-update'); // Seleziona di default quelli da aggiornare
+                return record;
+            });
+
+            displaySummary();
+            displaySyncReportTablePage(1);
+            document.getElementById('results-section').classList.remove('hidden');
+
+        } catch (error) {
+            showErrorMessage(`Errore di analisi: ${error.message}`);
+        } finally {
+            hideLoader();
+            document.getElementById('analyze-button').disabled = false;
+        }
+    }
+    
+    async function syncFile() { /* ... Incolla qui la tua funzione syncFile ... */ }
+    function downloadCSV() { /* ... Incolla qui la tua funzione downloadCSV ... */ }
     
     // --- Funzioni di Rendering e UI ---
-    function displaySummary() { /*...*/ }
-    function renderSyncReportTable(items) { /*...*/ }
-    function displaySyncReportTablePage(page) { /*...*/ }
-    function updateUIState() { /*...*/ }
-    function getStatusInfo(status) { /*...*/ }
+    function displaySummary() {
+        const summaryContainer = document.getElementById('summary');
+        if(!summaryContainer) return;
+        const summary = {
+            total: analysisResults.length,
+            toUpdate: analysisResults.filter(r => r.status === 'to-update').length,
+            synced: analysisResults.filter(r => r.status === 'success').length,
+            notFound: analysisResults.filter(r => r.status === 'not-found').length,
+            noChange: analysisResults.filter(r => r.status === 'no-change').length,
+        };
+        summaryContainer.innerHTML = `
+            <div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.total}</p><p class="text-sm text-gray-600">Prodotti Unici</p></div>
+            <div class="bg-blue-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-blue-800">${summary.toUpdate}</p><p class="text-sm text-blue-700">Da Aggiornare</p></div>
+            <div class="bg-green-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-green-800">${summary.synced}</p><p class="text-sm text-green-700">Sincronizzati</p></div>
+            <div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.notFound}</p><p class="text-sm text-yellow-700">Non Trovati</p></div>
+            <div class="bg-gray-200 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-gray-800">${summary.noChange}</p><p class="text-sm text-gray-700">Invariati</p></div>
+        `;
+    }
+
+    function renderSyncReportTable(items) { /* ... Incolla qui la tua funzione renderSyncReportTable ... */ }
+    function displaySyncReportTablePage(page) { /* ... Incolla qui la tua funzione displaySyncReportTablePage ... */ }
+    function updateUIState() { /* ... Incolla qui la tua funzione updateUIState ... */ }
 
     // --- Funzioni di Inizializzazione e Gestione Eventi ---
     function initializeSupabaseClient() {
         if (SUPABASE_URL_FRONTEND && SUPABASE_ANON_KEY_FRONTEND) {
             supabaseClient = supabase.createClient(SUPABASE_URL_FRONTEND, SUPABASE_ANON_KEY_FRONTEND);
             console.log("✅ Supabase client INIZIALIZZATO.");
-        } else {
-            console.error("❌ URL o Chiave Supabase non configurati.");
         }
     }
 
@@ -197,7 +292,6 @@
             });
             const result = await response.json();
             if (response.ok && result.success === true) {
-                console.log("✅ Password corretta.");
                 passwordOverlay.classList.add('hidden');
                 appContainer.classList.remove('hidden');
                 initializeSupabaseClient();
@@ -206,7 +300,6 @@
                 throw new Error("Password non corretta");
             }
         } catch (err) {
-            console.error("❌ Errore di autenticazione:", err);
             passwordError.classList.remove('hidden');
             passwordInput.value = '';
         } finally {
@@ -222,32 +315,38 @@
         showSyncView();
     }
 
-    function setupTabEvents() {
-        // Logica per gestire il cambio tra le tab
-    }
+    function setupTabEvents() { /* ... Incolla qui la tua funzione setupTabEvents ... */ }
     
     function showSyncView() {
         const syncTabContent = document.getElementById('sync-tab-content');
         syncTabContent.innerHTML = '';
         syncTabContent.appendChild(document.getElementById('sync-content-template').content.cloneNode(true));
         setupSyncViewEvents();
-        // Carica dati esistenti, se presenti
-        // loadSyncReportData(); 
     }
     
     function setupSyncViewEvents() {
         document.getElementById('analyze-button').addEventListener('click', analyzeFile);
-        // Aggiungi qui tutti gli altri event listener per la vista di sincro
-        // E.g., per il sync button, checkbox, filtri etc.
-        const syncButton = document.getElementById('sync-button');
-        if (syncButton) {
-            syncButton.addEventListener('click', syncFile);
-        }
+        document.getElementById('sync-button').addEventListener('click', syncFile);
+        document.getElementById('confirm-sync-checkbox').addEventListener('change', updateUIState);
+        document.getElementById('download-csv-button').addEventListener('click', downloadCSV);
+
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+    }
+    
+    function handleFile(file) {
+        uploadedFile = file;
+        document.getElementById('file-name').textContent = file.name;
+        document.getElementById('analyze-button').disabled = false;
     }
 
     // --- Punto di Ingresso Principale ---
     window.onload = function() {
-        console.log("🚀 Pagina caricata. Inizializzazione script.");
         passwordOverlay = document.getElementById('password-overlay');
         passwordInput = document.getElementById('password-input');
         loginButton = document.getElementById('login-button');
@@ -256,31 +355,8 @@
         mainContentArea = document.getElementById('main-content-area');
         
         loginButton.addEventListener('click', checkPassword);
-        passwordInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') checkPassword();
-        });
-        console.log("🔒 App in attesa di password.");
+        passwordInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') checkPassword(); });
     };
-
-    // --- Incolla qui il corpo completo di tutte le funzioni omesse con /*...*/ ---
-    // Esempio per callApi:
-    async function callApi(endpoint, payload) {
-        try {
-            const response = await fetch(`/.netlify/functions/${endpoint}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || `Errore server: ${response.statusText}`);
-            if (data.error) throw new Error(data.error);
-            return data;
-        } catch (error) {
-            showErrorMessage(`Errore di comunicazione con il server (${endpoint}): ${error.message}`);
-            throw error;
-        }
-    }
-    // ... e così via per tutte le altre funzioni ...
     </script>
 </body>
 </html>
