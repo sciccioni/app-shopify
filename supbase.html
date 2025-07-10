@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Sincronizzazione e Verifica Dati</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .drop-zone {
+            border: 2px dashed #cbd5e1;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        .drop-zone.drag-over {
+            background-color: #e2e8f0;
+            border-color: #94a3b8;
+        }
+        .status-icon {
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        .error-box {
+            background-color: #fee2e2;
+            border-left: 4px solid #ef4444;
+            color: #991b1b;
+        }
+        .tab-button {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: color 0.2s, border-color 0.2s;
+        }
+        .tab-button.active {
+            color: #4f46e5; /* indigo-600 */
+            border-bottom-color: #4f46e5;
+            font-weight: 600;
+        }
+        .debug-cell {
+            background-color: #fefce8;
+            font-family: monospace;
+            font-size: 10px;
+            white-space: pre;
+            max-width: 400px;
+            overflow-x: auto;
+        }
+        /* Aggiungi questo per nascondere la colonna di debug */
+/* Removed for production, if you need it, uncomment */
+
+#results-table-head th:last-child,
+#results-table-body td:last-child {
+    display: none;
+}
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div id="password-overlay" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm">
+            <h2 class="text-2xl font-bold mb-4 text-center">Accesso Richiesto APP Giacenze</h2>
+            <p class="text-center text-gray-600 mb-6">Inserisci la password per continuare.</p>
+            <div class="space-y-4">
+                <div>
+                    <label for="password-input" class="sr-only">Password</label>
+                    <input type="password" id="password-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" placeholder="Password">
+                </div>
+                <button id="login-button" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors">Accedi</button>
+            </div>
+            <p id="password-error" class="text-red-500 text-sm text-center mt-4 hidden">Password non corretta. Riprova.</p>
+        </div>
+    </div>
+
+    <div id="app-container" class="hidden">
+        <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+            <header class="mb-4">
+                <h1 class="text-3xl font-bold text-gray-900">App Sincronizzazione e Verifica</h1>
+                <p class="text-gray-600 mt-1">Usa le schede qui sotto per sincronizzare i dati con Shopify o per verificare il contenuto di un file.</p>
+            </header>
+
+            <div class="border-b border-gray-200 mb-6">
+                <nav class="flex -mb-px">
+                    <button id="sync-tab-button" class="tab-button active">Sincronizzazione</button>
+                    <button id="verify-tab-button" class="tab-button">Verifica File</button>
+                </nav>
+            </div>
+
+            <div id="sync-tab-content">
+                <main class="space-y-8">
+                    <div id="error-message-box" class="error-box p-4 rounded-md hidden" role="alert">
+                       <p id="error-message-text" class="text-sm"></p>
+                   </div>
+   
+                   <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                       <h2 class="text-xl font-semibold mb-4">1. Carica File</h2>
+                       <div id="drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
+                           <input type="file" id="file-input" class="hidden" accept=".xlsx, .xls">
+                           <div class="flex flex-col items-center">
+                               <svg class="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h10a4 4 0 014 4v6a4 4 0 01-4 4H7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 16v-4a4 4 0 00-4-4H8a4 4 0 00-4 4v4m16 0l-3-3m-13 3l3-3"></path></svg>
+                               <p class="text-gray-600">Trascina qui il file o <span class="font-semibold text-indigo-600">clicca per selezionarlo</span>.</p>
+                               <p id="file-name" class="text-sm text-gray-500 mt-2"></p>
+                           </div>
+                       </div>
+                       <button id="analyze-button" class="mt-4 w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors" disabled>
+                           Analizza File
+                       </button>
+                   </div>
+
+                    <div id="loader" class="text-center p-8 hidden">
+                        <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p id="loader-text" class="mt-2 text-gray-600">Elaborazione in corso...</p>
+                    </div>
+   
+                    <div id="results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden">
+                        <h2 class="text-xl font-semibold mb-4">2. Report di Analisi</h2>
+                        <div id="progress-bar-container" class="w-full bg-gray-200 rounded-full h-2.5 mb-4 hidden">
+                            <div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+                        </div>
+                        <div id="summary" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6"></div>
+                        <div id="sync-action-area" class="mt-6 p-4 border-t border-b border-gray-200 hidden">
+                            <div class="flex flex-col md:flex-row items-center justify-center gap-4">
+                                <div class="flex items-center">
+                                    <input id="confirm-sync-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                    <label for="confirm-sync-checkbox" class="ml-2 block text-sm text-gray-900">
+                                        Confermo di voler aggiornare i prodotti selezionati.
+                                    </label>
+                                </div>
+                                <button id="sync-button" class="bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed transition-colors">
+                                    Sincronizza Selezionati
+                                </button>
+                            </div>
+                            <p id="sync-status-message" class="mt-4 text-center font-semibold hidden"></p>
+                        </div>
+                        <div id="table-container" class="hidden mt-6">
+                           <div class="flex justify-between items-center mb-4">
+                               <fieldset class="flex items-center space-x-4">
+                                   <legend class="sr-only">Filtri</legend>
+                                   <div class="flex items-center">
+                                       <input id="filter-all" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="all" checked>
+                                       <label for="filter-all" class="ml-2 block text-sm font-medium">Tutti</label>
+                                   </div>
+                                   <div class="flex items-center">
+                                       <input id="filter-toupdate" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="to-update">
+                                       <label for="filter-toupdate" class="ml-2 block text-sm font-medium">Da Aggiornare</label>
+                                   </div>
+                                   <div class="flex items-center">
+                                       <input id="filter-errors" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="error">
+                                       <label for="filter-errors" class="ml-2 block text-sm font-medium">Solo Errori</label>
+                                   </div>
+                                   <div id="synced-filter-container" class="flex items-center hidden">
+                                       <input id="filter-synced" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="synced">
+                                       <label for="filter-synced" class="ml-2 block text-sm font-medium">Solo Sincronizzati</label>
+                                   </div>
+                                   <div id="duplicate-filter-container" class="flex items-center hidden">
+                                       <input id="filter-duplicates" class="h-4 w-4 text-indigo-600" name="filter-type" type="radio" value="duplicates">
+                                       <label for="filter-duplicates" class="ml-2 block text-sm font-medium">Solo Duplicati</label>
+                                   </div>
+                               </fieldset>
+                               <button id="download-csv-button" class="bg-gray-700 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-800 text-sm">
+                                   Scarica Report
+                               </button>
+                           </div>
+                           <div class="overflow-x-auto">
+                               <table class="min-w-full divide-y divide-gray-200">
+                                   <thead id="results-table-head" class="bg-gray-50"></thead>
+                                   <tbody id="results-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                               </table>
+                           </div>
+                           <div id="pagination-controls" class="mt-4 flex items-center justify-between">
+                               <button id="prev-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed">&larr; Precedente</button>
+                               <span id="page-indicator" class="text-sm font-semibold"></span>
+                               <button id="next-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed">Successivo &rarr;</button>
+                           </div>
+                       </div>
+                    </div>
+                </main>
+            </div>
+
+            <div id="verify-tab-content" class="hidden">
+                 <main class="space-y-8">
+                    <div id="verify-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <div id="verify-placeholder">
+                            <h2 class="text-xl font-semibold mb-2">Verifica Contenuto File</h2>
+                            <p class="text-gray-600">Carica un file nella scheda "Sincronizzazione" per attivare la ricerca qui.</p>
+                        </div>
+                        <div id="verify-controls" class="hidden">
+                             <h2 class="text-xl font-semibold mb-4">Cerca nel File Caricato</h2>
+                            <div class="flex gap-4">
+                                <input type="search" id="search-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Scrivi qui per cercare in qualsiasi colonna...">
+                            </div>
+                            <div id="verify-table-container" class="mt-6">
+                               <div class="overflow-x-auto">
+                                   <table class="min-w-full divide-y divide-gray-200">
+                                       <thead id="verify-table-head" class="bg-gray-50"></thead>
+                                       <tbody id="verify-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                                   </table>
+                               </div>
+                               <p id="verify-no-results" class="text-center text-gray-500 mt-4 hidden">Nessun risultato trovato.</p>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- ELEMENTI DEL DOM GLOBALI ---
+        const passwordOverlay = document.getElementById('password-overlay');
+        const passwordInput = document.getElementById('password-input');
+        const loginButton = document.getElementById('login-button');
+        const passwordError = document.getElementById('password-error');
+        const appContainer = document.getElementById('app-container');
+
+        // --- GESTIONE SCHEDE ---
+        const syncTabButton = document.getElementById('sync-tab-button');
+        const verifyTabButton = document.getElementById('verify-tab-button');
+        const syncTabContent = document.getElementById('sync-tab-content');
+        const verifyTabContent = document.getElementById('verify-tab-content');
+        
+        syncTabButton.addEventListener('click', () => {
+            syncTabButton.classList.add('active');
+            verifyTabButton.classList.remove('active');
+            syncTabContent.classList.remove('hidden');
+            verifyTabContent.classList.add('hidden');
+        });
+
+        verifyTabButton.addEventListener('click', () => {
+            verifyTabButton.classList.add('active');
+            syncTabButton.classList.remove('active');
+            verifyTabContent.classList.remove('hidden');
+            syncTabContent.classList.add('hidden');
+        });
+
+        // --- LOGICA DI ACCESSO CON PASSWORD ---
+        async function checkPassword() {
+            const enteredPassword = passwordInput.value;
+            try {
+                const response = await fetch('/.netlify/functions/shopify-proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'login', password: enteredPassword }),
+                });
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    passwordOverlay.classList.add('hidden');
+                    appContainer.classList.remove('hidden');
+                    passwordError.classList.add('hidden'); // Hide error if it was previously shown
+                } else {
+                    passwordError.classList.remove('hidden');
+                    passwordInput.value = ''; // Clear password field
+                }
+            } catch (error) {
+                console.error("Errore durante l'autenticazione:", error);
+                passwordError.textContent = "Errore di connessione. Riprova più tardi.";
+                passwordError.classList.remove('hidden');
+            }
+        }
+        loginButton.addEventListener('click', checkPassword);
+        passwordInput.addEventListener('keypress', (e) => e.key === 'Enter' && checkPassword());
+
+        // --- STATO CONDIVISO ---
+        let verificationData = [];
+
+        // --- FUNZIONE DI UTILITY PER LEGGERE I DATI DALLE RIGHE IN MODO FLESSIBILE ---
+        function getValue(obj, keys) {
+            if (!obj) return undefined;
+            for (const key of keys) {
+                const value = obj[key];
+                if (value !== undefined && value !== null) {
+                    return value;
+                }
+            }
+            const lowerCaseKeys = keys.map(k => k.toLowerCase());
+            for (const objKey in obj) {
+                if (lowerCaseKeys.includes(objKey.toLowerCase())) {
+                    return obj[objKey];
+                }
+            }
+            return undefined;
+        }
+
+        // ===============================================================
+        // SEZIONE SINCRONIZZAZIONE
+        // ===============================================================
+        {
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('file-input');
+            const fileNameDisplay = document.getElementById('file-name');
+            const analyzeButton = document.getElementById('analyze-button');
+            const resultsSection = document.getElementById('results-section');
+            const summaryContainer = document.getElementById('summary');
+            const loader = document.getElementById('loader');
+            const loaderText = document.getElementById('loader-text');
+            const syncActionArea = document.getElementById('sync-action-area');
+            const syncButton = document.getElementById('sync-button');
+            const confirmSyncCheckbox = document.getElementById('confirm-sync-checkbox');
+            const syncStatusMessage = document.getElementById('sync-status-message');
+            const errorMessageBox = document.getElementById('error-message-box');
+            const errorMessageText = document.getElementById('error-message-text');
+            const progressBarContainer = document.getElementById('progress-bar-container');
+            const progressBar = document.getElementById('progress-bar');
+            const downloadCsvButton = document.getElementById('download-csv-button');
+            const tableContainer = document.getElementById('table-container');
+            const resultsTableHead = document.getElementById('results-table-head');
+            const resultsTableBody = document.getElementById('results-table-body');
+            const prevPageButton = document.getElementById('prev-page-button');
+            const nextPageButton = document.getElementById('next-page-button');
+            const pageIndicator = document.getElementById('page-indicator');
+            const filterRadios = document.querySelectorAll('input[name="filter-type"]');
+            const duplicateFilterContainer = document.getElementById('duplicate-filter-container');
+            const syncedFilterContainer = document.getElementById('synced-filter-container');
+            
+            let uploadedFile = null;
+            let analysisResults = []; // Ora conterrà i risultati dell'analisi da Shopify, prima di inviarli a Supabase
+            let duplicateRows = [];
+            let fileDataRaw = [];
+            let currentPage = 1;
+            const ROWS_PER_PAGE = 100;
+
+            function handleFileSync(file) {
+                uploadedFile = file;
+                fileNameDisplay.textContent = file.name;
+                analyzeButton.disabled = false;
+            }
+
+            dropZone.addEventListener('click', () => fileInput.click());
+            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+            dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files.length) handleFileSync(e.dataTransfer.files[0]); });
+            fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFileSync(e.target.files[0]); });
+
+            function showErrorMessage(message) {
+                errorMessageText.innerHTML = message;
+                errorMessageBox.classList.remove('hidden');
+            }
+
+            function hideErrorMessage() {
+                errorMessageBox.classList.add('hidden');
+            }
+
+            function updateProgressBar(current, total) {
+                const percentage = Math.round((current / total) * 100);
+                progressBar.style.width = `${percentage}%`;
+            }
+
+            function excelDateToJSDate(value) {
+                // 1. Prova a gestire i numeri (comportamento originale)
+                if (typeof value === 'number') {
+                    if (!value) return null;
+                    // La soglia 25569 corrisponde al 1/1/1970 (inizio dell'epoca Unix)
+                    // Excel conta i giorni dal 1/1/1900, quindi dobbiamo correggere
+                    if (value < 60) { // Excel ha un bug storico che considera il 1900 un anno bisestile
+                         value--;
+                    }
+                    const utc_days  = Math.floor(value - 25569);
+                    const utc_value = utc_days * 86400;                                     
+                    const date_info = new Date(utc_value * 1000);
+                    
+                    const year = date_info.getUTCFullYear();
+                    const month = String(date_info.getUTCMonth() + 1).padStart(2, '0');
+                    const day = String(date_info.getUTCDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                }
+
+                // 2. Prova a gestire le stringhe (nuova logica)
+                if (typeof value === 'string' && value.trim()) {
+                    let parts = [];
+                    // Riconosce sia il formato con '/' sia quello con '-'
+                    if (value.includes('/')) {
+                        parts = value.split('/');
+                    } else if (value.includes('-')) {
+                        parts = value.split('-');
+                    }
+
+                    // Se la data è divisa in 3 parti (giorno, mese, anno)
+                    if (parts.length === 3) {
+                        let day, month, year;
+                        // Indovina il formato in base alla lunghezza dell'anno
+                        if (parts[2].length === 4) { // Formato: GG/MM/AAAA
+                            day = parts[0];
+                            month = parts[1];
+                            year = parts[2];
+                        } else if (parts[0].length === 4) { // Formato: AAAA/MM/GG
+                            year = parts[0];
+                            month = parts[1];
+                            day = parts[2];
+                        }
+
+                        if (year && month && day) {
+                            // Crea una stringa di data standard (ISO 8601)
+                            const isoDateString = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                            const d = new Date(isoDateString);
+                            // Controlla che la data sia valida (es. non 31/02/2025)
+                            if (d && !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === isoDateString) {
+                                 return isoDateString;
+                            }
+                        }
+                    }
+                }
+                
+                // 3. Se l'interpretazione fallisce, ritorna null
+                return null;
+            }
+
+            // Funzione per chiamare il backend (shopify-proxy.js)
+            async function callShopifyBackend(payload) {
+                const response = await fetch('/.netlify/functions/shopify-proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || `Errore server: ${response.statusText}`);
+                if (data.error) throw new Error(data.error);
+                return data;
+            }
+
+            // Funzione per chiamare la nuova funzione di ingestione Supabase
+            async function callSupabaseIngest(payload) {
+                const response = await fetch('/.netlify/functions/supabase-ingest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || `Errore server: ${response.statusText}`);
+                if (data.error) throw new Error(data.error);
+                return data;
+            }
+
+
+            analyzeButton.addEventListener('click', analyzeFile);
+
+            async function analyzeFile() {
+                hideErrorMessage();
+                resultsSection.classList.add('hidden');
+                loader.classList.remove('hidden');
+                loaderText.textContent = 'Elaborazione in corso...';
+                analyzeButton.disabled = true;
+
+                try {
+                    const data = await uploadedFile.arrayBuffer();
+                    const workbook = XLSX.read(data);
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    fileDataRaw = XLSX.utils.sheet_to_json(worksheet);
+
+                    window.dispatchEvent(new CustomEvent('data-loaded-for-verification', { detail: fileDataRaw }));
+
+                    const skuMap = new Map();
+                    fileDataRaw.forEach(row => {
+                        const sku = String(getValue(row, ['Minsan', 'EAN']) || '').trim();
+                        if (sku) {
+                            if (!skuMap.has(sku)) skuMap.set(sku, []);
+                            skuMap.get(sku).push(row);
+                        }
+                    });
+
+                    const fileData = [];
+                    duplicateRows = [];
+                    skuMap.forEach((rows, sku) => {
+                        if (rows.length > 1) {
+                            duplicateRows.push(...rows.map(r => ({...r, Minsan: sku}))); 
+                            
+                            const giacenze = rows.map(r => parseInt(getValue(r, ['Giacenza', 'giacenza']), 10) || 0);
+                            const scadenze = rows.map(r => excelDateToJSDate(getValue(r, ['Scadenza', 'scadenza']))).filter(Boolean);
+                            
+                            const totalGiacenza = giacenze.map(g => g < 0 ? 0 : g).reduce((sum, g) => sum + g, 0);
+                            let finalExpiry = null;
+
+                            if (scadenze.length > 0) {
+                                const earliestTimestamp = Math.min.apply(null, scadenze.map(date => new Date(`${date}T00:00:00Z`).getTime()));
+                                const earliestDate = new Date(earliestTimestamp);
+                                
+                                const year = earliestDate.getUTCFullYear();
+                                const month = String(earliestDate.getUTCMonth() + 1).padStart(2, '0');
+                                const day = String(earliestDate.getUTCDate()).padStart(2, '0');
+                                finalExpiry = `${year}-${month}-${day}`;
+                            }
+                            
+                            const firstRow = rows[0];
+                            const consolidatedRow = {
+                                Minsan: sku,
+                                Giacenza: totalGiacenza,
+                                Scadenza: finalExpiry,
+                                Descrizione: getValue(firstRow, ['Descrizione', 'descrizione']),
+                                isDuplicate: true,
+                                duplicateDetails: { giacenze, scadenze }
+                            };
+                            fileData.push(consolidatedRow);
+                        } else {
+                            fileData.push(rows[0]);
+                        }
+                    });
+
+                    if (duplicateRows.length > 0) duplicateFilterContainer.classList.remove('hidden');
+
+                    const allSkus = fileData.map(row => String(getValue(row, ['Minsan', 'EAN']))).filter(Boolean);
+                    if (allSkus.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
+
+                    const chunkSize = 250;
+                    const skuChunks = [];
+                    for (let i = 0; i < allSkus.length; i += chunkSize) skuChunks.push(allSkus.slice(i, i + chunkSize));
+                    
+                    let allShopifyProducts = [];
+                    progressBarContainer.classList.remove('hidden');
+                    for (let i = 0; i < skuChunks.length; i++) {
+                        loaderText.textContent = `Analisi pacchetto ${i + 1} di ${skuChunks.length}...`;
+                        // Chiamata al backend Shopify per ottenere i dati attuali
+                        const shopifyProductsChunk = await callShopifyBackend({ type: 'analyze', skus: skuChunks[i] });
+                        allShopifyProducts = allShopifyProducts.concat(shopifyProductsChunk);
+                        updateProgressBar(i + 1, skuChunks.length);
+                        if (skuChunks.length > 1) {
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                        }
+                    }
+                    
+                    analysisResults = []; // Resetta i risultati dell'analisi per la nuova elaborazione
+                    let productsToIngest = []; // Array per i prodotti da inviare a Supabase
+                    let toUpdateCount = 0, notFoundCount = 0, noChangeCount = 0, errorCount = 0;
+
+                    for (const row of fileData) {
+                        const minsan = String(getValue(row, ['Minsan', 'EAN']));
+                        const giacenza = getValue(row, ['Giacenza', 'giacenza']);
+                        const descrizione = getValue(row, ['Descrizione', 'descrizione']);
+                        const scadenza = getValue(row, ['Scadenza', 'scadenza']);
+
+                        let giacenzaFile = parseInt(giacenza, 10);
+                        let scadenzaFile = typeof scadenza === 'number' ? excelDateToJSDate(scadenza) : scadenza;
+                        
+                        let resultRow = { 
+                            minsan: minsan || 'N/D', 
+                            descrizione, 
+                            giacenzaFile, 
+                            scadenzaFile, 
+                            selected: false,
+                            _debug_source_row: row 
+                        };
+
+                        if (!minsan || isNaN(giacenzaFile)) {
+                            errorCount++;
+                            resultRow.status = 'error';
+                            resultRow.details = 'Dati mancanti o non numerici.';
+                        } else {
+                            const productOnShopify = allShopifyProducts.find(p => p.minsan === minsan);
+                            if (productOnShopify) {
+                                resultRow = { ...resultRow, ...productOnShopify };
+                                if (productOnShopify.inventory_quantity <= 0 && giacenzaFile < 0) {
+                                    errorCount++;
+                                    resultRow.status = 'error';
+                                    resultRow.details = 'Giacenza a zero non può essere decrementata.';
+                                } else {
+                                    const finalGiacenza = Math.max(0, giacenzaFile);
+                                    const quantityChanged = finalGiacenza !== productOnShopify.inventory_quantity;
+                                    const expiryChanged = scadenzaFile && (scadenzaFile !== productOnShopify.expiry_date);
+                                    
+                                    if (quantityChanged || expiryChanged) {
+                                        toUpdateCount++;
+                                        resultRow.status = 'to-update';
+                                        let detailsText = [];
+                                        
+                                        if (row.isDuplicate) {
+                                            let duplicateDetailString = `Giacenze sommate [${row.duplicateDetails.giacenze.join(', ')}].`;
+                                            const scadenzeList = row.duplicateDetails.scadenze;
+                                            if (scadenzeList.length > 1) {
+                                                duplicateDetailString += ` Scadenze multiple [${scadenzeList.join(', ')}], selezionata la più corta: ${scadenzaFile || 'N/D'}.`;
+                                            } else if (scadenzeList.length === 1) {
+                                                duplicateDetailString += ` Unica scadenza trovata: ${scadenzeList[0]}.`;
+                                            }
+                                            detailsText.push(duplicateDetailString);
+                                        }
+
+                                        if (giacenzaFile < 0) detailsText.push(`Giacenza negativa (${giacenzaFile}) corretta a 0.`);
+                                        if (detailsText.length === 0) detailsText.push('Pronto per l\'aggiornamento.');
+                                        resultRow.details = detailsText.join(' ');
+
+                                    } else {
+                                        noChangeCount++;
+                                        resultRow.status = 'no-change';
+                                        resultRow.details = `Giacenza e scadenza già corrette.`;
+                                    }
+                                }
+                            } else {
+                                notFoundCount++;
+                                resultRow.status = 'not-found';
+                                resultRow.details = 'Prodotto non trovato su Shopify.';
+                            }
+                        }
+                        analysisResults.push(resultRow); // Aggiungi al risultato dell'analisi per la visualizzazione
+                        productsToIngest.push(resultRow); // Aggiungi alla lista per l'ingestione in Supabase
+                    }
+                    
+                    // --- NUOVO: Invia i risultati dell'analisi a Supabase ---
+                    loaderText.textContent = 'Salvataggio dati su Supabase...';
+                    const ingestResponse = await callSupabaseIngest({ productsToIngest });
+                    if (ingestResponse.success) {
+                        console.log('Dati inviati a Supabase con successo:', ingestResponse.results);
+                        // Qui potresti aggiornare lo stato dei prodotti in analysisResults
+                        // basandoti sulla risposta di ingestResponse.results se necessario,
+                        // ma per ora manteniamo analysisResults come i risultati dell'analisi Shopify.
+                    } else {
+                        throw new Error(ingestResponse.error || 'Errore durante il salvataggio su Supabase.');
+                    }
+                    // --- FINE NUOVO ---
+
+                    resultsSection.classList.remove('hidden');
+                    displaySummary();
+                    if (analysisResults.length > 0) {
+                        tableContainer.classList.remove('hidden');
+                        document.getElementById('filter-all').checked = true;
+                        currentPage = 1;
+                        displayTablePage(currentPage);
+                    }
+                    if (toUpdateCount > 0) syncActionArea.classList.remove('hidden');
+
+                } catch (error) {
+                    console.error("Errore durante l'analisi o l'ingestione:", error);
+                    showErrorMessage(`<strong>Errore di Analisi o Ingestione:</strong> ${error.message}`);
+                    resultsSection.classList.add('hidden');
+                } finally {
+                    loader.classList.add('hidden');
+                    analyzeButton.disabled = false;
+                }
+            }
+            
+            async function syncFile() {
+                hideErrorMessage();
+                const itemsToUpdate = analysisResults.filter(r => r.selected);
+                if (itemsToUpdate.length === 0) {
+                    showErrorMessage("<strong>Nessun prodotto selezionato.</strong>");
+                    return;
+                }
+
+                syncButton.disabled = true;
+                confirmSyncCheckbox.disabled = true;
+                loader.classList.remove('hidden');
+                progressBarContainer.classList.remove('hidden');
+                updateProgressBar(0, 1);
+                let successCount = 0, failureCount = 0;
+                const chunkSize = 50;
+                const itemChunks = [];
+                for (let i = 0; i < itemsToUpdate.length; i += chunkSize) itemChunks.push(itemsToUpdate.slice(i, i + chunkSize));
+                
+                for (let i = 0; i < itemChunks.length; i++) {
+                    const chunk = itemChunks[i];
+                    loaderText.textContent = `Sincronizzazione pacchetto ${i + 1} di ${itemChunks.length}...`;
+                    try {
+                        // Questa chiamata rimane al shopify-proxy per l'aggiornamento effettivo su Shopify
+                        const payload = { type: 'sync', items: chunk.map(item => ({ productId: item.product_id, inventoryItemId: item.inventory_item_id, quantity: Math.max(0, item.giacenzaFile), expiryDate: item.scadenzaFile || null })) };
+                        const result = await callShopifyBackend(payload); // Usa callShopifyBackend
+                        if (result.success) {
+                            chunk.forEach(item => {
+                                const originalItem = analysisResults.find(r => r.minsan === item.minsan);
+                                if (originalItem) {
+                                    originalItem.status = 'success';
+                                    originalItem.details = `Sincronizzato con successo.`;
+                                    originalItem.inventory_quantity = Math.max(0, originalItem.giacenzaFile);
+                                    if (originalItem.scadenzaFile) originalItem.expiry_date = originalItem.scadenzaFile;
+                                }
+                            });
+                            successCount += chunk.length;
+                        } else throw new Error(result.error || "Errore sconosciuto.");
+                    } catch (error) {
+                        chunk.forEach(item => {
+                            const originalItem = analysisResults.find(r => r.minsan === item.minsan);
+                            if (originalItem) {
+                                originalItem.status = 'error';
+                                originalItem.details = `Errore API: ${error.message}`;
+                            }
+                        });
+                        failureCount += chunk.length;
+                        console.error(`Errore aggiornamento pacchetto ${i + 1}:`, error);
+                    }
+                    if(itemChunks.length > 1) {
+                         await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                }
+                
+                analysisResults.forEach(item => { if (item.selected) item.selected = false; });
+                displaySummary();
+                displayTablePage(currentPage);
+                loader.classList.add('hidden');
+                syncStatusMessage.classList.remove('hidden');
+                if (failureCount > 0) {
+                    syncStatusMessage.textContent = `Completato con ${successCount} successi e ${failureCount} fallimenti.`;
+                    syncStatusMessage.className = 'mt-4 text-center font-semibold text-red-700';
+                } else {
+                    syncStatusMessage.textContent = `Sincronizzazione completata per ${successCount} prodotti!`;
+                    syncStatusMessage.className = 'mt-4 text-center font-semibold text-green-700';
+                }
+                if (syncedFilterContainer && successCount > 0) syncedFilterContainer.classList.remove('hidden');
+                updateUIState();
+            }
+
+            function downloadCSV() {
+                const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
+                let dataToExport = analysisResults;
+                let headers = ['Minsan_SKU', 'Descrizione_Prodotto', 'Giacenza_Shopify', 'Giacenza_File', 'Scadenza_Shopify', 'Scadenza_File', 'Stato_Analisi', 'Dettagli'];
+                let filename = 'report_completo.csv';
+                if (filterValue === 'duplicates') {
+                    dataToExport = duplicateRows;
+                    headers = ['Minsan_SKU', 'Descrizione', 'Giacenza', 'Scadenza'];
+                    filename = 'report_duplicati.csv';
+                }
+                if (dataToExport.length === 0) return;
+                const csvRows = [headers.join(';')];
+                for (const res of dataToExport) {
+                    let row;
+                    if (filterValue === 'duplicates') {
+                        row = [getValue(res,['Minsan','EAN']), `"${getValue(res,['Descrizione','descrizione']) || ''}"`, getValue(res,['Giacenza','giacenza']), excelDateToJSDate(getValue(res,['Scadenza','scadenza'])) || 'N/D'];
+                    } else {
+                        row = [res.minsan || '', `"${(res.title || res.descrizione || '').replace(/"/g, '""')}"`, res.inventory_quantity !== undefined ? res.inventory_quantity : 'N/D', res.giacenzaFile, res.expiry_date || 'N/D', res.scadenzaFile || 'N/D', res.status, `"${(res.details || '').replace(/"/g, '""')}"`];
+                    }
+                    csvRows.push(row.join(';'));
+                }
+                const csvString = csvRows.join('\n');
+                const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+            
+            function displaySummary() {
+                const summary = { rawTotal: fileDataRaw.length, total: analysisResults.length, duplicates: duplicateRows.length, toUpdate: analysisResults.filter(r => r.status === 'to-update').length, synced: analysisResults.filter(r => r.status === 'success').length, notFound: analysisResults.filter(r => r.status === 'not-found').length, errors: analysisResults.filter(r => r.status === 'error').length };
+                summaryContainer.innerHTML = `<div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.rawTotal}</p><p class="text-sm text-gray-600">Righe Totali</p></div><div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.total}</p><p class="text-sm text-gray-600">Prodotti Unici</p></div><div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.duplicates}</p><p class="text-sm text-yellow-700">Righe Duplicate</p></div><div class="bg-blue-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-blue-800">${summary.toUpdate}</p><p class="text-sm text-blue-700">Da Aggiornare</p></div><div class="bg-green-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-green-800">${summary.synced}</p><p class="text-sm text-green-700">Sincronizzati</p></div><div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.notFound}</p><p class="text-sm text-yellow-700">Non Trovati</p></div><div class="bg-red-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-red-800">${summary.errors}</p><p class="text-sm text-red-700">Errori Dati</p></div>`;
+            }
+
+            function displayTablePage(page) {
+                currentPage = page;
+                const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
+                let dataToDisplay = analysisResults;
+                let isDuplicateView = false;
+                if (filterValue === 'to-update') dataToDisplay = analysisResults.filter(r => r.status === 'to-update');
+                else if (filterValue === 'error') dataToDisplay = analysisResults.filter(r => r.status === 'error');
+                else if (filterValue === 'duplicates') { dataToDisplay = duplicateRows; isDuplicateView = true; }
+                else if (filterValue === 'synced') dataToDisplay = analysisResults.filter(r => r.status === 'success');
+                const totalPages = Math.ceil(dataToDisplay.length / ROWS_PER_PAGE);
+                const paginatedItems = dataToDisplay.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
+                renderTable(paginatedItems, isDuplicateView);
+                pageIndicator.textContent = `Pagina ${page} di ${totalPages || 1}`;
+                prevPageButton.disabled = page === 1;
+                nextPageButton.disabled = page === totalPages || totalPages === 0;
+                updateUIState();
+            }
+
+            function renderTable(items, isDuplicateView) {
+                resultsTableBody.innerHTML = '';
+                if (isDuplicateView) {
+                    resultsTableHead.innerHTML = `<tr><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minsan/SKU</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrizione</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giacenza</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scadenza</th></tr>`;
+                    items.forEach(res => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `<td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${getValue(res, ['Minsan', 'EAN'])}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${getValue(res,['Descrizione','descrizione'])}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${getValue(res,['Giacenza','giacenza'])}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${excelDateToJSDate(getValue(res,['Scadenza','scadenza'])) || 'N/D'}</td>`;
+                        resultsTableBody.appendChild(row);
+                    });
+                } else {
+                    // Modifica qui per i nomi delle colonne in inglese
+                    resultsTableHead.innerHTML = `<tr><th class="px-2 py-3"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 rounded"></th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minsan/SKU</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[200px]">Descrizione</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available (Shopify)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Committed</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">On Hand</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">File Quantity</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Shopify Expiry</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">File Expiry</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase text-red-600">DEBUG</th></tr>`;
+                    items.forEach(res => {
+                        const statusInfo = getStatusInfo(res.status);
+                        const row = document.createElement('tr');
+                        row.className = statusInfo.rowClass;
+                        let checkboxHTML = '<td class="px-2 py-4"></td>';
+                        if (res.status === 'to-update') {
+                            checkboxHTML = `<td class="px-2 py-4"><input type="checkbox" class="h-4 w-4 text-indigo-600 rounded row-checkbox" data-minsan="${res.minsan}" ${res.selected ? 'checked' : ''}></td>`;
+                        }
+                        const debugData = JSON.stringify(res._debug_source_row, null, 2);
+                        row.innerHTML = `${checkboxHTML}<td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${res.minsan}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.title || res.descrizione}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.inventory_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.committed_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.available_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.on_hand_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.giacenzaFile}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.expiry_date || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.scadenzaFile || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${statusInfo.badgeClass}">${statusInfo.icon} ${statusInfo.label}</span></td><td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.details || ''}</td><td class="p-2 debug-cell">${debugData}</td>`;
+                        resultsTableBody.appendChild(row);
+                    });
+                }
+            }
+            
+            function updateUIState() {
+                const itemsToUpdateSelected = analysisResults.filter(r => r.selected).length > 0;
+                const totalToUpdate = analysisResults.filter(r => r.status === 'to-update').length;
+                confirmSyncCheckbox.disabled = !itemsToUpdateSelected;
+                syncButton.disabled = !confirmSyncCheckbox.checked || !itemsToUpdateSelected;
+                syncActionArea.classList.toggle('hidden', totalToUpdate === 0);
+                const selectAll = document.getElementById('select-all-checkbox');
+                if (selectAll) {
+                    const updatableItemsOnPage = document.querySelectorAll('.row-checkbox');
+                    selectAll.checked = updatableItemsOnPage.length > 0 && Array.from(updatableItemsOnPage).every(cb => cb.checked);
+                }
+            }
+
+            function getStatusInfo(status) {
+                const icons = { success: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`, 'to-update': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 20h5v-5M20 4h-5v5"></path></svg>`, 'no-change': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'not-found': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, error: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>` };
+                switch (status) {
+                    case 'success': return { label: 'Sincronizzato', badgeClass: 'bg-green-100 text-green-800', icon: icons.success, rowClass: 'bg-green-50' };
+                    case 'to-update': return { label: 'Da Aggiornare', badgeClass: 'bg-blue-100 text-blue-800', icon: icons['to-update'], rowClass: 'bg-blue-50' };
+                    case 'no-change': return { label: 'Nessuna Modifica', badgeClass: 'bg-gray-100 text-gray-800', icon: icons['no-change'], rowClass: '' };
+                    case 'not-found': return { label: 'Non Trovato', badgeClass: 'bg-yellow-100 text-yellow-800', icon: icons['not-found'], rowClass: 'bg-yellow-50' };
+                    case 'error': return { label: 'Errore', badgeClass: 'bg-red-100 text-red-800', icon: icons.error, rowClass: 'bg-red-50' };
+                    default: return { label: 'Sconosciuto', badgeClass: 'bg-gray-100 text-gray-800', icon: '', rowClass: '' };
+                }
+            }
+            
+            confirmSyncCheckbox.addEventListener('change', updateUIState);
+            syncButton.addEventListener('click', syncFile);
+            downloadCsvButton.addEventListener('click', downloadCSV);
+            resultsTableBody.addEventListener('change', (e) => {
+                if (e.target.classList.contains('row-checkbox')) {
+                    const item = analysisResults.find(r => r.minsan === e.target.dataset.minsan);
+                    if (item) item.selected = e.target.checked;
+                    updateUIState();
+                }
+            });
+            prevPageButton.addEventListener('click', () => { if (currentPage > 1) displayTablePage(currentPage - 1); });
+            nextPageButton.addEventListener('click', () => {
+                const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
+                let dataToPaginate = analysisResults;
+                if (filterValue === 'to-update') dataToPaginate = analysisResults.filter(r => r.status === 'to-update');
+                else if (filterValue === 'error') dataToPaginate = analysisResults.filter(r => r.status === 'error');
+                else if (filterValue === 'duplicates') dataToPaginate = duplicateRows;
+                const totalPages = Math.ceil(dataToPaginate.length / ROWS_PER_PAGE);
+                if (currentPage < totalPages) displayTablePage(currentPage + 1);
+            });
+            filterRadios.forEach(radio => radio.addEventListener('change', () => { currentPage = 1; displayTablePage(currentPage); }));
+            resultsTableHead.addEventListener('change', (e) => {
+                if (e.target.id === 'select-all-checkbox') {
+                    const isChecked = e.target.checked;
+                    analysisResults.forEach(res => { if (res.status === 'to-update') res.selected = isChecked; });
+                    displayTablePage(currentPage);
+                }
+            });
+        }
+
+        // ===============================================================
+        // SEZIONE VERIFICA FILE
+        // ===============================================================
+        {
+            const verifyPlaceholder = document.getElementById('verify-placeholder');
+            const verifyControls = document.getElementById('verify-controls');
+            const searchInput = document.getElementById('search-input');
+            const verifyTableHead = document.getElementById('verify-table-head');
+            const verifyTableBody = document.getElementById('verify-table-body');
+            const verifyNoResults = document.getElementById('verify-no-results');
+
+            window.addEventListener('data-loaded-for-verification', (event) => {
+                verificationData = event.detail;
+                verifyPlaceholder.classList.add('hidden');
+                verifyControls.classList.remove('hidden');
+                renderVerificationTable(verificationData);
+            });
+            
+            function renderVerificationTable(data) {
+                verifyTableHead.innerHTML = '';
+                verifyTableBody.innerHTML = '';
+                verifyNoResults.classList.toggle('hidden', data.length > 0);
+
+                if (data.length > 0) {
+                    const headers = Object.keys(data[0]);
+                    const headerRow = document.createElement('tr');
+                    headers.forEach(header => {
+                        const th = document.createElement('th');
+                        th.className = "px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider";
+                        th.textContent = header;
+                        headerRow.appendChild(th);
+                    });
+                    verifyTableHead.appendChild(headerRow);
+
+                    data.forEach(item => {
+                        const row = document.createElement('tr');
+                        headers.forEach(header => {
+                            const td = document.createElement('td');
+                            td.className = "px-3 py-4 whitespace-nowrap text-sm text-gray-700";
+                            td.textContent = item[header] ?? '';
+                            row.appendChild(td);
+                        });
+                        verifyTableBody.appendChild(row);
+                    });
+                }
+            }
+
+            function performSearch() {
+                const searchTerm = searchInput.value.toLowerCase();
+                if (!searchTerm) {
+                    renderVerificationTable(verificationData);
+                    return;
+                }
+                const filteredData = verificationData.filter(item => 
+                    Object.values(item).some(val => 
+                        String(val).toLowerCase().includes(searchTerm)
+                    )
+                );
+                renderVerificationTable(filteredData);
+            }
+
+            searchInput.addEventListener('input', performSearch);
+        }
+    </script>
+</body>
+</html>
