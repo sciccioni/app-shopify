@@ -490,7 +490,7 @@
                             shopify_inventory_item_id
                         )
                     `)
-                    .order('created_at', { ascending: false });
+                    .order('created_at', { ascending: false }); // Ordina per i più recenti
 
                 if (error) {
                     console.error('Errore nel caricamento report di sincronizzazione da Supabase:', error);
@@ -542,6 +542,10 @@
 
                 analysisResults = Array.from(consolidatedMap.values()); // Popola analysisResults con i dati consolidati
 
+                // Ricalcola duplicateRows se necessario per il filtro, basandosi sui dati raw originali
+                // Questo è necessario solo se non abbiamo ancora i raw data in memoria, o se vogliamo un report sui duplicati consolidati
+                // Per ora, duplicateRows rimane come calcolato durante l'ingestione raw (se il file era stato caricato).
+
                 syncReportContent.classList.remove('hidden');
                 currentPage = 1;
                 displaySyncReportTablePage(currentPage); 
@@ -553,7 +557,6 @@
                 loader.classList.add('hidden');
             }
         }
-        // --- FINE NUOVO: Funzioni di caricamento dati da Supabase ---
 
         // --- Funzioni di gestione file e analisi ---
         function handleFileSync(file) {
@@ -561,6 +564,9 @@
             fileNameDisplay.textContent = file.name;
             analyzeButton.disabled = false;
         }
+
+        // Funzioni per chiamare il backend (rimangono invariate)
+        // analyzeButton.addEventListener('click', analyzeFile); // Spostato all'interno di window.onload
 
         async function analyzeFile() {
             hideErrorMessage();
@@ -682,6 +688,7 @@
                 }
                 console.log('Tutti i dati inviati a Supabase con successo. Totale prodotti ingeriti:', totalIngested);
 
+                // Dopo l'ingestione, passa automaticamente alla vista del report di sincronizzazione
                 showSyncReportView(); 
 
             } catch (error) {
@@ -819,9 +826,9 @@
             
             renderSyncReportTable(paginatedItems, isDuplicateView); 
             
-            document.getElementById('sync-page-indicator').textContent = `Pagina ${page} di ${totalPages || 1}`;
-            document.getElementById('sync-prev-page-button').disabled = page === 1;
-            document.getElementById('sync-next-page-button').disabled = page === totalPages || totalPages === 0;
+            syncPageIndicator.textContent = `Pagina ${page} di ${totalPages || 1}`;
+            syncPrevPageButton.disabled = page === 1;
+            syncNextPageButton.disabled = page === totalPages || totalPages === 0;
             updateUIState();
         }
 
@@ -832,7 +839,7 @@
             syncReportTableBody.innerHTML = '';
 
             // Intestazioni per il Report di Sincronizzazione (consolidato)
-            syncReportTableHead.innerHTML = `<tr><th class="px-2 py-3"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 rounded"></th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minsan/SKU</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[200px]">Descrizione</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available (Shopify)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Committed</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">On Hand</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giac. File (Consol.)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. Shopify</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. File (Consol.)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase text-red-600">DEBUG</th></tr>`;
+            syncReportTableHead.innerHTML = `<tr><th class="px-2 py-3"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 rounded"></th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minsan/SKU</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[200px]">Descrizione</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available (Shopify)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Committed</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">On Hand</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giac. File (Consol.)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. Shopify</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. File (Consol.)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stato</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dettagli</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase text-red-600">DEBUG</th></tr>`;
             
             items.forEach(res => {
                 const statusInfo = getStatusInfo(res.status);
