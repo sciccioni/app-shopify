@@ -273,15 +273,10 @@
         let dropZone, fileInput, fileNameDisplay, analyzeButton, resultsSection, summaryContainer;
         let loader, loaderText, syncActionArea, syncButton, confirmSyncCheckbox, syncStatusMessage;
         let errorMessageBox, errorMessageText, progressBarContainer, progressBar, downloadCsvButton;
-        let tableContainer, resultsTableHead, resultsTableBody; // Questi saranno usati per il report di sincronizzazione
-        let prevPageButton, nextPageButton, pageIndicator;
-        let filterRadios;
-        let duplicateFilterContainer, syncedFilterContainer;
-
-        let rawSearchInput, downloadRawCsvButton; // Elementi per la tabella raw
+        let rawSearchInput, downloadRawCsvButton;
         let rawImportTableHead, rawImportTableBody;
         let rawPrevPageButton, rawNextPageButton, rawPageIndicator;
-
+        let syncReportTableHead, syncReportTableBody, syncPrevPageButton, syncNextPageButton, syncPageIndicator, filterRadios, duplicateFilterContainer, syncedFilterContainer;
 
         // --- STATO CONDIVISO ---
         let verificationData = []; // Usato per la tab "Verifica File"
@@ -358,9 +353,8 @@
                         }
                     }
                 }
+                return null;
             }
-            return null;
-        }
 
         // Funzione per chiamare il backend (shopify-proxy.js)
         async function callShopifyBackend(payload) {
@@ -407,12 +401,7 @@
                 console.error("Supabase URL or Anon Key not configured in frontend. Cannot load data from Supabase.");
             }
         }
-        const supabaseScript = document.createElement('script');
-        supabaseScript.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
-        supabaseScript.onload = initializeSupabaseClient;
-        document.head.appendChild(supabaseScript);
-        // --- FINE Inizializzazione Supabase ---
-
+        
         // --- Funzione per caricare i dati RAW importati da Supabase ---
         async function loadRawImportData() {
             if (!supabaseClient) {
@@ -423,7 +412,7 @@
             loader.classList.remove('hidden');
             loaderText.textContent = 'Caricamento dati raw da Supabase...';
             rawImportContent.classList.add('hidden');
-            syncReportContent.classList.add('hidden'); // Nasconde anche l'altra vista
+            syncReportContent.classList.add('hidden'); 
             hideErrorMessage();
 
             try {
@@ -484,10 +473,11 @@
             loader.classList.remove('hidden');
             loaderText.textContent = 'Caricamento report di sincronizzazione da Supabase...';
             syncReportContent.classList.add('hidden');
-            rawImportContent.classList.add('hidden'); // Nasconde anche l'altra vista
+            rawImportContent.classList.add('hidden'); 
             hideErrorMessage();
 
             try {
+                // Recupera tutti i record necessari per il consolidamento
                 const { data, error } = await supabaseClient
                     .from('inventory_updates')
                     .select(`
@@ -508,16 +498,18 @@
                     return;
                 }
 
+                // Logica di consolidamento in JS per il report di sincronizzazione
                 const consolidatedMap = new Map();
                 data.forEach(item => {
                     const minsan = item.products.sku_or_minsan;
                     if (!consolidatedMap.has(minsan)) {
+                        // Se non esiste, crea un nuovo record consolidato
                         consolidatedMap.set(minsan, {
                             minsan: minsan,
                             title: item.products.title,
                             descrizione: item.products.title,
-                            giacenzaFile: 0,
-                            scadenzaFile: null,
+                            giacenzaFile: 0, // Inizializza giacenza
+                            scadenzaFile: null, 
                             shopify_product_id: item.products.shopify_product_id,
                             shopify_variant_id: item.products.shopify_variant_id,
                             shopify_inventory_item_id: item.products.shopify_inventory_item_id,
@@ -526,29 +518,33 @@
                             available_quantity: item.shopify_available_quantity,
                             on_hand_quantity: item.shopify_on_hand_quantity,
                             expiry_date: item.shopify_expiry_date,
-                            status: item.status,
+                            status: item.status, // Ultimo stato di sync per questo prodotto
                             details: item.details,
                             selected: false,
                         });
                     }
                     const consolidatedItem = consolidatedMap.get(minsan);
+                    
+                    // Somma le giacenze di tutti i lotti importati
                     consolidatedItem.giacenzaFile += item.quantity_from_file;
                     
+                    // Trova la scadenza più breve
                     if (item.expiry_date_from_file) {
                         const currentExpiryDate = new Date(item.expiry_date_from_file);
                         if (!consolidatedItem.scadenzaFile || currentExpiryDate < new Date(consolidatedItem.scadenzaFile)) {
                             consolidatedItem.scadenzaFile = item.expiry_date_from_file;
                         }
                     }
+                    // Aggiorna lo stato e i dettagli con l'ultimo record (grazie all'ordinamento per data)
                     consolidatedItem.status = item.status;
                     consolidatedItem.details = item.details;
                 });
 
-                analysisResults = Array.from(consolidatedMap.values());
+                analysisResults = Array.from(consolidatedMap.values()); // Popola analysisResults con i dati consolidati
 
                 syncReportContent.classList.remove('hidden');
                 currentPage = 1;
-                displaySyncReportTablePage(currentPage);
+                displaySyncReportTablePage(currentPage); 
 
             } catch (error) {
                 console.error("Errore durante il caricamento report di sincronizzazione da Supabase:", error);
@@ -557,6 +553,7 @@
                 loader.classList.add('hidden');
             }
         }
+        // --- FINE NUOVO: Funzioni di caricamento dati da Supabase ---
 
         // --- Funzioni di gestione file e analisi ---
         function handleFileSync(file) {
@@ -564,9 +561,6 @@
             fileNameDisplay.textContent = file.name;
             analyzeButton.disabled = false;
         }
-
-        // Funzioni per chiamare il backend (rimangono invariate)
-        // analyzeButton.addEventListener('click', analyzeFile); // Spostato all'interno di window.onload
 
         async function analyzeFile() {
             hideErrorMessage();
@@ -588,6 +582,7 @@
 
                 window.dispatchEvent(new CustomEvent('data-loaded-for-verification', { detail: fileDataRaw }));
 
+                // La logica per duplicateRows per il summary dei duplicati raw
                 const skuMapForDuplicates = new Map();
                 fileDataRaw.forEach(row => {
                     const sku = String(getValue(row, ['Minsan', 'EAN']) || '').trim();
@@ -804,12 +799,136 @@
             summaryContainer.innerHTML = `<div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.rawTotal}</p><p class="text-sm text-gray-600">Righe Totali</p></div><div class="bg-gray-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold">${summary.total}</p><p class="text-sm text-gray-600">Prodotti Unici</p></div><div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.duplicates}</p><p class="text-sm text-yellow-700">Righe Duplicate</p></div><div class="bg-blue-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-blue-800">${summary.toUpdate}</p><p class="text-sm text-blue-700">Da Aggiornare</p></div><div class="bg-green-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-green-800">${summary.synced}</p><p class="text-sm text-green-700">Sincronizzati</p></div><div class="bg-yellow-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-yellow-800">${summary.notFound}</p><p class="text-sm text-yellow-700">Non Trovati</p></div><div class="bg-red-100 p-4 rounded-lg text-center"><p class="text-2xl font-bold text-red-800">${summary.errors}</p><p class="text-sm text-red-700">Errori Dati</p></div>`;
         }
 
-        // --- Event Listeners per la paginazione e i filtri del report di sincronizzazione ---
-        // Spostati all'interno di window.onload
+        // --- Funzione per visualizzare la tabella del Report di Sincronizzazione ---
+        function displaySyncReportTablePage(page) {
+            currentPage = page; // Usa la variabile globale currentPage
+            const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
+            let dataToDisplay = analysisResults; // analysisResults contiene i dati consolidati
+            let isDuplicateView = false; // Non applicabile direttamente qui, i duplicati sono già consolidati
 
-        // --- Event Listeners per la paginazione e la ricerca del report raw ---
-        // Spostati all'interno di window.onload
+            if (filterValue === 'to-update') dataToDisplay = analysisResults.filter(r => r.status === 'to-update');
+            else if (filterValue === 'error') dataToDisplay = analysisResults.filter(r => r.status === 'error');
+            else if (filterValue === 'duplicates') { 
+                dataToDisplay = duplicateRows; 
+                isDuplicateView = true; 
+            }
+            else if (filterValue === 'synced') dataToDisplay = analysisResults.filter(r => r.status === 'success');
+            
+            const totalPages = Math.ceil(dataToDisplay.length / ROWS_PER_PAGE);
+            const paginatedItems = dataToDisplay.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
+            
+            renderSyncReportTable(paginatedItems, isDuplicateView); 
+            
+            document.getElementById('sync-page-indicator').textContent = `Pagina ${page} di ${totalPages || 1}`;
+            document.getElementById('sync-prev-page-button').disabled = page === 1;
+            document.getElementById('sync-next-page-button').disabled = page === totalPages || totalPages === 0;
+            updateUIState();
+        }
 
+        // --- Funzione per renderizzare la tabella del Report di Sincronizzazione ---
+        function renderSyncReportTable(items, isDuplicateView) {
+            const syncReportTableHead = document.getElementById('sync-report-table-head');
+            const syncReportTableBody = document.getElementById('sync-report-table-body');
+            syncReportTableBody.innerHTML = '';
+
+            // Intestazioni per il Report di Sincronizzazione (consolidato)
+            syncReportTableHead.innerHTML = `<tr><th class="px-2 py-3"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 rounded"></th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minsan/SKU</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[200px]">Descrizione</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available (Shopify)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Committed</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">On Hand</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giac. File (Consol.)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. Shopify</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. File (Consol.)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Details</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase text-red-600">DEBUG</th></tr>`;
+            
+            items.forEach(res => {
+                const statusInfo = getStatusInfo(res.status);
+                const row = document.createElement('tr');
+                row.className = statusInfo.rowClass;
+                let checkboxHTML = '<td class="px-2 py-4"></td>';
+                if (res.status === 'to-update') {
+                    checkboxHTML = `<td class="px-2 py-4"><input type="checkbox" class="h-4 w-4 text-indigo-600 rounded row-checkbox" data-minsan="${res.minsan}" ${res.selected ? 'checked' : ''}></td>`;
+                }
+                const debugData = JSON.stringify(res._debug_source_row || res, null, 2); 
+                row.innerHTML = `${checkboxHTML}<td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${res.minsan}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.title || res.descrizione}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.inventory_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.committed_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.available_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.on_hand_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.giacenzaFile}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.expiry_date || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.scadenzaFile || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${statusInfo.badgeClass}">${statusInfo.icon} ${statusInfo.label}</span></td><td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.details || ''}</td><td class="p-2 debug-cell">${debugData}</td>`;
+                syncReportTableBody.appendChild(row);
+            });
+        }
+
+        // --- NUOVO: Funzione per renderizzare la tabella dei Dati Importati (Raw) ---
+        function renderRawImportTable(items) {
+            const rawImportTableHead = document.getElementById('raw-import-table-head');
+            const rawImportTableBody = document.getElementById('raw-import-table-body');
+            rawImportTableBody.innerHTML = '';
+
+            if (items.length === 0) {
+                rawImportTableHead.innerHTML = '';
+                rawImportTableBody.innerHTML = '<tr><td colspan="15" class="text-center py-4 text-gray-500">Nessun dato raw da visualizzare.</td></tr>';
+                return;
+            }
+
+            // Intestazioni per i Dati Importati (Raw) - tutte le colonne del file Excel + dati Shopify
+            const headers = [
+                'Minsan/SKU', 'Descrizione', 'Ditta', 'Lotto', 'Giacenza File', 'Scadenza File',
+                'Costo Base', 'Costo Medio', 'Ultimo Costo Ditta', 'Data Ultimo Costo Ditta',
+                'Prezzo BD', 'IVA Value',
+                'Shopify Product ID', 'Shopify Variant ID', 'Shopify Inventory Item ID',
+                'Shopify On Hand', 'Shopify Available', 'Shopify Committed', 'Shopify Unavailable', 'Shopify Expiry',
+                'Stato Ingestione', 'Dettagli Ingestione', 'Ingested At'
+            ];
+            rawImportTableHead.innerHTML = `<tr>${headers.map(h => `<th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">${h}</th>`).join('')}</tr>`;
+
+            items.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${item.minsan ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.title || item.descrizione ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.Ditta ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.lotto ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.giacenzaFile ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.scadenzaFile || 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.CostoBase ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.CostoMedio ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.UltimoCostoDitta ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.DataUltimoCostoDitta || 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.PrezzoBD ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.IVAValue ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_product_id ? item.shopify_product_id.split('/').pop() : 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_variant_id ? item.shopify_variant_id.split('/').pop() : 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_inventory_item_id ? item.shopify_inventory_item_id.split('/').pop() : 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_on_hand_quantity ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_available_quantity ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_committed_quantity ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_unavailable_quantity ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_expiry_date || 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${getStatusInfo(item.status).badgeClass}">${getStatusInfo(item.status).icon} ${getStatusInfo(item.status).label}</span></td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${item.details || ''}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${new Date(item.created_at).toLocaleString()}</td>
+                `;
+                rawImportTableBody.appendChild(row);
+            });
+        }
+        // --- FINE NUOVO: Funzioni di renderizzazione tabelle ---
+
+        function updateUIState() {
+            const itemsToUpdateSelected = analysisResults.filter(r => r.selected).length > 0;
+            const totalToUpdate = analysisResults.filter(r => r.status === 'to-update').length;
+            confirmSyncCheckbox.disabled = !itemsToUpdateSelected;
+            syncButton.disabled = !confirmSyncCheckbox.checked || !itemsToUpdateSelected;
+            syncActionArea.classList.toggle('hidden', totalToUpdate === 0);
+            const selectAll = document.getElementById('select-all-checkbox');
+            if (selectAll) {
+                const updatableItemsOnPage = document.querySelectorAll('.row-checkbox');
+                selectAll.checked = updatableItemsOnPage.length > 0 && Array.from(updatableItemsOnPage).every(cb => cb.checked);
+            }
+        }
+
+        function getStatusInfo(status) {
+            const icons = { success: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`, 'to-update': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 20h5v-5M20 4h-5v5"></path></svg>`, 'no-change': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'not-found': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, error: `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`, 'to-ingest': `<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>` }; // Aggiunto icona per 'to-ingest'
+            switch (status) {
+                case 'success': return { label: 'Sincronizzato', badgeClass: 'bg-green-100 text-green-800', icon: icons.success, rowClass: 'bg-green-50' };
+                case 'to-update': return { label: 'Da Aggiornare', badgeClass: 'bg-blue-100 text-blue-800', icon: icons['to-update'], rowClass: 'bg-blue-50' };
+                case 'no-change': return { label: 'Nessuna Modifica', badgeClass: 'bg-gray-100 text-gray-800', icon: icons['no-change'], rowClass: '' };
+                case 'not-found': return { label: 'Non Trovato', badgeClass: 'bg-yellow-100 text-yellow-800', icon: icons['not-found'], rowClass: 'bg-yellow-50' };
+                case 'error': return { label: 'Errore', badgeClass: 'bg-red-100 text-red-800', icon: icons.error, rowClass: 'bg-red-50' };
+                case 'to-ingest': return { label: 'Da Ingerire', badgeClass: 'bg-purple-100 text-purple-800', icon: icons['to-ingest'], rowClass: 'bg-purple-50' }; // Nuovo stato
+                default: return { label: 'Sconosciuto', badgeClass: 'bg-gray-100 text-gray-800', icon: '', rowClass: '' };
+            }
+        }
+        
         // --- Inizializzazione degli Event Listeners dopo il caricamento del DOM ---
         window.onload = function() {
             // Assegna gli elementi DOM dopo che la pagina è completamente caricata
@@ -846,12 +965,12 @@
             progressBarContainer = document.getElementById('progress-bar-container');
             progressBar = document.getElementById('progress-bar');
             downloadCsvButton = document.getElementById('download-csv-button');
-            tableContainer = document.getElementById('sync-report-table-container'); // Riferimento al container del report di sync
-            resultsTableHead = document.getElementById('sync-report-table-head');
-            resultsTableBody = document.getElementById('sync-report-table-body');
-            prevPageButton = document.getElementById('sync-prev-page-button');
-            nextPageButton = document.getElementById('sync-next-page-button');
-            pageIndicator = document.getElementById('sync-page-indicator');
+            // Nota: Riferimenti corretti per le tabelle raw e sync
+            syncReportTableHead = document.getElementById('sync-report-table-head');
+            syncReportTableBody = document.getElementById('sync-report-table-body');
+            syncPrevPageButton = document.getElementById('sync-prev-page-button');
+            syncNextPageButton = document.getElementById('sync-next-page-button');
+            syncPageIndicator = document.getElementById('sync-page-indicator');
             filterRadios = document.querySelectorAll('input[name="filter-type"]');
             duplicateFilterContainer = document.getElementById('duplicate-filter-container');
             syncedFilterContainer = document.getElementById('synced-filter-container');
@@ -894,8 +1013,8 @@
             downloadCsvButton.addEventListener('click', downloadCSV);
             
             // Event Listeners per la paginazione e i filtri del report di sincronizzazione
-            document.getElementById('sync-prev-page-button').addEventListener('click', () => { if (currentPage > 1) displaySyncReportTablePage(currentPage - 1); });
-            document.getElementById('sync-next-page-button').addEventListener('click', () => {
+            syncPrevPageButton.addEventListener('click', () => { if (currentPage > 1) displaySyncReportTablePage(currentPage - 1); });
+            syncNextPageButton.addEventListener('click', () => {
                 const filterValue = document.querySelector('input[name="filter-type"]:checked').value;
                 let dataToPaginate = analysisResults;
                 if (filterValue === 'to-update') dataToPaginate = analysisResults.filter(r => r.status === 'to-update');
@@ -905,14 +1024,14 @@
                 if (currentPage < totalPages) displaySyncReportTablePage(currentPage + 1);
             });
             filterRadios.forEach(radio => radio.addEventListener('change', () => { currentPage = 1; displaySyncReportTablePage(currentPage); }));
-            document.getElementById('sync-report-table-head').addEventListener('change', (e) => {
+            syncReportTableHead.addEventListener('change', (e) => {
                 if (e.target.id === 'select-all-checkbox') {
                     const isChecked = e.target.checked;
                     analysisResults.forEach(res => { if (res.status === 'to-update') res.selected = isChecked; });
                     displaySyncReportTablePage(currentPage);
                 }
             });
-            document.getElementById('sync-report-table-body').addEventListener('change', (e) => {
+            syncReportTableBody.addEventListener('change', (e) => {
                 if (e.target.classList.contains('row-checkbox')) {
                     const item = analysisResults.find(r => r.minsan === e.target.dataset.minsan);
                     if (item) item.selected = e.target.checked;
@@ -921,8 +1040,8 @@
             });
 
             // Event Listeners per la paginazione e la ricerca del report raw
-            document.getElementById('raw-prev-page-button').addEventListener('click', () => { if (rawCurrentPage > 1) displayRawImportTablePage(rawCurrentPage - 1); });
-            document.getElementById('raw-next-page-button').addEventListener('click', () => {
+            rawPrevPageButton.addEventListener('click', () => { if (rawCurrentPage > 1) displayRawImportTablePage(rawCurrentPage - 1); });
+            rawNextPageButton.addEventListener('click', () => {
                 let dataToPaginate = rawImportData;
                 const searchTerm = rawSearchInput.value.toLowerCase();
                 if (searchTerm) {
@@ -938,72 +1057,55 @@
             rawSearchInput.addEventListener('input', () => { rawCurrentPage = 1; displayRawImportTablePage(rawCurrentPage); });
             downloadRawCsvButton.addEventListener('click', downloadRawCSV);
 
-            // Inizializza la visualizzazione al caricamento della pagina
-            showSyncReportView(); // Mostra il report di sincronizzazione per default
-        };
-
-        // ===============================================================
-        // SEZIONE VERIFICA FILE (rimane invariata)
-        // ===============================================================
-        {
-            const verifyPlaceholder = document.getElementById('verify-placeholder');
-            const verifyControls = document.getElementById('verify-controls');
-            const searchInput = document.getElementById('search-input');
-            const verifyTableHead = document.getElementById('verify-table-head');
-            const verifyTableBody = document.getElementById('verify-table-body');
-            const verifyNoResults = document.getElementById('verify-no-results');
-
-            window.addEventListener('data-loaded-for-verification', (event) => {
-                verificationData = event.detail;
-                verifyPlaceholder.classList.add('hidden');
-                verifyControls.classList.remove('hidden');
-                renderVerificationTable(verificationData);
-            });
-            
-            function renderVerificationTable(data) {
-                verifyTableHead.innerHTML = '';
-                verifyTableBody.innerHTML = '';
-                verifyNoResults.classList.toggle('hidden', data.length > 0);
-
-                if (data.length > 0) {
-                    const headers = Object.keys(data[0]);
-                    const headerRow = document.createElement('tr');
-                    headers.forEach(header => {
-                        const th = document.createElement('th');
-                        th.className = "px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider";
-                        th.textContent = header;
-                        headerRow.appendChild(th);
-                    });
-                    verifyTableHead.appendChild(headerRow);
-
-                    data.forEach(item => {
-                        const row = document.createElement('tr');
-                        headers.forEach(header => {
-                            const td = document.createElement('td');
-                            td.className = "px-3 py-4 whitespace-nowrap text-sm text-gray-700";
-                            td.textContent = item[header] ?? '';
-                            row.appendChild(td);
-                        });
-                        verifyTableBody.appendChild(row);
-                    });
+            // Funzione per scaricare il report raw
+            function downloadRawCSV() {
+                if (rawImportData.length === 0) return;
+                const headers = [
+                    'Minsan_SKU', 'Descrizione', 'Ditta', 'Lotto', 'Giacenza_File', 'Scadenza_File',
+                    'Costo_Base', 'Costo_Medio', 'Ultimo_Costo_Ditta', 'Data_Ultimo_Costo_Ditta',
+                    'Prezzo_BD', 'IVA_Value',
+                    'Shopify_Product_ID', 'Shopify_Variant_ID', 'Shopify_Inventory_Item_ID',
+                    'Shopify_On_Hand', 'Shopify_Available', 'Shopify_Committed', 'Shopify_Unavailable', 'Shopify_Expiry',
+                    'Stato_Ingestione', 'Dettagli_Ingestione', 'Ingested_At'
+                ];
+                const csvRows = [headers.join(';')];
+                for (const res of rawImportData) {
+                    const row = [
+                        res.minsan ?? '', 
+                        `"${(res.title || res.descrizione || '').replace(/"/g, '""')}"`,
+                        res.Ditta ?? '',
+                        res.lotto ?? '',
+                        res.giacenzaFile ?? '',
+                        res.scadenzaFile || '',
+                        res.CostoBase ?? '',
+                        res.CostoMedio ?? '',
+                        res.UltimoCostoDitta ?? '',
+                        res.DataUltimoCostoDitta || '',
+                        res.PrezzoBD ?? '',
+                        res.IVAValue ?? '',
+                        res.shopify_product_id ? res.shopify_product_id.split('/').pop() : '',
+                        res.shopify_variant_id ? res.shopify_variant_id.split('/').pop() : '',
+                        res.shopify_inventory_item_id ? res.shopify_inventory_item_id.split('/').pop() : '',
+                        res.shopify_on_hand_quantity ?? '',
+                        res.shopify_available_quantity ?? '',
+                        res.shopify_committed_quantity ?? '',
+                        res.shopify_unavailable_quantity ?? '',
+                        res.shopify_expiry_date || '',
+                        getStatusInfo(res.status).label,
+                        `"${(res.details || '').replace(/"/g, '""')}"`,
+                        new Date(res.created_at).toLocaleString()
+                    ];
+                    csvRows.push(row.join(';'));
                 }
+                const csvString = csvRows.join('\n');
+                const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'report_raw_import.csv';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
             }
-
-            function performSearch() {
-                const searchTerm = searchInput.value.toLowerCase();
-                if (!searchTerm) {
-                    renderVerificationTable(verificationData);
-                    return;
-                }
-                const filteredData = verificationData.filter(item => 
-                    Object.values(item).some(val => 
-                        String(val).toLowerCase().includes(searchTerm)
-                    )
-                );
-                renderVerificationTable(filteredData);
-            }
-
-            searchInput.addEventListener('input', performSearch);
         }
     </script>
 </body>
