@@ -238,28 +238,28 @@
 
             <div id="verify-tab-content" class="hidden">
                  <main class="space-y-8">
-                     <div id="verify-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                         <div id="verify-placeholder">
-                             <h2 class="text-xl font-semibold mb-2">Verifica Contenuto File</h2>
-                             <p class="text-gray-600">Carica un file nella scheda "Sincronizzazione" per attivare la ricerca qui.</p>
-                         </div>
-                         <div id="verify-controls" class="hidden">
-                              <h2 class="text-xl font-semibold mb-4">Cerca nel File Caricato</h2>
-                            <div class="flex gap-4">
-                                <input type="search" id="search-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Scrivi qui per cercare in qualsiasi colonna...">
-                            </div>
-                            <div id="verify-table-container" class="mt-6">
-                               <div class="overflow-x-auto">
-                                   <table class="min-w-full divide-y divide-gray-200">
-                                       <thead id="verify-table-head" class="bg-gray-50"></thead>
-                                       <tbody id="verify-table-body" class="bg-white divide-y divide-gray-200"></tbody>
-                                   </table>
-                               </div>
-                               <p id="verify-no-results" class="text-center text-gray-500 mt-4 hidden">Nessun risultato trovato.</p>
-                            </div>
-                        </div>
-                    </div>
-                </main>
+                       <div id="verify-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                           <div id="verify-placeholder">
+                               <h2 class="text-xl font-semibold mb-2">Verifica Contenuto File</h2>
+                               <p class="text-gray-600">Carica un file nella scheda "Sincronizzazione" per attivare la ricerca qui.</p>
+                           </div>
+                           <div id="verify-controls" class="hidden">
+                                <h2 class="text-xl font-semibold mb-4">Cerca nel File Caricato</h2>
+                                <div class="flex gap-4">
+                                    <input type="search" id="search-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Scrivi qui per cercare in qualsiasi colonna...">
+                                </div>
+                                <div id="verify-table-container" class="mt-6">
+                                   <div class="overflow-x-auto">
+                                       <table class="min-w-full divide-y divide-gray-200">
+                                           <thead id="verify-table-head" class="bg-gray-50"></thead>
+                                           <tbody id="verify-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                                       </table>
+                                   </div>
+                                   <p id="verify-no-results" class="text-center text-gray-500 mt-4 hidden">Nessun risultato trovato.</p>
+                                </div>
+                           </div>
+                       </div>
+                   </main>
             </div>
         </div>
     </div>
@@ -317,7 +317,7 @@
                     value--;
                 }
                 const utc_days  = Math.floor(value - 25569);
-                const utc_value = utc_days * 86400;                                     
+                const utc_value = utc_days * 86400;                                             
                 const date_info = new Date(utc_value * 1000);
                 
                 const year = date_info.getUTCFullYear();
@@ -893,30 +893,30 @@
             items.forEach(item => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${item.minsan ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.title || item.descrizione ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.Ditta ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.lotto ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.giacenzaFile ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.scadenzaFile || 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.CostoBase ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.CostoMedio ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.UltimoCostoDitta ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.DataUltimoCostoDitta || 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.PrezzoBD ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.IVAValue ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_product_id ? item.shopify_product_id.split('/').pop() : 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_variant_id ? item.shopify_variant_id.split('/').pop() : 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_inventory_item_id ? item.shopify_inventory_item_id.split('/').pop() : 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_on_hand_quantity ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_available_quantity ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_committed_quantity ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_unavailable_quantity ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_expiry_date || 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${getStatusInfo(item.status).badgeClass}">${getStatusInfo(item.status).icon} ${getStatusInfo(item.status).label}</span></td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${item.details || ''}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${new Date(item.created_at).toLocaleString()}</td>
-                `; // <--- CORRECTED: Closing backtick added
+                    <td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${item.minsan ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.title || item.descrizione ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.Ditta ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.lotto ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.giacenzaFile ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.scadenzaFile || 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.CostoBase ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.CostoMedio ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.UltimoCostoDitta ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.DataUltimoCostoDitta || 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.PrezzoBD ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.IVAValue ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_product_id ? item.shopify_product_id.split('/').pop() : 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_variant_id ? item.shopify_variant_id.split('/').pop() : 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_inventory_item_id ? item.shopify_inventory_item_id.split('/').pop() : 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_on_hand_quantity ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_available_quantity ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_committed_quantity ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_unavailable_quantity ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_expiry_date || 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${getStatusInfo(item.status).badgeClass}">${getStatusInfo(item.status).icon} ${getStatusInfo(item.status).label}</span></td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${item.details || ''}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${new Date(item.created_at).toLocaleString()}</td>
+                `;
                 rawImportTableBody.appendChild(row);
             });
         }
