@@ -446,9 +446,6 @@
     function initializeSupabaseClient() {
         if (SUPABASE_URL_FRONTEND && SUPABASE_ANON_KEY_FRONTEND) {
             supabaseClient = supabase.createClient(SUPABASE_URL_FRONTEND, SUPABASE_ANON_KEY_FRONTEND);
-            console.log("✅ Supabase client INIZIALIZZATO.");
-        } else {
-            console.error("❌ URL o Chiave Supabase non configurati.");
         }
     }
 
@@ -532,7 +529,7 @@
         
         let filteredData = fileDataRaw;
         if (term) {
-            filteredData = fileDataRaw.filter(item => Object.values(item).some(val => String(val).toLowerCase().includes(term)));
+            filteredData = fileDataRaw.filter(item => Object.values(item).some(val => String(val || '').toLowerCase().includes(term)));
         }
 
         tableBody.innerHTML = '';
