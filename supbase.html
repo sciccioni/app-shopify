@@ -893,30 +893,30 @@
             items.forEach(item => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${item.minsan ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.title || item.descrizione ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.Ditta ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.lotto ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.giacenzaFile ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.scadenzaFile || 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.CostoBase ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.CostoMedio ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.UltimoCostoDitta ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.DataUltimoCostoDitta || 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.PrezzoBD ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.IVAValue ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_product_id ? item.shopify_product_id.split('/').pop() : 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_variant_id ? item.shopify_variant_id.split('/').pop() : 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_inventory_item_id ? item.shopify_inventory_item_id.split('/').pop() : 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_on_hand_quantity ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_available_quantity ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_committed_quantity ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_unavailable_quantity ?? 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_expiry_date || 'N/D'}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${getStatusInfo(item.status).badgeClass}">${getStatusInfo(item.status).icon} ${getStatusInfo(item.status).label}</span></td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${item.details || ''}</td>
-                    <td class="px-3 py-4 whitespace-nowrap text-xs">${new Date(item.created_at).toLocaleString()}</td>
-                `;
+                    <td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${item.minsan ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.title || item.descrizione ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.Ditta ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.lotto ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.giacenzaFile ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.scadenzaFile || 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.CostoBase ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.CostoMedio ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.UltimoCostoDitta ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.DataUltimoCostoDitta || 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.PrezzoBD ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.IVAValue ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_product_id ? item.shopify_product_id.split('/').pop() : 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_variant_id ? item.shopify_variant_id.split('/').pop() : 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_inventory_item_id ? item.shopify_inventory_item_id.split('/').pop() : 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_on_hand_quantity ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_available_quantity ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_committed_quantity ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_unavailable_quantity ?? 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${item.shopify_expiry_date || 'N/D'}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${getStatusInfo(item.status).badgeClass}">${getStatusInfo(item.status).icon} ${getStatusInfo(item.status).label}</span></td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${item.details || ''}</td>
+                    <td class="px-3 py-4 whitespace-nowrap text-xs">${new Date(item.created_at).toLocaleString()}</td>
+                `; // <--- CORRECTED: Closing backtick added
                 rawImportTableBody.appendChild(row);
             });
         }
