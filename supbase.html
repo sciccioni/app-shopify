@@ -285,9 +285,10 @@
                     return value;
                 }
             }
-            const lowerCaseKeys = keys.map(k => k.toLowerCase());
+            // Se non trova la chiave esatta, prova a normalizzare i nomi delle chiavi dell'oggetto
+            const lowerCaseKeys = keys.map(k => k.toLowerCase().trim());
             for (const objKey in obj) {
-                if (lowerCaseKeys.includes(objKey.toLowerCase())) {
+                if (lowerCaseKeys.includes(objKey.toLowerCase().trim())) {
                     return obj[objKey];
                 }
             }
@@ -461,80 +462,35 @@
                     const worksheet = workbook.Sheets[sheetName];
                     fileDataRaw = XLSX.utils.sheet_to_json(worksheet);
 
+                    // --- DEBUG: Log di tutti i nomi delle colonne rilevati ---
+                    if (fileDataRaw.length > 0) {
+                        console.log("DEBUG Frontend - Nomi delle colonne rilevati nel file Excel:", Object.keys(fileDataRaw[0]));
+                    }
+                    // --- FINE DEBUG ---
+
                     window.dispatchEvent(new CustomEvent('data-loaded-for-verification', { detail: fileDataRaw }));
 
-                    const skuMap = new Map();
+                    // Rimuoviamo la logica di consolidamento per fileData
+                    // Ora, fileData conterrà tutte le righe originali del file Excel
+                    const fileData = fileDataRaw; 
+                    
+                    // La logica per duplicateRows può rimanere se serve per il summary
+                    const skuMapForDuplicates = new Map();
                     fileDataRaw.forEach(row => {
-                        // Utilizziamo Minsan o EAN come chiave per la mappatura
                         const sku = String(getValue(row, ['Minsan', 'EAN']) || '').trim();
                         if (sku) {
-                            if (!skuMap.has(sku)) skuMap.set(sku, []);
-                            skuMap.get(sku).push(row);
+                            if (!skuMapForDuplicates.has(sku)) skuMapForDuplicates.set(sku, []);
+                            skuMapForDuplicates.get(sku).push(row);
                         }
                     });
-
-                    const fileData = [];
-                    duplicateRows = [];
-                    skuMap.forEach((rows, sku) => {
+                    duplicateRows = []; // Resetta
+                    skuMapForDuplicates.forEach((rows, sku) => {
                         if (rows.length > 1) {
                             duplicateRows.push(...rows.map(r => ({...r, Minsan: sku}))); 
-                            
-                            const giacenze = rows.map(r => parseInt(getValue(r, ['Giacenza', 'giacenza']), 10) || 0);
-                            const scadenze = rows.map(r => excelDateToJSDate(getValue(r, ['Scadenza', 'scadenza']))).filter(Boolean);
-                            
-                            const totalGiacenza = giacenze.map(g => g < 0 ? 0 : g).reduce((sum, g) => sum + g, 0);
-                            let finalExpiry = null;
-
-                            if (scadenze.length > 0) {
-                                const earliestTimestamp = Math.min.apply(null, scadenze.map(date => new Date(`${date}T00:00:00Z`).getTime()));
-                                const earliestDate = new Date(earliestTimestamp);
-                                
-                                const year = earliestDate.getUTCFullYear();
-                                const month = String(earliestDate.getUTCMonth() + 1).padStart(2, '0');
-                                const day = String(earliestDate.getUTCDate()).padStart(2, '0');
-                                finalExpiry = `${year}-${month}-${day}`;
-                            }
-                            
-                            const firstRow = rows[0];
-                            const consolidatedRow = {
-                                Minsan: sku,
-                                Giacenza: totalGiacenza,
-                                Scadenza: finalExpiry,
-                                Descrizione: getValue(firstRow, ['Descrizione', 'descrizione']),
-                                isDuplicate: true,
-                                duplicateDetails: { giacenze, scadenze },
-                                // Includiamo i nuovi campi qui
-                                Ditta: getValue(firstRow, ['Ditta', 'ditta']),
-                                lotto: getValue(firstRow, ['lotto', 'Lotto']),
-                                CostoBase: getValue(firstRow, ['CostoBase', 'costo_base']),
-                                CostoMedio: getValue(firstRow, ['CostoMedio', 'costo_medio']),
-                                UltimoCostoDitta: getValue(firstRow, ['UltimoCostoDitta', 'ultimo_costo_ditta']),
-                                DataUltimoCostoDitta: excelDateToJSDate(getValue(firstRow, ['DataUltimoCostoDitta', 'data_ultimo_costo_ditta'])),
-                                // Estraiamo PrezzoBD e IVAValue separatamente
-                                PrezzoBD: getValue(firstRow, ['PrezzoBD', 'prezzo_bd', 'PrezzoBDIVA']), // Mappa PrezzoBDIVA a PrezzoBD
-                                IVAValue: getValue(firstRow, ['IVA', 'iva']) // Assumi che ci sia una colonna IVA separata
-                            };
-                            fileData.push(consolidatedRow);
-                        } else {
-                            const singleRow = rows[0];
-                            fileData.push({
-                                ...singleRow,
-                                Minsan: sku,
-                                // Includiamo i nuovi campi anche per le righe singole
-                                Ditta: getValue(singleRow, ['Ditta', 'ditta']),
-                                lotto: getValue(singleRow, ['lotto', 'Lotto']),
-                                CostoBase: getValue(singleRow, ['CostoBase', 'costo_base']),
-                                CostoMedio: getValue(singleRow, ['CostoMedio', 'costo_medio']),
-                                UltimoCostoDitta: getValue(singleRow, ['UltimoCostoDitta', 'ultimo_costo_ditta']),
-                                DataUltimoCostoDitta: excelDateToJSDate(getValue(singleRow, ['DataUltimoCostoDitta', 'data_ultimo_costo_ditta'])),
-                                // Estraiamo PrezzoBD e IVAValue separatamente
-                                PrezzoBD: getValue(singleRow, ['PrezzoBD', 'prezzo_bd', 'PrezzoBDIVA']), // Mappa PrezzoBDIVA a PrezzoBD
-                                IVAValue: getValue(singleRow, ['IVA', 'iva']) // Assumi che ci sia una colonna IVA separata
-                            });
                         }
                     });
-
                     if (duplicateRows.length > 0) duplicateFilterContainer.classList.remove('hidden');
+
 
                     const allSkus = fileData.map(row => String(getValue(row, ['Minsan', 'EAN']))).filter(Boolean);
                     if (allSkus.length === 0) throw new Error("Nessun Minsan/EAN valido trovato nel file.");
@@ -560,10 +516,10 @@
                     let productsToIngest = []; 
                     let toUpdateCount = 0, notFoundCount = 0, noChangeCount = 0, errorCount = 0;
 
-                    for (const row of fileData) {
+                    // Iteriamo direttamente su fileData (che ora contiene tutte le righe originali)
+                    for (const row of fileData) { 
                         const minsan = String(getValue(row, ['Minsan', 'EAN']));
                         const giacenza = getValue(row, ['Giacenza', 'giacenza']);
-                        // I campi del file sono già stati estratti in fileData
 
                         let giacenzaFile = parseInt(giacenza, 10);
                         let scadenzaFile = typeof getValue(row, ['Scadenza', 'scadenza']) === 'number' ? excelDateToJSDate(getValue(row, ['Scadenza', 'scadenza'])) : getValue(row, ['Scadenza', 'scadenza']);
@@ -575,16 +531,22 @@
                             scadenzaFile, 
                             selected: false,
                             _debug_source_row: row,
-                            // Includiamo i nuovi campi estratti qui
+                            // Includiamo tutti i campi direttamente dalla riga originale
                             Ditta: getValue(row, ['Ditta', 'ditta']),
                             lotto: getValue(row, ['lotto', 'Lotto']),
                             CostoBase: getValue(row, ['CostoBase', 'costo_base']),
                             CostoMedio: getValue(row, ['CostoMedio', 'costo_medio']),
                             UltimoCostoDitta: getValue(row, ['UltimoCostoDitta', 'ultimo_costo_ditta']),
                             DataUltimoCostoDitta: excelDateToJSDate(getValue(row, ['DataUltimoCostoDitta', 'data_ultimo_costo_ditta'])),
-                            PrezzoBD: getValue(row, ['PrezzoBD', 'prezzo_bd', 'PrezzoBDIVA']), // Mappa PrezzoBDIVA a PrezzoBD
-                            IVAValue: getValue(row, ['IVA', 'iva']) // Assumi che ci sia una colonna IVA separata
+                            PrezzoBD: getValue(row, ['PrezzoBD', 'prezzo_bd']), 
+                            IVAValue: getValue(row, ['IVA', 'iva']) 
                         };
+
+                        // --- DEBUG Frontend - Log per ogni riga prima dell'invio ---
+                        console.log(`DEBUG Frontend - Processando Minsan: ${minsan}, Lotto: ${resultRow.lotto}`);
+                        console.log(`DEBUG Frontend - Estratto IVAValue per questa riga:`, resultRow.IVAValue);
+                        console.log(`DEBUG Frontend - Dati completi della riga per debug:`, resultRow);
+                        // --- FINE DEBUG ---
 
                         if (!minsan || isNaN(giacenzaFile)) {
                             errorCount++;
@@ -608,16 +570,11 @@
                                         resultRow.status = 'to-update';
                                         let detailsText = [];
                                         
-                                        if (row.isDuplicate) {
-                                            let duplicateDetailString = `Giacenze sommate [${row.duplicateDetails.giacenze.join(', ')}].`;
-                                            const scadenzeList = row.duplicateDetails.scadenze;
-                                            if (scadenzeList.length > 1) {
-                                                duplicateDetailString += ` Scadenze multiple [${scadenzeList.join(', ')}], selezionata la più corta: ${scadenzaFile || 'N/D'}.`;
-                                            } else if (scadenzeList.length === 1) {
-                                                duplicateDetailString += ` Unica scadenza trovata: ${scadenzeList[0]}.`;
-                                            }
-                                            detailsText.push(duplicateDetailString);
-                                        }
+                                        // Questa parte della logica di consolidamento dettagli non è più rilevante per l'ingestione di singole righe,
+                                        // ma può essere mantenuta per la visualizzazione dei "duplicateRows" nel summary se desiderato.
+                                        // Se row.isDuplicate è ancora un flag, assicurati che sia impostato correttamente se lo usi.
+                                        // Per ora, lo rimuovo da qui per evitare confusione con la logica di ingestione per riga singola.
+                                        // if (row.isDuplicate) { ... } 
 
                                         if (giacenzaFile < 0) detailsText.push(`Giacenza negativa (${giacenzaFile}) corretta a 0.`);
                                         if (detailsText.length === 0) detailsText.push('Pronto per l\'aggiornamento.');
