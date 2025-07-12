@@ -5,6 +5,7 @@ import xlsx from "xlsx";
 import { Readable } from "stream";
 
 // Colonne obbligatorie che ci aspettiamo di trovare nel file Excel.
+// Il controllo sarà case-insensitive.
 const REQUIRED_COLUMNS = [
   'Ditta', 'Minsan', 'EAN', 'Descrizione', 'Scadenza', 
   'Lotto', 'Giacenza', 'CostoBase', 'CostoMedio', 
@@ -45,7 +46,6 @@ const parseMultipartForm = (event: HandlerEvent): Promise<{ file: Buffer, passwo
         reject(err);
     });
 
-    // Gestisce correttamente la codifica del corpo della richiesta
     const body = Buffer.from(event.body || '', event.isBase64Encoded ? 'base64' : 'utf8');
     bb.end(body);
   });
@@ -53,40 +53,26 @@ const parseMultipartForm = (event: HandlerEvent): Promise<{ file: Buffer, passwo
 
 
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
-  // 1. Verifica il metodo della richiesta
   if (event.httpMethod !== "POST") {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ error: "Metodo non consentito." }),
-    };
+    return { statusCode: 405, body: JSON.stringify({ error: "Metodo non consentito." }) };
   }
 
-  // 2. Inizializza il client di Supabase
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
   const appPassword = process.env.APP_PASSWORD;
 
   if (!supabaseUrl || !supabaseServiceKey || !appPassword) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Variabili d'ambiente Supabase o password non configurate." }),
-    };
+    return { statusCode: 500, body: JSON.stringify({ error: "Variabili d'ambiente non configurate." }) };
   }
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    // 3. Parsing del form
     const { file, password } = await parseMultipartForm(event);
 
-    // 4. Protezione dell'endpoint con password
     if (password !== appPassword) {
-      return {
-        statusCode: 401,
-        body: JSON.stringify({ error: "Password non valida." }),
-      };
+      return { statusCode: 401, body: JSON.stringify({ error: "Password non valida." }) };
     }
 
-    // 5. Parsing del file Excel
     const workbook = xlsx.read(file, { type: "buffer", cellDates: true });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
@@ -96,9 +82,14 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       return { statusCode: 400, body: JSON.stringify({ error: "Il file Excel è vuoto." }) };
     }
 
-    // 6. Validazione delle colonne
-    const header = Object.keys(data[0]);
-    const missingColumns = REQUIRED_COLUMNS.filter(col => !header.includes(col));
+    // --- NUOVA LOGICA DI VALIDAZIONE E NORMALIZZAZIONE (CASE-INSENSITIVE) ---
+    const headerOriginal = Object.keys(data[0]);
+    const headerLowercase = headerOriginal.map(h => h.toLowerCase());
+
+    const missingColumns = REQUIRED_COLUMNS.filter(
+      reqCol => !headerLowercase.includes(reqCol.toLowerCase())
+    );
+
     if (missingColumns.length > 0) {
       return {
         statusCode: 400,
@@ -106,8 +97,26 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       };
     }
 
-    // 7. Salvataggio su Supabase
-    // Inizia una "transazione" manuale
+    // Creiamo una mappa per passare dai nomi minuscoli a quelli originali
+    const headerMap: { [key: string]: string } = {};
+    headerOriginal.forEach(h => {
+        headerMap[h.toLowerCase()] = h;
+    });
+
+    // Normalizziamo le chiavi di ogni riga per avere una struttura dati consistente
+    const normalizedData = data.map(row => {
+        const newRow: { [key: string]: any } = {};
+        for (const requiredCol of REQUIRED_COLUMNS) {
+            const originalColName = headerMap[requiredCol.toLowerCase()];
+            if (originalColName) {
+                // Usiamo il nome della colonna richiesto (es. "Lotto") come chiave
+                newRow[requiredCol] = row[originalColName];
+            }
+        }
+        return newRow;
+    });
+    // --- FINE NUOVA LOGICA ---
+
     const { data: importData, error: importError } = await supabase
       .from('imports')
       .insert({ file_name: 'uploaded_file.xlsx' })
@@ -118,10 +127,9 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     const importId = importData.id;
 
-    // Prepara i dati grezzi per l'inserimento
-    const rawDataToInsert = data.map(row => ({
+    const rawDataToInsert = normalizedData.map(row => ({
       import_id: importId,
-      row_data: row,
+      row_data: row, // Ora row_data ha chiavi con la giusta capitalizzazione (es. "Lotto")
     }));
 
     const { error: rawDataError } = await supabase
@@ -129,18 +137,16 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       .insert(rawDataToInsert);
 
     if (rawDataError) {
-      // Rollback manuale: se l'inserimento dei dati grezzi fallisce, cancella l'importazione creata
       await supabase.from('imports').delete().eq('id', importId);
       throw rawDataError;
     }
 
-    // 8. Risposta di successo
     return {
       statusCode: 200,
       body: JSON.stringify({
         message: "File importato con successo!",
         importId: importId,
-        rowsImported: data.length,
+        rowsImported: normalizedData.length,
       }),
     };
 
