@@ -1,0 +1,14 @@
+<!DOCTYPE html><html><head>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head><body>
+  <canvas id="stockDist"></canvas>
+  <script>
+    async function build() {
+      const stats = await fetch('/api/dashboard-stats').then(r=>r.json());
+      new Chart(document.getElementById('stockDist'), { type:'bar', data:{
+        labels: stats.labels, datasets:[{ label:'Giacenza', data: stats.values }] }
+      });
+    }
+    build();
+  </script>
+</body></html>
