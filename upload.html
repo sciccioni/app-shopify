@@ -1,0 +1,17 @@
+<form id="uploadForm">
+  <input type="file" name="file" accept=".xlsx" required />
+  <button type="submit">Importa</button>
+</form>
+<script>
+  document.getElementById('uploadForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const res = await fetch('https://<YOUR-PROJECT-REF>.functions.supabase.co/importRows', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` },
+      body: form
+    });
+    const json = await res.json();
+    alert(JSON.stringify(json));
+  });
+</script>
