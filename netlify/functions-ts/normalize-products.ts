@@ -1,32 +1,28 @@
 import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 
-// Interfaccia per i dati grezzi estratti da Supabase
+// Interfaccia per i dati grezzi estratti dal JSONB in Supabase
 interface RawProductData {
-  id: number;
-  import_id: string;
-  row_data: {
-    Minsan: string;
-    EAN?: string;
-    Ditta?: string;
-    Descrizione?: string;
-    Scadenza: string | Date; // Può essere stringa o data
-    Lotto?: string;
-    Giacenza: number;
-    CostoMedio?: number;
-    PrezzoBD?: number;
-    IVA?: number;
-  };
+  Minsan: string;
+  EAN?: string;
+  Ditta?: string;
+  Descrizione?: string;
+  Scadenza: string | Date; // Può essere stringa o data
+  Lotto?: string;
+  Giacenza: number;
+  CostoMedio?: number;
+  PrezzoBD?: number;
+  IVA?: number;
 }
 
-// Interfaccia per i prodotti normalizzati da inserire
+// Interfaccia per i prodotti normalizzati da inserire nella tabella 'products'
 interface NormalizedProduct {
   import_id: string;
   minsan: string;
   ean?: string;
   ditta?: string;
   descrizione?: string;
-  scadenza?: string; // Formato YYYY-MM-DD
+  scadenza?: string; // Verrà salvato in formato YYYY-MM-DD
   giacenza: number;
   costo_medio?: number;
   prezzo_bd?: number;
@@ -66,7 +62,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     // 3. Recupera tutti i dati grezzi per l'importazione specificata
     const { data: rawData, error: fetchError } = await supabase
       .from('imports_raw')
-      .select('*')
+      .select('row_data')
       .eq('import_id', importId);
 
     if (fetchError) throw fetchError;
@@ -77,8 +73,9 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     // 4. Raggruppa e normalizza i dati
     const normalizedMap = new Map<string, NormalizedProduct>();
 
-    for (const rawProduct of rawData as RawProductData[]) {
-      const { Minsan, Giacenza, Scadenza } = rawProduct.row_data;
+    for (const item of rawData) {
+      const productData = item.row_data as RawProductData;
+      const { Minsan, Giacenza, Scadenza } = productData;
       
       const existing = normalizedMap.get(Minsan);
 
@@ -87,25 +84,29 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         normalizedMap.set(Minsan, {
           import_id: importId,
           minsan: Minsan,
-          ean: rawProduct.row_data.EAN,
-          ditta: rawProduct.row_data.Ditta,
-          descrizione: rawProduct.row_data.Descrizione,
+          ean: productData.EAN,
+          ditta: productData.Ditta,
+          descrizione: productData.Descrizione,
           scadenza: new Date(Scadenza).toISOString().split('T')[0], // Converte in YYYY-MM-DD
-          giacenza: Giacenza,
-          costo_medio: rawProduct.row_data.CostoMedio,
-          prezzo_bd: rawProduct.row_data.PrezzoBD,
-          iva: rawProduct.row_data.IVA,
+          giacenza: Number(Giacenza) || 0,
+          costo_medio: productData.CostoMedio,
+          prezzo_bd: productData.PrezzoBD,
+          iva: productData.IVA,
         });
       } else {
         // Se esiste già, aggreghiamo i valori
         // Somma algebrica della giacenza
-        existing.giacenza += Giacenza;
+        existing.giacenza += Number(Giacenza) || 0;
 
         // Trova la data di scadenza più vicina
-        const existingDate = new Date(existing.scadenza!);
-        const newDate = new Date(Scadenza);
-        if (newDate < existingDate) {
-          existing.scadenza = newDate.toISOString().split('T')[0];
+        try {
+            const existingDate = new Date(existing.scadenza!);
+            const newDate = new Date(Scadenza);
+            if (newDate < existingDate) {
+              existing.scadenza = newDate.toISOString().split('T')[0];
+            }
+        } catch(e) {
+            console.warn(`Data non valida per Minsan ${Minsan}: ${Scadenza}`);
         }
       }
     }
