@@ -9,23 +9,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            margin-right: 10px;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        body { font-family: 'Inter', sans-serif; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: inline-block; margin-right: 10px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-gray-50 flex items-center justify-center min-h-screen">
@@ -37,30 +23,25 @@
         </div>
 
         <form id="uploadForm">
+            <!-- ... campi del form (password e file) ... -->
             <div class="space-y-6">
                 <div>
                     <label for="password" class="block text-sm font-medium text-gray-700">Password App</label>
-                    <input type="password" id="password" name="password" required
-                           class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <input type="password" id="password" name="password" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                 </div>
-
                 <div>
                     <label for="excelFile" class="block text-sm font-medium text-gray-700">File Excel (.xlsx)</label>
-                    <input type="file" id="excelFile" name="excelFile" accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required
-                           class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100">
+                    <input type="file" id="excelFile" name="excelFile" accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100">
                 </div>
             </div>
-
             <div class="mt-8">
-                <button type="submit" id="submitButton"
-                        class="w-full flex items-center justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 disabled:cursor-not-allowed">
+                <button type="submit" id="submitButton" class="w-full flex items-center justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 disabled:cursor-not-allowed">
                     <span id="buttonText">Carica e Analizza</span>
                     <div id="buttonLoader" class="hidden loader"></div>
                 </button>
             </div>
         </form>
 
-        <!-- Area per mostrare i messaggi di stato -->
         <div id="statusMessage" class="mt-6 text-center text-sm"></div>
     </div>
 
@@ -74,62 +55,44 @@
         uploadForm.addEventListener('submit', async (event) => {
             event.preventDefault();
 
-            // --- FASE 1: IMPORTAZIONE ---
             submitButton.disabled = true;
-            buttonText.textContent = 'Caricamento...';
-            buttonLoader.classList.remove('hidden');
-            statusMessage.innerHTML = `<p class="text-blue-600">Invio del file in corso, attendere...</p>`;
-
-            const formData = new FormData();
-            formData.append('excelFile', document.getElementById('excelFile').files[0]);
-            formData.append('password', document.getElementById('password').value);
-
             let importId;
 
             try {
-                const importResponse = await fetch('/api/import-excel', {
-                    method: 'POST',
-                    body: formData,
-                });
+                // FASE 1: IMPORTAZIONE
+                buttonText.textContent = 'Caricamento...';
+                buttonLoader.classList.remove('hidden');
+                statusMessage.innerHTML = `<p class="text-blue-600">Invio del file...</p>`;
+                const formData = new FormData();
+                formData.append('excelFile', document.getElementById('excelFile').files[0]);
+                formData.append('password', document.getElementById('password').value);
+                const importResponse = await fetch('/api/import-excel', { method: 'POST', body: formData });
                 const importResult = await importResponse.json();
-                if (!importResponse.ok) throw new Error(importResult.error || `Errore HTTP: ${importResponse.status}`);
-                
+                if (!importResponse.ok) throw new Error(importResult.error);
                 importId = importResult.importId;
-                statusMessage.innerHTML = `
-                    <div class="p-4 bg-blue-100 text-blue-800 rounded-md">
-                        <p>File importato con <strong>${importResult.rowsImported} righe</strong>.</p>
-                        <p class="font-bold">Avvio della normalizzazione...</p>
-                    </div>
-                `;
 
-                // --- FASE 2: NORMALIZZAZIONE ---
+                // FASE 2: NORMALIZZAZIONE
                 buttonText.textContent = 'Normalizzazione...';
-                const normalizeResponse = await fetch('/api/normalize-products', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ importId: importId }),
-                });
+                statusMessage.innerHTML = `<p class="text-blue-600">Dati importati. Avvio normalizzazione...</p>`;
+                const normalizeResponse = await fetch('/api/normalize-products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ importId }) });
                 const normalizeResult = await normalizeResponse.json();
-                if (!normalizeResponse.ok) throw new Error(normalizeResult.error || `Errore HTTP: ${normalizeResponse.status}`);
+                if (!normalizeResponse.ok) throw new Error(normalizeResult.error);
 
-                // --- SUCCESSO FINALE ---
-                statusMessage.innerHTML = `
-                    <div class="p-4 bg-green-100 text-green-800 rounded-md">
-                        <p class="font-bold">Processo completato con successo!</p>
-                        <p>ID Importazione: ${importId}</p>
-                        <p>Prodotti unici trovati: ${normalizeResult.uniqueProducts}</p>
-                        <p class="mt-2">Prossimo passo: anteprima delle modifiche.</p>
-                    </div>
-                `;
-                
+                // FASE 3: CALCOLO DIFFERENZE
+                buttonText.textContent = 'Confronto con Shopify...';
+                statusMessage.innerHTML = `<p class="text-blue-600">Dati normalizzati. Confronto con Shopify in corso...</p>`;
+                const diffResponse = await fetch('/api/compute-diffs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ importId }) });
+                const diffResult = await diffResponse.json();
+                if (!diffResponse.ok) throw new Error(diffResult.error);
+
+                // SUCCESSO E REINDIRIZZAMENTO
+                statusMessage.innerHTML = `<div class="p-4 bg-green-100 text-green-800 rounded-md"><p class="font-bold">Analisi completata!</p><p>Trovate ${diffResult.updatesFound} modifiche. Reindirizzamento alla pagina di revisione...</p></div>`;
+                window.setTimeout(() => {
+                    window.location.href = `/review.html?import_id=${importId}`;
+                }, 2000);
+
             } catch (error) {
-                statusMessage.innerHTML = `
-                    <div class="p-4 bg-red-100 text-red-800 rounded-md">
-                        <p class="font-bold">Errore durante il processo:</p>
-                        <p>${error.message}</p>
-                    </div>
-                `;
-            } finally {
+                statusMessage.innerHTML = `<div class="p-4 bg-red-100 text-red-800 rounded-md"><p class="font-bold">Errore:</p><p>${error.message}</p></div>`;
                 submitButton.disabled = false;
                 buttonText.textContent = 'Carica e Analizza';
                 buttonLoader.classList.add('hidden');
