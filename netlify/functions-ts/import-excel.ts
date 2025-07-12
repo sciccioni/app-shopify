@@ -44,7 +44,9 @@ const parseMultipartForm = (event: HandlerEvent): Promise<{ file: Buffer, passwo
         reject(err);
     });
 
-    bb.end(Buffer.from(event.body || '', 'base64'));
+    // Gestisce correttamente la codifica del corpo della richiesta
+    const body = Buffer.from(event.body || '', event.isBase64Encoded ? 'base64' : 'utf8');
+    bb.end(body);
   });
 };
 
@@ -107,7 +109,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     // Inizia una "transazione" manuale
     const { data: importData, error: importError } = await supabase
       .from('imports')
-      .insert({ file_name: 'uploaded_file.xlsx' }) // Potresti passare il nome del file originale se lo desideri
+      .insert({ file_name: 'uploaded_file.xlsx' })
       .select()
       .single();
 
