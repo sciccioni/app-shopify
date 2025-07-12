@@ -82,7 +82,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       return { statusCode: 400, body: JSON.stringify({ error: "Il file Excel è vuoto." }) };
     }
 
-    // --- NUOVA LOGICA DI VALIDAZIONE E NORMALIZZAZIONE (CASE-INSENSITIVE) ---
     const headerOriginal = Object.keys(data[0]);
     const headerLowercase = headerOriginal.map(h => h.toLowerCase());
 
@@ -97,48 +96,54 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       };
     }
 
-    // Creiamo una mappa per passare dai nomi minuscoli a quelli originali
     const headerMap: { [key: string]: string } = {};
     headerOriginal.forEach(h => {
         headerMap[h.toLowerCase()] = h;
     });
 
-    // Normalizziamo le chiavi di ogni riga per avere una struttura dati consistente
     const normalizedData = data.map(row => {
         const newRow: { [key: string]: any } = {};
         for (const requiredCol of REQUIRED_COLUMNS) {
             const originalColName = headerMap[requiredCol.toLowerCase()];
-            if (originalColName) {
-                // Usiamo il nome della colonna richiesto (es. "Lotto") come chiave
+            if (originalColName && row[originalColName] !== undefined) {
                 newRow[requiredCol] = row[originalColName];
             }
         }
         return newRow;
     });
-    // --- FINE NUOVA LOGICA ---
 
+    // --- 7. Salvataggio su Supabase con gestione errori migliorata ---
     const { data: importData, error: importError } = await supabase
       .from('imports')
       .insert({ file_name: 'uploaded_file.xlsx' })
       .select()
       .single();
 
-    if (importError) throw importError;
+    if (importError) {
+        console.error("Supabase error (imports):", importError);
+        throw new Error("Impossibile creare un nuovo record di importazione nel database.");
+    }
 
     const importId = importData.id;
 
-    const rawDataToInsert = normalizedData.map(row => ({
-      import_id: importId,
-      row_data: row, // Ora row_data ha chiavi con la giusta capitalizzazione (es. "Lotto")
-    }));
+    try {
+        const rawDataToInsert = normalizedData.map(row => ({
+            import_id: importId,
+            row_data: row,
+        }));
 
-    const { error: rawDataError } = await supabase
-      .from('imports_raw')
-      .insert(rawDataToInsert);
+        const { error: rawDataError } = await supabase
+            .from('imports_raw')
+            .insert(rawDataToInsert);
 
-    if (rawDataError) {
-      await supabase.from('imports').delete().eq('id', importId);
-      throw rawDataError;
+        if (rawDataError) {
+            throw rawDataError; // Verrà catturato dal blocco catch sottostante
+        }
+    } catch(rawDataInsertError: any) {
+        console.error("Supabase error (imports_raw):", rawDataInsertError);
+        // Rollback: se l'inserimento dei dati grezzi fallisce, cancella l'importazione creata
+        await supabase.from('imports').delete().eq('id', importId);
+        throw new Error("Errore durante il salvataggio dei dati del file nel database. L'operazione è stata annullata.");
     }
 
     return {
@@ -151,7 +156,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     };
 
   } catch (error: any) {
-    console.error("Errore durante l'importazione:", error);
+    console.error("Errore completo durante l'importazione:", error);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message || "Errore interno del server." }),
