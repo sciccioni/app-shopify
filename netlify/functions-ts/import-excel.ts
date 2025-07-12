@@ -64,6 +64,10 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   if (!supabaseUrl || !supabaseServiceKey || !appPassword) {
     return { statusCode: 500, body: JSON.stringify({ error: "Variabili d'ambiente non configurate." }) };
   }
+  
+  // Log per verificare che l'URL sia letto correttamente
+  console.log("Tentativo di connessione a Supabase URL:", supabaseUrl.substring(0, 20) + "...");
+
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
@@ -120,7 +124,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       .single();
 
     if (importError) {
-        console.error("Supabase error (imports):", importError);
+        // Log dell'errore migliorato per vedere tutti i dettagli
+        console.error("Supabase error (imports):", JSON.stringify(importError, null, 2));
         throw new Error("Impossibile creare un nuovo record di importazione nel database.");
     }
 
@@ -140,7 +145,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             throw rawDataError; // Verrà catturato dal blocco catch sottostante
         }
     } catch(rawDataInsertError: any) {
-        console.error("Supabase error (imports_raw):", rawDataInsertError);
+        console.error("Supabase error (imports_raw):", JSON.stringify(rawDataInsertError, null, 2));
         // Rollback: se l'inserimento dei dati grezzi fallisce, cancella l'importazione creata
         await supabase.from('imports').delete().eq('id', importId);
         throw new Error("Errore durante il salvataggio dei dati del file nel database. L'operazione è stata annullata.");
