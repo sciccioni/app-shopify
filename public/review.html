@@ -68,6 +68,9 @@
                 } else if (field === 'price') {
                     bgColor = 'bg-green-100 text-green-800';
                     fieldName = 'Prezzo';
+                } else if (field === 'cost_per_item') {
+                    bgColor = 'bg-yellow-100 text-yellow-800';
+                    fieldName = 'Costo';
                 }
                 return `<span class="px-2 py-1 text-xs font-medium rounded-full ${bgColor}">${fieldName}</span>`;
             }
