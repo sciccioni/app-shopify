@@ -1,1 +1,22 @@
+{
+  "compilerOptions": {
+    /* Impostazioni del Progetto */
+    "target": "ES2020",                                  // Specifica la versione di ECMAScript di destinazione. ES2020 è ben supportato da Node.js su Netlify.
+    "module": "CommonJS",                                // Specifica la generazione del codice del modulo. Le funzioni Netlify usano CommonJS.
+    "outDir": "./netlify/functions",                     // Reindirizza la struttura di output alla directory specificata. Qui andranno i file .js compilati.
+    "rootDir": "./netlify/functions-ts",                 // Specifica la directory radice dei file di input. I nostri file .ts vivranno qui.
+    "esModuleInterop": true,                             // Abilita la compatibilità con i moduli CommonJS, essenziale per usare librerie come 'xlsx'.
+    "forceConsistentCasingInFileNames": true,            // Assicura che i riferimenti ai file abbiano la stessa combinazione di maiuscole/minuscole.
+
+    /* Controlli di Tipo Stretti */
+    "strict": true,                                      // Abilita tutte le opzioni di controllo di tipo stretto.
+    "skipLibCheck": true                                 // Salta il controllo di tipo di tutti i file di dichiarazione (.d.ts).
+  },
+  "include": [
+    "netlify/functions-ts/**/*.ts"                      // Specifica quali file TypeScript includere nella compilazione.
+  ],
+  "exclude": [
+    "node_modules"                                       // Esclude la cartella node_modules dalla compilazione.
+  ]
+}
 
