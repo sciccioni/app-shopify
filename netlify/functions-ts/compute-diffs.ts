@@ -11,7 +11,7 @@ interface LocalProduct {
 }
 
 interface ShopifyVariant {
-  id: string; // Es: "gid://shopify/ProductVariant/12345"
+  id: string;
   sku: string;
   displayName: string;
   inventoryQuantity: number;
@@ -33,8 +33,9 @@ interface ShopifyGraphQLResponse {
 
 // --- FUNZIONI HELPER ---
 
-async function queryShopify(query: string, shopifyUrl: string, apiToken: string): Promise<ShopifyGraphQLResponse> {
-  const response = await fetch(`https://${shopifyUrl}/admin/api/2023-10/graphql.json`, {
+async function queryShopify(shopifyDomain: string, apiToken: string, query: string): Promise<ShopifyGraphQLResponse> {
+  const url = `https://${shopifyDomain}/admin/api/2023-10/graphql.json`;
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -67,9 +68,10 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     return { statusCode: 400, body: JSON.stringify({ error: "Corpo richiesta non valido o importId mancante." }) };
   }
 
-  const { SUPABASE_URL, SUPABASE_SERVICE_KEY, SHOPIFY_STORE_URL, SHOPIFY_ADMIN_API_TOKEN } = process.env;
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !SHOPIFY_STORE_URL || !SHOPIFY_ADMIN_API_TOKEN) {
-    return { statusCode: 500, body: JSON.stringify({ error: "Variabili d'ambiente mancanti." }) };
+  // --- MODIFICA: Usa SHOPIFY_STORE_NAME ---
+  const { SUPABASE_URL, SUPABASE_SERVICE_KEY, SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN } = process.env;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN) {
+    return { statusCode: 500, body: JSON.stringify({ error: "Variabili d'ambiente mancanti. Assicurarsi che SUPABASE_URL, SUPABASE_SERVICE_KEY, SHOPIFY_STORE_NAME, e SHOPIFY_ADMIN_API_TOKEN siano definite." }) };
   }
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
@@ -85,10 +87,12 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       return { statusCode: 404, body: JSON.stringify({ error: "Nessun prodotto normalizzato trovato." }) };
     }
 
-    const skusQuery = localProducts.map(p => `sku:${p.minsan}`).join(' OR ');
+    const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
     const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku displayName inventoryQuantity inventoryItem { unitCost { amount } } } } } }`;
 
-    const shopifyResponse = await queryShopify(graphqlQuery, SHOPIFY_STORE_URL, SHOPIFY_ADMIN_API_TOKEN);
+    // Costruisce il dominio completo di Shopify
+    const shopifyDomain = `${SHOPIFY_STORE_NAME}.myshopify.com`;
+    const shopifyResponse = await queryShopify(shopifyDomain, SHOPIFY_ADMIN_API_TOKEN, graphqlQuery);
 
     if (shopifyResponse.errors) {
       throw new Error(`Errore GraphQL da Shopify: ${shopifyResponse.errors.map(e => e.message).join(', ')}`);
