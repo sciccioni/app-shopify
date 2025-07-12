@@ -75,7 +75,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
-    // 1. Recupera tutti i dati necessari in parallelo
     const [productsPromise, markupsPromise] = [
       supabase.from('products').select('minsan, ditta, iva, giacenza, costo_medio').eq('import_id', importId).returns<LocalProduct[]>(),
       supabase.from('company_markups').select('ditta, markup_percentage').returns<CompanyMarkup[]>()
@@ -91,10 +90,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       return { statusCode: 404, body: JSON.stringify({ error: "Nessun prodotto normalizzato trovato." }) };
     }
 
-    // Mappa i markup per un accesso rapido
     const markupsMap = new Map(markups?.map(m => [m.ditta, m.markup_percentage]));
 
-    // 2. Interroga Shopify
     const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
     const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku displayName price inventoryQuantity inventoryItem { unitCost { amount } } } } } }`;
     const shopifyDomain = SHOPIFY_STORE_NAME;
@@ -104,7 +101,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     const shopifyVariantsMap = new Map(shopifyResponse.data?.productVariants?.edges?.map(edge => [edge.node.sku, edge.node]) || []);
     
-    // 3. Confronta i dati e genera le differenze
     const pendingUpdates = [];
     for (const localProduct of localProducts) {
       const shopifyVariant = shopifyVariantsMap.get(localProduct.minsan);
@@ -115,25 +111,40 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         pendingUpdates.push({ import_id: importId, product_variant_id: shopifyVariant.id, product_title: shopifyVariant.displayName, field: 'inventory_quantity', old_value: shopifyVariant.inventoryQuantity, new_value: localProduct.giacenza });
       }
 
-      // B. Calcola e confronta il prezzo
+      // B. Confronta il costo (RI-AGGIUNTO)
       const shopifyCost = shopifyVariant.inventoryItem?.unitCost ? parseFloat(shopifyVariant.inventoryItem.unitCost.amount) : null;
-      if (localProduct.costo_medio != null && localProduct.costo_medio !== shopifyCost) {
-        const markup = markupsMap.get(localProduct.ditta);
-        if (markup !== undefined) {
+      if (localProduct.costo_medio != null && localProduct.costo_medio.toFixed(2) !== shopifyCost?.toFixed(2)) {
+          pendingUpdates.push({
+              import_id: importId,
+              product_variant_id: shopifyVariant.id,
+              product_title: shopifyVariant.displayName,
+              field: 'cost_per_item',
+              old_value: shopifyCost,
+              new_value: localProduct.costo_medio.toFixed(2),
+          });
+      }
+
+      // C. Calcola e confronta il prezzo
+      const markup = markupsMap.get(localProduct.ditta);
+      if (markup !== undefined && localProduct.costo_medio != null) {
           const costoMedio = localProduct.costo_medio;
           const iva = localProduct.iva || 0;
-          // prezzo_vendita = CostoMedio × (1 + markup) × (1 + IVA/100)
           const newPrice = costoMedio * (1 + markup / 100) * (1 + iva / 100);
           const newPriceFormatted = newPrice.toFixed(2);
           
           if (newPriceFormatted !== shopifyVariant.price) {
-            pendingUpdates.push({ import_id: importId, product_variant_id: shopifyVariant.id, product_title: shopifyVariant.displayName, field: 'price', old_value: shopifyVariant.price, new_value: newPriceFormatted });
+              pendingUpdates.push({
+                  import_id: importId,
+                  product_variant_id: shopifyVariant.id,
+                  product_title: shopifyVariant.displayName,
+                  field: 'price',
+                  old_value: shopifyVariant.price,
+                  new_value: newPriceFormatted,
+              });
           }
-        }
       }
     }
 
-    // 4. Salva le differenze
     if (pendingUpdates.length > 0) {
       await supabase.from('pending_updates').delete().eq('import_id', importId);
       const { error: insertError } = await supabase.from('pending_updates').insert(pendingUpdates);
