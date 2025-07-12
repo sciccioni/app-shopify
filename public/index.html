@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopify Sync - Importa Inventario</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-md bg-white rounded-xl shadow-md p-8">
+        <div class="text-center mb-8">
+            <h1 class="text-2xl font-bold text-gray-800">Importa Inventario</h1>
+            <p class="text-gray-500">Carica il file .xlsx per avviare la sincronizzazione.</p>
+        </div>
+
+        <form id="uploadForm">
+            <div class="space-y-6">
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700">Password App</label>
+                    <input type="password" id="password" name="password" required
+                           class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+
+                <div>
+                    <label for="excelFile" class="block text-sm font-medium text-gray-700">File Excel (.xlsx)</label>
+                    <input type="file" id="excelFile" name="excelFile" accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required
+                           class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100">
+                </div>
+            </div>
+
+            <div class="mt-8">
+                <button type="submit" id="submitButton"
+                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300">
+                    Carica e Analizza
+                </button>
+            </div>
+        </form>
+
+        <!-- Area per mostrare i messaggi di stato -->
+        <div id="statusMessage" class="mt-6 text-center text-sm"></div>
+    </div>
+
+    <script>
+        const uploadForm = document.getElementById('uploadForm');
+        const submitButton = document.getElementById('submitButton');
+        const statusMessage = document.getElementById('statusMessage');
+
+        uploadForm.addEventListener('submit', async (event) => {
+            event.preventDefault(); // Impedisce il ricaricamento della pagina
+
+            // Mostra un messaggio di caricamento e disabilita il bottone
+            submitButton.disabled = true;
+            submitButton.textContent = 'Caricamento in corso...';
+            statusMessage.innerHTML = `<p class="text-blue-600">Invio del file in corso, attendere...</p>`;
+
+            const formData = new FormData();
+            formData.append('excelFile', document.getElementById('excelFile').files[0]);
+            formData.append('password', document.getElementById('password').value);
+
+            try {
+                // La richiesta viene inviata all'endpoint /api/ che Netlify reindirizza alla nostra funzione
+                const response = await fetch('/api/import-excel', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    // Se la risposta non è 2xx, lancia un errore con il messaggio del server
+                    throw new Error(result.error || `Errore HTTP: ${response.status}`);
+                }
+
+                // Successo!
+                statusMessage.innerHTML = `
+                    <div class="p-4 bg-green-100 text-green-800 rounded-md">
+                        <p class="font-bold">Importazione completata con successo!</p>
+                        <p>ID Importazione: ${result.importId}</p>
+                        <p>Righe importate: ${result.rowsImported}</p>
+                        <p class="mt-2">A breve verrai reindirizzato alla pagina di revisione...</p>
+                    </div>
+                `;
+                
+                // TODO: Reindirizzare alla pagina di revisione dopo un breve ritardo
+                // window.setTimeout(() => {
+                //     window.location.href = `/review.html?import_id=${result.importId}`;
+                // }, 3000);
+
+
+            } catch (error) {
+                // Errore
+                statusMessage.innerHTML = `
+                    <div class="p-4 bg-red-100 text-red-800 rounded-md">
+                        <p class="font-bold">Errore durante l'importazione:</p>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            } finally {
+                // Riabilita il bottone in ogni caso
+                submitButton.disabled = false;
+                submitButton.textContent = 'Carica e Analizza';
+            }
+        });
+    </script>
+</body>
+</html>
