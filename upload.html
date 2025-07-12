@@ -6,9 +6,9 @@
   document.getElementById('uploadForm').addEventListener('submit', async e => {
     e.preventDefault();
     const form = new FormData(e.target);
-    const res = await fetch('https://<YOUR-PROJECT-REF>.functions.supabase.co/importRows', {
+    const res = await fetch('https://wqgfgvovwzcancgdsadc.functions.supabase.co/importRows', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` },
+      headers: { Authorization: `Bearer ${eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndxZ2Zndm92d3pjYW5jZ2RzYWRjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MjE0MzI4NCwiZXhwIjoyMDY3NzE5Mjg0fQ.RRqHQQfwwFkALC6Gabz-rdVGWH17rK3Alw6ythD_ajk}` },
       body: form
     });
     const json = await res.json();
