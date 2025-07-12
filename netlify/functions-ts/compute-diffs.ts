@@ -68,7 +68,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     return { statusCode: 400, body: JSON.stringify({ error: "Corpo richiesta non valido o importId mancante." }) };
   }
 
-  // --- MODIFICA: Usa SHOPIFY_STORE_NAME ---
   const { SUPABASE_URL, SUPABASE_SERVICE_KEY, SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN } = process.env;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN) {
     return { statusCode: 500, body: JSON.stringify({ error: "Variabili d'ambiente mancanti. Assicurarsi che SUPABASE_URL, SUPABASE_SERVICE_KEY, SHOPIFY_STORE_NAME, e SHOPIFY_ADMIN_API_TOKEN siano definite." }) };
@@ -90,8 +89,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
     const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku displayName inventoryQuantity inventoryItem { unitCost { amount } } } } } }`;
 
-    // Costruisce il dominio completo di Shopify
-    const shopifyDomain = `${SHOPIFY_STORE_NAME}.myshopify.com`;
+    // --- CORREZIONE: Usa direttamente SHOPIFY_STORE_NAME come dominio ---
+    const shopifyDomain = SHOPIFY_STORE_NAME;
     const shopifyResponse = await queryShopify(shopifyDomain, SHOPIFY_ADMIN_API_TOKEN, graphqlQuery);
 
     if (shopifyResponse.errors) {
