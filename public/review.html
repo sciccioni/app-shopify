@@ -10,53 +10,36 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
-        /* Stili per personalizzare DataTables con Tailwind */
-        .dataTables_wrapper .dataTables_length, .dataTables_wrapper .dataTables_filter, .dataTables_wrapper .dataTables_info, .dataTables_wrapper .dataTables_paginate {
-            margin-bottom: 1.5rem;
-        }
-        .dataTables_wrapper .dataTables_paginate .paginate_button {
-            padding: 0.5rem 1rem;
-            margin: 0 0.25rem;
-            border-radius: 0.375rem;
-            border: 1px solid #e2e8f0;
-        }
-        .dataTables_wrapper .dataTables_paginate .paginate_button.current {
-            background-color: #4f46e5;
-            color: white;
-            border-color: #4f46e5;
-        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current { background-color: #4f46e5; color: white; border-color: #4f46e5; }
     </style>
 </head>
 <body class="bg-gray-50 p-4 sm:p-8">
     <div class="max-w-7xl mx-auto bg-white p-6 rounded-lg shadow">
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
             <div>
                 <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Revisione Modifiche</h1>
                 <p class="mt-1 text-gray-600">Seleziona le modifiche che vuoi applicare su Shopify.</p>
             </div>
-            <div>
+            <div class="flex items-center">
+                <button id="populateMarkupsButton" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg mr-2">Popola Markup</button>
                 <button id="backButton" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mr-2">Torna Indietro</button>
                 <button id="confirmButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Conferma Aggiornamento</button>
             </div>
         </div>
 
-        <div id="loader" class="text-center p-8">
-            <p class="text-gray-600">Caricamento delle modifiche in corso...</p>
-        </div>
+        <div id="loader" class="text-center p-8"><p class="text-gray-600">Caricamento delle modifiche...</p></div>
 
         <table id="updatesTable" class="display w-full hidden">
             <thead>
                 <tr>
                     <th><input type="checkbox" id="selectAll"></th>
                     <th>Prodotto</th>
-                    <th>Campo</th>
+                    <th>Campo Modificato</th>
                     <th>Valore Attuale (Shopify)</th>
-                    <th>Nuovo Valore (Excel)</th>
+                    <th>Nuovo Valore (Calcolato)</th>
                 </tr>
             </thead>
-            <tbody>
-                <!-- Le righe verranno popolate da JavaScript -->
-            </tbody>
+            <tbody></tbody>
         </table>
     </div>
 
@@ -72,11 +55,23 @@
             const tableContainer = $('#updatesTable');
 
             if (!importId) {
-                loader.html('<p class="text-red-500">ID importazione non trovato nell\'URL.</p>');
+                loader.html('<p class="text-red-500">ID importazione non trovato.</p>');
                 return;
             }
 
-            // Carica i dati dalla nostra nuova funzione API
+            function formatField(field) {
+                let bgColor = 'bg-gray-200 text-gray-800';
+                let fieldName = field;
+                if (field === 'inventory_quantity') {
+                    bgColor = 'bg-blue-100 text-blue-800';
+                    fieldName = 'Giacenza';
+                } else if (field === 'price') {
+                    bgColor = 'bg-green-100 text-green-800';
+                    fieldName = 'Prezzo';
+                }
+                return `<span class="px-2 py-1 text-xs font-medium rounded-full ${bgColor}">${fieldName}</span>`;
+            }
+
             $.ajax({
                 url: `/api/get-pending-updates?import_id=${importId}`,
                 method: 'GET',
@@ -87,48 +82,47 @@
                     const table = $('#updatesTable').DataTable({
                         data: data.updates,
                         columns: [
-                            { 
-                                data: 'id',
-                                orderable: false,
-                                render: function(data, type, row) {
-                                    return `<input type="checkbox" class="update-checkbox" value="${data}" checked>`;
-                                }
-                            },
+                            { data: 'id', orderable: false, render: (d) => `<input type="checkbox" class="update-checkbox" value="${d}" checked>` },
                             { data: 'product_title' },
-                            { data: 'field' },
+                            { data: 'field', render: (field) => formatField(field) },
                             { data: 'old_value' },
                             { data: 'new_value' }
                         ],
-                        language: {
-                            url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/it-IT.json',
-                        }
+                        language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/it-IT.json' }
                     });
 
-                    // Logica per il checkbox "seleziona tutto"
                     $('#selectAll').on('click', function() {
                         const rows = table.rows({ 'search': 'applied' }).nodes();
                         $('input[type="checkbox"]', rows).prop('checked', this.checked);
                     });
                 },
-                error: function(xhr) {
-                    const error = xhr.responseJSON ? xhr.responseJSON.error : "Errore sconosciuto.";
-                    loader.html(`<p class="text-red-500">Errore nel caricamento dei dati: ${error}</p>`);
-                }
+                error: (xhr) => loader.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
             });
 
-            // Gestione dei bottoni (per ora solo log)
-            $('#backButton').on('click', function() {
-                window.location.href = '/';
-            });
-
+            $('#backButton').on('click', () => window.location.href = '/');
+            
             $('#confirmButton').on('click', function() {
-                const selectedUpdates = [];
-                $('.update-checkbox:checked').each(function() {
-                    selectedUpdates.push($(this).val());
-                });
-                console.log("ID delle modifiche da applicare:", selectedUpdates);
+                const selectedUpdates = $('.update-checkbox:checked').map(function() { return $(this).val(); }).get();
+                console.log("ID da applicare:", selectedUpdates);
                 alert(`Verranno applicate ${selectedUpdates.length} modifiche.`);
-                // Nel prossimo passo, qui chiameremo la funzione /api/apply-updates
+            });
+
+            // --- NUOVA LOGICA PER IL BOTTONE MARKUP ---
+            $('#populateMarkupsButton').on('click', function() {
+                const btn = $(this);
+                btn.prop('disabled', true).text('Popolamento...');
+                $.ajax({
+                    url: '/api/populate-markups',
+                    method: 'POST',
+                    success: function(data) {
+                        alert(`Successo! Ditte analizzate: ${data.ditteAnalizzate}. Nuovi markup aggiunti: ${data.ditteAggiunte}`);
+                        btn.prop('disabled', false).text('Popola Markup');
+                    },
+                    error: function(xhr) {
+                        alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
+                        btn.prop('disabled', false).text('Popola Markup');
+                    }
+                });
             });
         });
     </script>
