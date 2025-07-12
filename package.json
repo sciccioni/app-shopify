@@ -1,0 +1,23 @@
+{
+  "name": "shopify-sync-app",
+  "version": "1.0.0",
+  "description": "App per la sincronizzazione dell'inventario da Excel a Shopify tramite Netlify e Supabase.",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "busboy": "^1.6.0",
+    "node-fetch": "^3.3.2",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/busboy": "^1.5.3",
+    "@types/node": "^20.10.4",
+    "typescript": "^5.3.3"
+  }
+}
