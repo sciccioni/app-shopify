@@ -66,6 +66,9 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       .eq('import_id', importId);
 
     if (fetchError) throw fetchError;
+    
+    console.log(`Normalizzazione avviata per importId: ${importId}. Trovate ${rawData?.length || 0} righe grezze.`);
+
     if (!rawData || rawData.length === 0) {
       return { statusCode: 404, body: JSON.stringify({ error: "Nessun dato grezzo trovato per questo importId." }) };
     }
@@ -77,7 +80,26 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       const productData = item.row_data as RawProductData;
       const { Minsan, Giacenza, Scadenza } = productData;
       
+      if (!Minsan) {
+        console.warn("Riga saltata: Minsan mancante.", productData);
+        continue;
+      }
+
       const existing = normalizedMap.get(Minsan);
+
+      let formattedDate: string | undefined;
+      try {
+        if (Scadenza) {
+            const date = new Date(Scadenza);
+            // Verifica se la data è valida
+            if (isNaN(date.getTime())) {
+                throw new Error(`Formato data non valido: ${Scadenza}`);
+            }
+            formattedDate = date.toISOString().split('T')[0];
+        }
+      } catch (e: any) {
+        console.warn(`(Minsan: ${Minsan}): Data di scadenza non valida ('${Scadenza}'). Verrà ignorata. Errore: ${e.message}`);
+      }
 
       if (!existing) {
         // Se è la prima volta che vediamo questo Minsan, creiamo una nuova voce
@@ -87,7 +109,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           ean: productData.EAN,
           ditta: productData.Ditta,
           descrizione: productData.Descrizione,
-          scadenza: new Date(Scadenza).toISOString().split('T')[0], // Converte in YYYY-MM-DD
+          scadenza: formattedDate,
           giacenza: Number(Giacenza) || 0,
           costo_medio: productData.CostoMedio,
           prezzo_bd: productData.PrezzoBD,
@@ -95,40 +117,43 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         });
       } else {
         // Se esiste già, aggreghiamo i valori
-        // Somma algebrica della giacenza
         existing.giacenza += Number(Giacenza) || 0;
 
-        // Trova la data di scadenza più vicina
-        try {
-            const existingDate = new Date(existing.scadenza!);
-            const newDate = new Date(Scadenza);
-            if (newDate < existingDate) {
-              existing.scadenza = newDate.toISOString().split('T')[0];
+        // Aggiorna la data di scadenza solo se la nuova data è valida e precedente a quella esistente
+        if (formattedDate && existing.scadenza) {
+            if (new Date(formattedDate) < new Date(existing.scadenza)) {
+              existing.scadenza = formattedDate;
             }
-        } catch(e) {
-            console.warn(`Data non valida per Minsan ${Minsan}: ${Scadenza}`);
+        } else if (formattedDate && !existing.scadenza) {
+            existing.scadenza = formattedDate;
         }
       }
     }
 
+    console.log(`Mappa normalizzata creata con ${normalizedMap.size} prodotti unici.`);
+    const productsToInsert = Array.from(normalizedMap.values());
+
     // 5. Finalizza i dati e prepara per l'inserimento
-    const productsToInsert: NormalizedProduct[] = [];
-    for (const product of normalizedMap.values()) {
-      // Se la giacenza totale è negativa, impostala a 0 come richiesto
+    for (const product of productsToInsert) {
       if (product.giacenza < 0) {
         product.giacenza = 0;
       }
-      productsToInsert.push(product);
     }
     
-    // 6. Elimina vecchi dati normalizzati (se presenti) e inserisci i nuovi
-    await supabase.from('products').delete().eq('import_id', importId);
-    
-    const { error: insertError } = await supabase
-      .from('products')
-      .insert(productsToInsert);
+    if (productsToInsert.length > 0) {
+      console.log(`Tentativo di inserire ${productsToInsert.length} prodotti nella tabella 'products'.`);
+      
+      // 6. Elimina vecchi dati normalizzati (se presenti) e inserisci i nuovi
+      await supabase.from('products').delete().eq('import_id', importId);
+      
+      const { error: insertError } = await supabase
+        .from('products')
+        .insert(productsToInsert);
 
-    if (insertError) throw insertError;
+      if (insertError) throw insertError;
+    } else {
+      console.warn("Nessun prodotto da inserire dopo la normalizzazione. La tabella 'products' non verrà modificata.");
+    }
 
     // 7. Risposta di successo
     return {
@@ -141,7 +166,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     };
 
   } catch (error: any) {
-    console.error("Errore durante la normalizzazione:", error);
+    console.error("Errore dettagliato durante la normalizzazione:", JSON.stringify(error, null, 2));
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message || "Errore interno del server." }),
