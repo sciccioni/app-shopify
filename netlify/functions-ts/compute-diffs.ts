@@ -6,14 +6,22 @@ import fetch from "node-fetch";
 
 interface LocalProduct {
   minsan: string;
+  ditta: string;
+  iva: number;
   giacenza: number;
   costo_medio?: number;
+}
+
+interface CompanyMarkup {
+  ditta: string;
+  markup_percentage: number;
 }
 
 interface ShopifyVariant {
   id: string;
   sku: string;
   displayName: string;
+  price: string;
   inventoryQuantity: number;
   inventoryItem: {
     unitCost: {
@@ -37,18 +45,10 @@ async function queryShopify(shopifyDomain: string, apiToken: string, query: stri
   const url = `https://${shopifyDomain}/admin/api/2023-10/graphql.json`;
   const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Shopify-Access-Token': apiToken,
-    },
+    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': apiToken },
     body: JSON.stringify({ query }),
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Errore risposta Shopify:", errorText);
-    throw new Error(`Errore dalla API di Shopify: ${response.statusText}`);
-  }
+  if (!response.ok) throw new Error(`Errore API Shopify: ${response.statusText}`);
   return response.json() as Promise<ShopifyGraphQLResponse>;
 }
 
@@ -65,56 +65,75 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     importId = body.importId;
     if (!importId) throw new Error("importId non fornito.");
   } catch (error) {
-    return { statusCode: 400, body: JSON.stringify({ error: "Corpo richiesta non valido o importId mancante." }) };
+    return { statusCode: 400, body: JSON.stringify({ error: "Corpo richiesta non valido." }) };
   }
 
   const { SUPABASE_URL, SUPABASE_SERVICE_KEY, SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN } = process.env;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN) {
-    return { statusCode: 500, body: JSON.stringify({ error: "Variabili d'ambiente mancanti. Assicurarsi che SUPABASE_URL, SUPABASE_SERVICE_KEY, SHOPIFY_STORE_NAME, e SHOPIFY_ADMIN_API_TOKEN siano definite." }) };
+    return { statusCode: 500, body: JSON.stringify({ error: "Variabili d'ambiente mancanti." }) };
   }
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
-    const { data: localProducts, error: fetchError } = await supabase
-      .from('products')
-      .select('minsan, giacenza, costo_medio')
-      .eq('import_id', importId)
-      .returns<LocalProduct[]>();
+    // 1. Recupera tutti i dati necessari in parallelo
+    const [productsPromise, markupsPromise] = [
+      supabase.from('products').select('minsan, ditta, iva, giacenza, costo_medio').eq('import_id', importId).returns<LocalProduct[]>(),
+      supabase.from('company_markups').select('ditta, markup_percentage').returns<CompanyMarkup[]>()
+    ];
+    
+    const { data: localProducts, error: productsError } = await productsPromise;
+    if (productsError) throw productsError;
+    
+    const { data: markups, error: markupsError } = await markupsPromise;
+    if (markupsError) throw markupsError;
 
-    if (fetchError) throw fetchError;
     if (!localProducts || localProducts.length === 0) {
       return { statusCode: 404, body: JSON.stringify({ error: "Nessun prodotto normalizzato trovato." }) };
     }
 
-    const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
-    const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku displayName inventoryQuantity inventoryItem { unitCost { amount } } } } } }`;
+    // Mappa i markup per un accesso rapido
+    const markupsMap = new Map(markups?.map(m => [m.ditta, m.markup_percentage]));
 
-    // --- CORREZIONE: Usa direttamente SHOPIFY_STORE_NAME come dominio ---
+    // 2. Interroga Shopify
+    const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
+    const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku displayName price inventoryQuantity inventoryItem { unitCost { amount } } } } } }`;
     const shopifyDomain = SHOPIFY_STORE_NAME;
     const shopifyResponse = await queryShopify(shopifyDomain, SHOPIFY_ADMIN_API_TOKEN, graphqlQuery);
 
-    if (shopifyResponse.errors) {
-      throw new Error(`Errore GraphQL da Shopify: ${shopifyResponse.errors.map(e => e.message).join(', ')}`);
-    }
+    if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map(e => e.message).join(', ')}`);
 
-    const shopifyVariants = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
-    const shopifyVariantsMap = new Map(shopifyVariants.map(v => [v.sku, v]));
-
+    const shopifyVariantsMap = new Map(shopifyResponse.data?.productVariants?.edges?.map(edge => [edge.node.sku, edge.node]) || []);
+    
+    // 3. Confronta i dati e genera le differenze
     const pendingUpdates = [];
     for (const localProduct of localProducts) {
       const shopifyVariant = shopifyVariantsMap.get(localProduct.minsan);
       if (!shopifyVariant) continue;
 
+      // A. Confronta la giacenza
       if (localProduct.giacenza !== shopifyVariant.inventoryQuantity) {
         pendingUpdates.push({ import_id: importId, product_variant_id: shopifyVariant.id, product_title: shopifyVariant.displayName, field: 'inventory_quantity', old_value: shopifyVariant.inventoryQuantity, new_value: localProduct.giacenza });
       }
 
+      // B. Calcola e confronta il prezzo
       const shopifyCost = shopifyVariant.inventoryItem?.unitCost ? parseFloat(shopifyVariant.inventoryItem.unitCost.amount) : null;
       if (localProduct.costo_medio != null && localProduct.costo_medio !== shopifyCost) {
-        pendingUpdates.push({ import_id: importId, product_variant_id: shopifyVariant.id, product_title: shopifyVariant.displayName, field: 'cost_per_item', old_value: shopifyCost, new_value: localProduct.costo_medio });
+        const markup = markupsMap.get(localProduct.ditta);
+        if (markup !== undefined) {
+          const costoMedio = localProduct.costo_medio;
+          const iva = localProduct.iva || 0;
+          // prezzo_vendita = CostoMedio × (1 + markup) × (1 + IVA/100)
+          const newPrice = costoMedio * (1 + markup / 100) * (1 + iva / 100);
+          const newPriceFormatted = newPrice.toFixed(2);
+          
+          if (newPriceFormatted !== shopifyVariant.price) {
+            pendingUpdates.push({ import_id: importId, product_variant_id: shopifyVariant.id, product_title: shopifyVariant.displayName, field: 'price', old_value: shopifyVariant.price, new_value: newPriceFormatted });
+          }
+        }
       }
     }
 
+    // 4. Salva le differenze
     if (pendingUpdates.length > 0) {
       await supabase.from('pending_updates').delete().eq('import_id', importId);
       const { error: insertError } = await supabase.from('pending_updates').insert(pendingUpdates);
