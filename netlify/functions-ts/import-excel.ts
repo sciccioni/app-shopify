@@ -2,6 +2,7 @@ import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import busboy from "busboy";
 import xlsx from "xlsx";
+import { Readable } from "stream";
 
 // Colonne obbligatorie che ci aspettiamo di trovare nel file Excel.
 const REQUIRED_COLUMNS = [
@@ -17,9 +18,9 @@ const parseMultipartForm = (event: HandlerEvent): Promise<{ file: Buffer, passwo
     let fileBuffer: Buffer | null = null;
     let password: string | undefined;
 
-    bb.on('file', (fieldname, file, filename, encoding, mimetype) => {
+    bb.on('file', (fieldname: string, file: Readable, info: { filename: string; encoding: string; mimeType: string; }) => {
       const chunks: Buffer[] = [];
-      file.on('data', (data) => {
+      file.on('data', (data: Buffer) => {
         chunks.push(data);
       });
       file.on('end', () => {
@@ -27,7 +28,7 @@ const parseMultipartForm = (event: HandlerEvent): Promise<{ file: Buffer, passwo
       });
     });
 
-    bb.on('field', (fieldname, val) => {
+    bb.on('field', (fieldname: string, val: string) => {
       if (fieldname === 'password') {
         password = val;
       }
@@ -40,7 +41,7 @@ const parseMultipartForm = (event: HandlerEvent): Promise<{ file: Buffer, passwo
       resolve({ file: fileBuffer, password });
     });
     
-    bb.on('error', err => {
+    bb.on('error', (err: Error) => {
         reject(err);
     });
 
