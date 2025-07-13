@@ -22,7 +22,6 @@ interface ShopifyVariant {
   inventoryItem: { id: string; unitCost: { amount: string } | null };
   metafield: { value: string } | null;
 }
-// --- NUOVA INTERFACCIA PER UNA TIPizzazione SICURA ---
 interface ShopifyGraphQLResponse {
   data?: {
     productVariants?: {
@@ -31,7 +30,6 @@ interface ShopifyGraphQLResponse {
   };
   errors?: { message: string }[];
 }
-
 
 // --- HANDLER PRINCIPALE ---
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
@@ -61,7 +59,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     const markupsMap = new Map(markups?.map(m => [m.ditta, m.markup_percentage]));
 
-    // 2. Interroga Shopify (con compareAtPrice e metafield)
     const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
     const graphqlQuery = `
       query { 
@@ -81,7 +78,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         } 
       }`;
     const shopifyDomain = SHOPIFY_STORE_NAME;
-    // --- CORREZIONE: Tipizzazione esplicita della risposta ---
     const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2024-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
     
     if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map((e) => e.message).join(', ')}`);
@@ -97,19 +93,16 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
       const changes: any = {};
       
-      // Confronta Giacenza
       if (local.giacenza !== shopify.inventoryQuantity) {
         changes.quantity = { old: shopify.inventoryQuantity, new: local.giacenza };
       }
 
-      // Confronta Costo
       const shopifyCost = shopify.inventoryItem?.unitCost ? parseFloat(shopify.inventoryItem.unitCost.amount) : null;
       const localCost = local.costo_medio;
       if (localCost != null && localCost.toFixed(2) !== shopifyCost?.toFixed(2)) {
         changes.cost = { old: shopifyCost, new: localCost.toFixed(2) };
       }
 
-      // Calcola e confronta Prezzo
       const markup = markupsMap.get(local.ditta);
       if (markup !== undefined && markup > 0 && localCost != null) {
         const newPrice = (localCost * (1 + markup / 100) * (1 + (local.iva || 0) / 100)).toFixed(2);
@@ -118,19 +111,16 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         }
       }
 
-      // Confronta Prezzo Barrato (Compare At Price)
       const localComparePrice = local.prezzo_bd?.toFixed(2);
       if (localComparePrice != null && localComparePrice !== shopify.compareAtPrice) {
         changes.compare_at_price = { old: shopify.compareAtPrice, new: localComparePrice };
       }
 
-      // Confronta Scadenza (Metafield)
       const localExpiry = local.scadenza;
       if (localExpiry && localExpiry !== shopify.metafield?.value) {
         changes.expiry_date = { old: shopify.metafield?.value, new: localExpiry };
       }
       
-      // Aggiungi alla lista SOLO SE ci sono modifiche effettive
       if (Object.keys(changes).length > 0) {
         pendingUpdates.push({
           import_id: importId,
