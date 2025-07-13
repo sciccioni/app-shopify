@@ -72,16 +72,15 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       const { product_variant_id, inventory_item_id, changes } = update;
       
       try {
-        // A. Aggiorna prezzo, costo e compareAtPrice
-        const priceChanged = changes.price && changes.price.old !== changes.price.new;
-        const costChanged = changes.cost && (changes.cost.old?.toFixed(2) !== changes.cost.new);
-        const comparePriceChanged = changes.compare_at_price && changes.compare_at_price.old !== changes.compare_at_price.new;
+        // --- LOGICA DI AGGIORNAMENTO CORRETTA E SEPARATA ---
 
-        if (priceChanged || costChanged || comparePriceChanged) {
+        // A. Aggiorna prezzo e prezzo barrato (sulla variante)
+        const priceChanged = changes.price && changes.price.old !== changes.price.new;
+        const comparePriceChanged = changes.compare_at_price && changes.compare_at_price.old !== changes.compare_at_price.new;
+        if (priceChanged || comparePriceChanged) {
           const variantInput: any = { id: product_variant_id };
           if (priceChanged) variantInput.price = changes.price!.new;
           if (comparePriceChanged) variantInput.compareAtPrice = changes.compare_at_price!.new;
-          if (costChanged) variantInput.inventoryItem = { cost: changes.cost!.new };
           
           const mutation = `mutation productVariantUpdate($input: ProductVariantInput!) {
             productVariantUpdate(input: $input) { userErrors { field message } }
@@ -89,7 +88,22 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: variantInput });
         }
 
-        // B. Aggiorna il metafield della scadenza
+        // B. Aggiorna il costo (sull'articolo di magazzino)
+        const costChanged = changes.cost && (changes.cost.old?.toFixed(2) !== changes.cost.new);
+        if (costChanged && inventory_item_id && changes.cost.new !== null) {
+            const mutation = `mutation inventoryItemUpdate($input: InventoryItemUpdateInput!) {
+                inventoryItemUpdate(input: $input) { userErrors { field message } }
+            }`;
+            const variables = {
+                input: {
+                    id: inventory_item_id,
+                    cost: changes.cost.new
+                }
+            };
+            await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, variables);
+        }
+
+        // C. Aggiorna il metafield della scadenza
         if (changes.expiry_date && changes.expiry_date.old !== changes.expiry_date.new) {
             const mutation = `mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
                 metafieldsSet(metafields: $metafields) { userErrors { field message } }
@@ -106,7 +120,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, variables);
         }
 
-        // C. Aggiorna la giacenza
+        // D. Aggiorna la giacenza
         if (changes.quantity && inventory_item_id && changes.quantity.old !== changes.quantity.new) {
           const delta = changes.quantity.new - changes.quantity.old;
           const mutation = `mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
