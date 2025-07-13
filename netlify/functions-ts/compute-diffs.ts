@@ -22,6 +22,16 @@ interface ShopifyVariant {
   inventoryItem: { id: string; unitCost: { amount: string } | null };
   metafield: { value: string } | null;
 }
+// --- NUOVA INTERFACCIA PER UNA TIPizzazione SICURA ---
+interface ShopifyGraphQLResponse {
+  data?: {
+    productVariants?: {
+      edges: { node: ShopifyVariant }[];
+    };
+  };
+  errors?: { message: string }[];
+}
+
 
 // --- HANDLER PRINCIPALE ---
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
@@ -71,10 +81,13 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         } 
       }`;
     const shopifyDomain = SHOPIFY_STORE_NAME;
-    const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2025-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as any;
-    if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map((e: any) => e.message).join(', ')}`);
+    // --- CORREZIONE: Tipizzazione esplicita della risposta ---
+    const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2024-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
     
-    const shopifyVariantsMap = new Map(shopifyResponse.data?.productVariants?.edges?.map((edge: any) => [edge.node.sku, edge.node]) || []);
+    if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map((e) => e.message).join(', ')}`);
+    
+    const shopifyVariants = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
+    const shopifyVariantsMap = new Map<string, ShopifyVariant>(shopifyVariants.map(v => [v.sku, v]));
     
     const pendingUpdates = [];
 
