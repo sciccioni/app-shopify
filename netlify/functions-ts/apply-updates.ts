@@ -81,8 +81,12 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         }
 
         // B. Aggiorna il costo (sull'articolo di magazzino) - LA TUA SOLUZIONE CORRETTA
-        const costChanged = changes.cost && (changes.cost.old?.toFixed(2) !== changes.cost.new);
-        if (costChanged && inventory_item_id && changes.cost.new !== null) {
+        if (
+            changes.cost &&
+            changes.cost.new !== null &&
+            inventory_item_id &&
+            changes.cost.old?.toFixed(2) !== changes.cost.new
+        ) {
             const mutation = `mutation inventoryItemUpdate($id: ID!, $input: InventoryItemInput!) {
                 inventoryItemUpdate(id: $id, input: $input) {
                     inventoryItem { id }
