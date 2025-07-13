@@ -27,7 +27,6 @@ async function executeShopifyMutation(domain: string, token: string, query: stri
   const jsonResponse = await response.json() as any;
   
   const userErrors = jsonResponse.data?.productVariantUpdate?.userErrors || 
-                     jsonResponse.data?.inventoryItemUpdate?.userErrors || 
                      jsonResponse.data?.inventoryAdjustQuantities?.userErrors ||
                      jsonResponse.data?.metafieldsSet?.userErrors || [];
 
@@ -72,41 +71,34 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       const { product_variant_id, inventory_item_id, changes } = update;
       
       try {
-        // A. Aggiorna prezzo e prezzo barrato
-        const priceChanged = changes.price && changes.price.old !== changes.price.new;
-        const comparePriceChanged = changes.compare_at_price && changes.compare_at_price.old !== changes.compare_at_price.new;
-        if (priceChanged || comparePriceChanged) {
-          const variantInput: any = { id: product_variant_id };
-          if (priceChanged) variantInput.price = changes.price!.new;
-          if (comparePriceChanged) variantInput.compareAtPrice = changes.compare_at_price!.new;
-          
+        // --- LOGICA DI AGGIORNAMENTO RISTRUTTURATA ---
+
+        // 1. Prepara l'oggetto per l'aggiornamento della variante (prezzo, costo, etc.)
+        const variantInput: any = { id: product_variant_id };
+        let hasVariantUpdate = false;
+
+        if (changes.price && changes.price.old !== changes.price.new) {
+          variantInput.price = changes.price.new;
+          hasVariantUpdate = true;
+        }
+        if (changes.compare_at_price && changes.compare_at_price.old !== changes.compare_at_price.new) {
+          variantInput.compareAtPrice = changes.compare_at_price.new;
+          hasVariantUpdate = true;
+        }
+        if (changes.cost && changes.cost.new !== null && changes.cost.old?.toFixed(2) !== changes.cost.new) {
+          variantInput.inventoryItem = { cost: changes.cost.new };
+          hasVariantUpdate = true;
+        }
+
+        // Esegui l'aggiornamento della variante solo se ci sono modifiche
+        if (hasVariantUpdate) {
           const mutation = `mutation productVariantUpdate($input: ProductVariantInput!) {
             productVariantUpdate(input: $input) { userErrors { field message } }
           }`;
           await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: variantInput });
         }
 
-        // B. Aggiorna il costo - LOGICA CORRETTA E SICURA
-        if (
-            changes.cost &&
-            changes.cost.new !== null &&
-            inventory_item_id &&
-            changes.cost.old?.toFixed(2) !== changes.cost.new
-        ) {
-            const mutation = `mutation inventoryItemUpdate($id: ID!, $input: InventoryItemInput!) {
-                inventoryItemUpdate(id: $id, input: $input) {
-                    inventoryItem { id }
-                    userErrors { field message }
-                }
-            }`;
-            const variables = {
-                id: inventory_item_id,
-                input: { cost: parseFloat(changes.cost.new) }
-            };
-            await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, variables);
-        }
-
-        // C. Aggiorna il metafield della scadenza
+        // 2. Aggiorna il metafield della scadenza (operazione separata)
         if (changes.expiry_date && changes.expiry_date.old !== changes.expiry_date.new) {
             const mutation = `mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
                 metafieldsSet(metafields: $metafields) { userErrors { field message } }
@@ -123,7 +115,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, variables);
         }
 
-        // D. Aggiorna la giacenza
+        // 3. Aggiorna la giacenza (operazione separata)
         if (changes.quantity && inventory_item_id && changes.quantity.old !== changes.quantity.new) {
           const delta = changes.quantity.new - changes.quantity.old;
           const mutation = `mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
