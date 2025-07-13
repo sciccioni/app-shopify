@@ -18,7 +18,7 @@ interface PendingUpdate {
 
 // --- FUNZIONI HELPER PER SHOPIFY ---
 async function executeShopifyMutation(domain: string, token: string, query: string, variables: object) {
-  const url = `https://${domain}/admin/api/2025-07/graphql.json`; // API AGGIORNATA
+  const url = `https://${domain}/admin/api/2024-07/graphql.json`;
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
@@ -72,9 +72,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       const { product_variant_id, inventory_item_id, changes } = update;
       
       try {
-        // --- LOGICA DI AGGIORNAMENTO CORRETTA E SEPARATA ---
-
-        // A. Aggiorna prezzo e prezzo barrato (sulla variante)
+        // A. Aggiorna prezzo e prezzo barrato
         const priceChanged = changes.price && changes.price.old !== changes.price.new;
         const comparePriceChanged = changes.compare_at_price && changes.compare_at_price.old !== changes.compare_at_price.new;
         if (priceChanged || comparePriceChanged) {
@@ -88,9 +86,13 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: variantInput });
         }
 
-        // B. Aggiorna il costo (sull'articolo di magazzino)
-        const costChanged = changes.cost && (changes.cost.old?.toFixed(2) !== changes.cost.new);
-        if (costChanged && inventory_item_id && changes.cost.new !== null) {
+        // B. Aggiorna il costo
+        if (
+            changes.cost &&
+            changes.cost.new !== null &&
+            inventory_item_id &&
+            changes.cost.old?.toFixed(2) !== changes.cost.new
+        ) {
             const mutation = `mutation inventoryItemUpdate($input: InventoryItemUpdateInput!) {
                 inventoryItemUpdate(input: $input) { userErrors { field message } }
             }`;
