@@ -16,14 +16,14 @@ interface PendingUpdate {
 
 // --- FUNZIONI HELPER PER SHOPIFY ---
 async function executeShopifyMutation(domain: string, token: string, query: string, variables: object) {
-  const url = `https://${domain}/admin/api/2025-07/graphql.json`; // API AGGIORNATA
+  const url = `https://${domain}/admin/api/2025-07/graphql.json`;
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
     body: JSON.stringify({ query, variables }),
   });
   const jsonResponse = await response.json() as any;
-  const userErrors = jsonResponse.data?.productVariantUpdate?.userErrors || jsonResponse.data?.inventoryAdjustQuantities?.userErrors || [];
+  const userErrors = jsonResponse.data?.productVariantUpdate?.userErrors || jsonResponse.data?.inventoryItemUpdate?.userErrors || jsonResponse.data?.inventoryAdjustQuantities?.userErrors || [];
   if (jsonResponse.errors || userErrors.length > 0) {
     console.error("Shopify API Error:", JSON.stringify(jsonResponse, null, 2));
     const errorMessage = userErrors.map((e: any) => e.message).join(', ') || jsonResponse.errors?.map((e: any) => e.message).join(', ') || "Errore sconosciuto da Shopify.";
@@ -56,8 +56,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       .in('id', update_ids)
       .returns<PendingUpdate[]>();
     if (fetchError) throw fetchError;
-    
-    console.log(`Trovate ${updates?.length || 0} modifiche da applicare.`);
 
     let successCount = 0;
     let errorCount = 0;
@@ -67,20 +65,23 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       const { product_variant_id, inventory_item_id, changes } = update;
       
       try {
-        console.log(`Processando product_variant_id: ${product_variant_id}`);
-        // A. Aggiorna prezzo e costo
-        if (changes.price || changes.cost) {
-          const variantInput: any = { id: product_variant_id };
-          if (changes.price) variantInput.price = changes.price.new;
-          if (changes.cost) variantInput.inventoryItem = { cost: changes.cost.new };
-          
+        // A. Aggiorna prezzo (sulla variante)
+        if (changes.price) {
           const mutation = `mutation productVariantUpdate($input: ProductVariantInput!) {
-            productVariantUpdate(input: $input) { productVariant { id } userErrors { field message } }
+            productVariantUpdate(input: $input) { userErrors { field message } }
           }`;
-          await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: variantInput });
+          await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: { id: product_variant_id, price: changes.price.new } });
         }
 
-        // B. Aggiorna la giacenza
+        // B. Aggiorna costo (sull'articolo di magazzino)
+        if (changes.cost && inventory_item_id) {
+            const mutation = `mutation inventoryItemUpdate($input: InventoryItemUpdateInput!) {
+                inventoryItemUpdate(input: $input) { userErrors { field message } }
+            }`;
+            await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: { id: inventory_item_id, cost: changes.cost.new } });
+        }
+
+        // C. Aggiorna la giacenza
         if (changes.quantity && inventory_item_id) {
           const delta = changes.quantity.new - changes.quantity.old;
           const mutation = `mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
@@ -99,23 +100,9 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       }
     }
 
-    // --- SEZIONE DI LOGGING MIGLIORATA ---
     if (logs.length > 0) {
-        console.log(`Tentativo di inserire ${logs.length} record in sync_logs.`);
-        try {
-            const { error: logError } = await supabase.from('sync_logs').insert(logs);
-            if (logError) {
-                // Se anche il logging fallisce, lo stampiamo nella console di Netlify
-                console.error("ERRORE CRITICO: Impossibile salvare i log su Supabase.", logError);
-                throw new Error("Impossibile salvare i log delle operazioni.");
-            }
-            console.log("Log salvati con successo.");
-        } catch (logCatchError) {
-             console.error("Eccezione durante il salvataggio dei log:", logCatchError);
-        }
+      await supabase.from('sync_logs').insert(logs);
     }
-    
-    console.log("Tentativo di eliminare le modifiche processate da pending_updates.");
     await supabase.from('pending_updates').delete().in('id', update_ids);
 
     return {
