@@ -3,251 +3,146 @@ import { createClient } from "@supabase/supabase-js";
 import fetch from "node-fetch";
 
 // --- INTERFACCE ---
-interface PendingUpdate {
-  id: number;
-  product_id: string;           // GID del prodotto, es. "gid://shopify/Product/1234567890"
-  product_variant_id: string;   // GID della variante, es. "gid://shopify/ProductVariant/0987654321"
-  inventory_item_id: string;    // GID dell’inventory item
-  changes: {
-    quantity?: { old: number; new: number };
-    price?: { old: string; new: string };
-    compare_at_price?: { old: string | null; new: string | null };
-    cost?: { old: number | null; new: string | null };
-    expiry_date?: { old: string | null; new: string | null };
-  };
+interface LocalProduct {
+  minsan: string;
+  ditta: string;
+  iva: number;
+  giacenza: number;
+  costo_medio?: number;
+  prezzo_bd?: number;
+  scadenza?: string;
 }
-
-// --- HELPER PER SHOPIFY ---
-async function executeShopifyMutation(
-  domain: string,
-  token: string,
-  query: string,
-  variables: object
-) {
-  const url = `https://${domain}/admin/api/2025-07/graphql.json`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Access-Token": token,
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-  const json = await res.json() as any;
-  // raccogli eventuali errori
-  const errs =
-    json.data?.productVariantsBulkUpdate?.userErrors ||
-    json.data?.inventoryItemUpdate?.userErrors ||
-    json.errors ||
-    [];
-  if (errs.length > 0) {
-    const msg = errs.map((e: any) => e.message).join("; ");
-    throw new Error(msg);
-  }
-  return json.data;
+interface ShopifyVariant {
+  id: string;
+  sku: string;
+  displayName:string;
+  price: string;
+  compareAtPrice: string | null;
+  inventoryQuantity: number;
+  inventoryItem: { id: string; unitCost: { amount: string } | null };
+  metafield: { value: string } | null;
+  product: { id: string }; // <-- ID del prodotto genitore
+}
+interface ShopifyGraphQLResponse {
+  data?: { productVariants?: { edges: { node: ShopifyVariant }[] } };
+  errors?: { message: string }[];
 }
 
 // --- HANDLER PRINCIPALE ---
-const handler: Handler = async (event, context) => {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: JSON.stringify({ error: "Metodo non consentito" }) };
+const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
+  if (event.httpMethod !== "POST") return { statusCode: 405, body: JSON.stringify({ error: "Metodo non consentito." }) };
+
+  let importId: string;
+  try {
+    const body = JSON.parse(event.body || "{}");
+    importId = body.importId;
+    if (!importId) throw new Error("importId non fornito.");
+  } catch (error) {
+    return { statusCode: 400, body: JSON.stringify({ error: "Corpo richiesta non valido." }) };
   }
 
-  const {
-    SUPABASE_URL,
-    SUPABASE_SERVICE_KEY,
-    SHOPIFY_STORE_NAME,
-    SHOPIFY_ADMIN_API_TOKEN,
-    SHOPIFY_LOCATION_ID,
-  } = process.env;
-  if (
-    !SUPABASE_URL ||
-    !SUPABASE_SERVICE_KEY ||
-    !SHOPIFY_STORE_NAME ||
-    !SHOPIFY_ADMIN_API_TOKEN ||
-    !SHOPIFY_LOCATION_ID
-  ) {
-    return { statusCode: 500, body: JSON.stringify({ error: "Env vars mancanti" }) };
+  const { SUPABASE_URL, SUPABASE_SERVICE_KEY, SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN } = process.env;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN) {
+    return { statusCode: 500, body: JSON.stringify({ error: "Variabili d'ambiente mancanti." }) };
   }
-
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
-    const { update_ids, import_id } = JSON.parse(event.body || "{}");
-    if (!Array.isArray(update_ids) || update_ids.length === 0 || !import_id) {
-      return { statusCode: 400, body: JSON.stringify({ error: "Dati mancanti" }) };
-    }
+    const { data: localProducts, error: pError } = await supabase.from('products').select('*').eq('import_id', importId).returns<LocalProduct[]>();
+    if (pError) throw pError;
+    const { data: markups, error: mError } = await supabase.from('company_markups').select('ditta, markup_percentage');
+    if (mError) throw mError;
+    if (!localProducts?.length) return { statusCode: 404, body: JSON.stringify({ error: "Nessun prodotto normalizzato trovato." }) };
 
-    // 1. Fetch degli aggiornamenti pendenti (ora includono product_id)
-    const { data: updates, error } = await supabase
-      .from("pending_updates")
-      .select("id, product_id, product_variant_id, inventory_item_id, changes")
-      .in("id", update_ids) as { data: PendingUpdate[]; error: any };
-    if (error) throw error;
+    const markupsMap = new Map(markups?.map(m => [m.ditta, m.markup_percentage]));
 
-    // 2. Raggruppa per product_id per bulk update
-    const grouped = updates.reduce((acc, upd) => {
-      (acc[upd.product_id] = acc[upd.product_id] || []).push(upd);
-      return acc;
-    }, {} as Record<string, PendingUpdate[]>);
+    // 2. Interroga Shopify (con product.id)
+    const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
+    const graphqlQuery = `
+      query { 
+        productVariants(first: 250, query: "${skusQuery}") { 
+          edges { 
+            node { 
+              id 
+              sku 
+              displayName 
+              price 
+              compareAtPrice
+              inventoryQuantity 
+              inventoryItem { id unitCost { amount } }
+              metafield(namespace: "custom", key: "data_di_scadenza") { value }
+              product { id }
+            } 
+          } 
+        } 
+      }`;
+    const shopifyDomain = SHOPIFY_STORE_NAME;
+    const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2024-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
+    if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map((e) => e.message).join(', ')}`);
+    
+    const shopifyVariants = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
+    const shopifyVariantsMap = new Map<string, ShopifyVariant>(shopifyVariants.map(v => [v.sku, v]));
+    
+    const pendingUpdates = [];
 
-    let successCount = 0;
-    let errorCount = 0;
-    const logs: any[] = [];
+    for (const local of localProducts) {
+      const shopify = shopifyVariantsMap.get(local.minsan);
+      if (!shopify) continue;
 
-    // 3. Per ogni gruppo di varianti, esegui bulkUpdate
-    for (const [productId, group] of Object.entries(grouped)) {
-      try {
-        // 3.1 Costruisci l’array variants per bulk
-        const variantsBulk = group.map((u) => {
-          const v: any = { id: u.product_variant_id };
-          if (u.changes.price && u.changes.price.old !== u.changes.price.new) {
-            v.price = u.changes.price.new;
-          }
-          if (u.changes.compare_at_price && u.changes.compare_at_price.old !== u.changes.compare_at_price.new) {
-            v.compareAtPrice = u.changes.compare_at_price.new;
-          }
-          return v;
-        }).filter(v => Object.keys(v).length > 1); // scarta se nessuna mod
+      const changes: any = {};
+      
+      if (local.giacenza !== shopify.inventoryQuantity) {
+        changes.quantity = { old: shopify.inventoryQuantity, new: local.giacenza };
+      }
 
-        if (variantsBulk.length > 0) {
-          const bulkMutation = `
-            mutation bulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-              productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-                productVariants { id }
-                userErrors { field message }
-              }
-            }
-          `;
-          await executeShopifyMutation(
-            SHOPIFY_STORE_NAME,
-            SHOPIFY_ADMIN_API_TOKEN,
-            bulkMutation,
-            { productId, variants: variantsBulk }
-          );
+      const shopifyCost = shopify.inventoryItem?.unitCost ? parseFloat(shopify.inventoryItem.unitCost.amount) : null;
+      const localCost = local.costo_medio;
+      if (localCost != null && localCost.toFixed(2) !== shopifyCost?.toFixed(2)) {
+        changes.cost = { old: shopifyCost, new: localCost.toFixed(2) };
+      }
+
+      const markup = markupsMap.get(local.ditta);
+      if (markup !== undefined && markup > 0 && localCost != null) {
+        const newPrice = (localCost * (1 + markup / 100) * (1 + (local.iva || 0) / 100)).toFixed(2);
+        if (newPrice !== shopify.price) {
+          changes.price = { old: shopify.price, new: newPrice };
         }
+      }
 
-        // 3.2 Per ogni variante del gruppo: cost, expiry_date e quantity
-        for (const u of group) {
-          // 3.2.a aggiornamento cost se serve
-          if (u.changes.cost && u.changes.cost.new !== null && String(u.changes.cost.old?.toFixed(2)) !== u.changes.cost.new) {
-            const costMutation = `
-              mutation updateInventoryItem($id: ID!, $input: InventoryItemInput!) {
-                inventoryItemUpdate(id: $id, input: $input) {
-                  inventoryItem { id unitCost { amount currencyCode } }
-                  userErrors { field message }
-                }
-              }
-            `;
-            await executeShopifyMutation(
-              SHOPIFY_STORE_NAME,
-              SHOPIFY_ADMIN_API_TOKEN,
-              costMutation,
-              { id: u.inventory_item_id, input: { cost: u.changes.cost.new } }
-            );
-          }
+      const localComparePrice = local.prezzo_bd?.toFixed(2);
+      if (localComparePrice != null && localComparePrice !== shopify.compareAtPrice) {
+        changes.compare_at_price = { old: shopify.compareAtPrice, new: localComparePrice };
+      }
 
-          // 3.2.b metafield expiry_date
-          if (u.changes.expiry_date && u.changes.expiry_date.old !== u.changes.expiry_date.new) {
-            const mfMutation = `
-              mutation setExpiry($metafields: [MetafieldsSetInput!]!) {
-                metafieldsSet(metafields: $metafields) {
-                  userErrors { field message }
-                }
-              }
-            `;
-            await executeShopifyMutation(
-              SHOPIFY_STORE_NAME,
-              SHOPIFY_ADMIN_API_TOKEN,
-              mfMutation,
-              {
-                metafields: [{
-                  key: "data_di_scadenza",
-                  namespace: "custom",
-                  ownerId: u.product_variant_id,
-                  type: "date",
-                  value: u.changes.expiry_date.new!
-                }]
-              }
-            );
-          }
-
-          // 3.2.c inventoryAdjustQuantities
-          if (u.changes.quantity && u.changes.quantity.old !== u.changes.quantity.new) {
-            const delta = u.changes.quantity.new - u.changes.quantity.old;
-            const qtyMutation = `
-              mutation adjustQty($input: InventoryAdjustQuantitiesInput!) {
-                inventoryAdjustQuantities(input: $input) {
-                  userErrors { field message }
-                }
-              }
-            `;
-            await executeShopifyMutation(
-              SHOPIFY_STORE_NAME,
-              SHOPIFY_ADMIN_API_TOKEN,
-              qtyMutation,
-              {
-                input: {
-                  reason: "CORRECTION",
-                  name: "Excel Sync",
-                  changes: [
-                    {
-                      inventoryItemId: u.inventory_item_id,
-                      locationId: `gid://shopify/Location/${SHOPIFY_LOCATION_ID}`,
-                      delta,
-                    }
-                  ]
-                }
-              }
-            );
-          }
-
-          successCount++;
-          logs.push({
-            import_id,
-            product_variant_id: u.product_variant_id,
-            status: "success",
-            action: "bulk-update",
-            details: {},
-          });
-        }
-
-      } catch (e: any) {
-        // error handling per gruppo
-        errorCount += group.length;
-        for (const u of group) {
-          logs.push({
-            import_id,
-            product_variant_id: u.product_variant_id,
-            status: "error",
-            action: "bulk-update",
-            details: { error: e.message },
-          });
-        }
+      const localExpiry = local.scadenza;
+      if (localExpiry && localExpiry !== shopify.metafield?.value) {
+        changes.expiry_date = { old: shopify.metafield?.value, new: localExpiry };
+      }
+      
+      if (Object.keys(changes).length > 0) {
+        pendingUpdates.push({
+          import_id: importId,
+          product_id: shopify.product.id, // <-- SALVA L'ID DEL PRODOTTO
+          product_variant_id: shopify.id,
+          inventory_item_id: shopify.inventoryItem?.id,
+          product_title: shopify.displayName,
+          minsan: local.minsan,
+          ditta: local.ditta,
+          changes: changes
+        });
       }
     }
 
-    // 4. Salva log e pulisci pending_updates
-    if (logs.length) {
-      await supabase.from("sync_logs").insert(logs);
+    await supabase.from('pending_updates').delete().eq('import_id', importId);
+    if (pendingUpdates.length > 0) {
+      await supabase.from('pending_updates').insert(pendingUpdates);
     }
-    await supabase.from("pending_updates").delete().in("id", update_ids);
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        message: "Aggiornamento batch completato.",
-        success: successCount,
-        errors: errorCount,
-      }),
-    };
+    return { statusCode: 200, body: JSON.stringify({ message: "Calcolo differenze completato.", updatesFound: pendingUpdates.length }) };
 
-  } catch (err: any) {
-    console.error(err);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: err.message || "Errore interno" }),
-    };
+  } catch (error: any) {
+    console.error("Errore durante il calcolo delle differenze:", error);
+    return { statusCode: 500, body: JSON.stringify({ error: error.message || "Errore interno." }) };
   }
 };
 
