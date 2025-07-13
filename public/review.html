@@ -16,6 +16,7 @@
         .change-cell .arrow { color: #2563eb; margin: 0 0.25rem; }
         .change-cell .new { font-weight: 600; color: #16a34a; }
         .no-change { color: #9ca3af; }
+        .save-status { margin-left: 8px; font-size: 0.875rem; }
     </style>
 </head>
 <body class="bg-gray-50 p-4 sm:p-8">
@@ -162,7 +163,10 @@
                                 <tr data-id="${m.id}">
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${m.ditta}</td>
                                     <td class="px-6 py-4 whitespace-nowrap"><input type="number" step="0.01" class="markup-input w-24 rounded-md border-gray-300 shadow-sm" value="${m.markup_percentage}"></td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><button class="save-markup-btn text-indigo-600 hover:text-indigo-900">Salva</button></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex items-center">
+                                        <button class="save-markup-btn text-indigo-600 hover:text-indigo-900">Salva</button>
+                                        <span class="save-status"></span>
+                                    </td>
                                 </tr>
                             `);
                         });
@@ -176,10 +180,12 @@
             $('#markups-container').on('click', '.save-markup-btn', function() {
                 const btn = $(this);
                 const row = btn.closest('tr');
+                const statusSpan = row.find('.save-status');
                 const id = row.data('id');
                 const percentage = row.find('.markup-input').val();
                 
                 btn.text('Salvataggio...').prop('disabled', true);
+                statusSpan.text('').removeClass('text-green-600 text-red-600');
 
                 $.ajax({
                     url: '/api/update-markup',
@@ -187,11 +193,13 @@
                     contentType: 'application/json',
                     data: JSON.stringify({ id: id, markup_percentage: percentage }),
                     success: function() {
+                        statusSpan.text('✔ Salvato').addClass('text-green-600');
                         btn.text('Salva').prop('disabled', false);
-                        // Potresti aggiungere un feedback visivo, es. un'icona di spunta
+                        setTimeout(() => statusSpan.text(''), 2000); // Rimuove il messaggio dopo 2 secondi
                     },
-                    error: function() {
-                        alert('Errore durante il salvataggio.');
+                    error: function(xhr) {
+                        const errorMsg = xhr.responseJSON?.error || 'Errore durante il salvataggio.';
+                        statusSpan.text(`✖ ${errorMsg}`).addClass('text-red-600');
                         btn.text('Salva').prop('disabled', false);
                     }
                 });
