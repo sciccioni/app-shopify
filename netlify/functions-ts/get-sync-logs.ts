@@ -6,11 +6,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     return { statusCode: 405, body: JSON.stringify({ error: "Metodo non consentito." }) };
   }
 
-  const importId = event.queryStringParameters?.import_id;
-  if (!importId) {
-    return { statusCode: 400, body: JSON.stringify({ error: "Parametro import_id mancante." }) };
-  }
-
   const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     return { statusCode: 500, body: JSON.stringify({ error: "Variabili d'ambiente mancanti." }) };
@@ -18,10 +13,10 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
+    // Recupera tutti i log, ordinati per data
     const { data: logs, error } = await supabase
       .from('sync_logs')
       .select('*')
-      .eq('import_id', importId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
