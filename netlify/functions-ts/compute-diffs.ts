@@ -17,7 +17,10 @@ interface ShopifyVariant {
   displayName:string;
   price: string;
   inventoryQuantity: number;
-  inventoryItem: { unitCost: { amount: string } | null };
+  inventoryItem: { 
+      id: string;
+      unitCost: { amount: string } | null 
+  };
 }
 interface ShopifyGraphQLResponse {
   data?: { productVariants?: { edges: { node: ShopifyVariant }[] } };
@@ -54,10 +57,11 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     const markupsMap = new Map(markups?.map(m => [m.ditta, m.markup_percentage]));
 
+    // 2. Interroga Shopify (con inventoryItem.id e API aggiornata)
     const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
-    const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku displayName price inventoryQuantity inventoryItem { unitCost { amount } } } } } }`;
+    const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku displayName price inventoryQuantity inventoryItem { id unitCost { amount } } } } } }`;
     const shopifyDomain = SHOPIFY_STORE_NAME;
-    const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2024-04/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
+    const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2025-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
     if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map((e) => e.message).join(', ')}`);
     
     const shopifyVariants = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
@@ -74,19 +78,16 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       const shopifyCost = shopify.inventoryItem?.unitCost ? parseFloat(shopify.inventoryItem.unitCost.amount) : null;
       let newPriceFormatted: string | undefined;
 
-      // --- LOGICA DI CALCOLO AGGIORNATA ---
       const markup = markupsMap.get(local.ditta);
-      // Calcola il nuovo prezzo solo se il markup è definito e MAGGIORE DI ZERO
       if (markup !== undefined && markup > 0 && local.costo_medio != null) {
         const newPrice = (local.costo_medio * (1 + markup / 100) * (1 + (local.iva || 0) / 100));
         newPriceFormatted = newPrice.toFixed(2);
         productPriceUpdates.push({ minsan: local.minsan, prezzo_calcolato: parseFloat(newPriceFormatted) });
       }
 
-      // Popola l'oggetto 'changes' con tutti i confronti
       changes.quantity = { old: shopify.inventoryQuantity, new: local.giacenza };
       changes.cost = { old: shopifyCost, new: local.costo_medio?.toFixed(2) };
-      changes.price = { old: shopify.price, new: newPriceFormatted }; // Sarà undefined se il markup è 0
+      changes.price = { old: shopify.price, new: newPriceFormatted };
       if (local.scadenza) {
         changes.expiry = { new: local.scadenza };
       }
@@ -94,6 +95,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       pendingUpdates.push({
         import_id: importId,
         product_variant_id: shopify.id,
+        inventory_item_id: shopify.inventoryItem?.id,
         product_title: shopify.displayName,
         minsan: local.minsan,
         ditta: local.ditta,
