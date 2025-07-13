@@ -18,7 +18,7 @@ interface ShopifyVariant {
   price: string;
   inventoryQuantity: number;
   inventoryItem: { 
-      id: string;
+      id: string; // <-- ID dell'articolo di magazzino
       unitCost: { amount: string } | null 
   };
 }
