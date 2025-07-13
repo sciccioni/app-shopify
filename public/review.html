@@ -94,7 +94,6 @@
             </nav>
         </div>
 
-        <!-- Contenuto dei pannelli -->
         <div class="mt-8">
             <!-- Pannello Revisione Modifiche -->
             <div id="panel-reviews">
@@ -156,8 +155,9 @@
             <div id="panel-logs" class="hidden">
                  <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                     <h2 class="text-xl font-semibold text-gray-800">Storico Operazioni</h2>
+                    <p class="mt-1 text-sm text-gray-500">Visualizza il risultato di tutte le operazioni di aggiornamento eseguite.</p>
                     <div id="loader-logs" class="text-center p-8"><p class="text-gray-600">Caricamento log...</p></div>
-                    <div id="logs-container" class="overflow-x-auto"></div>
+                    <div id="logs-container" class="overflow-x-auto mt-4"></div>
                  </div>
             </div>
         </div>
@@ -378,20 +378,34 @@
                             container.html('<p class="text-gray-500">Nessun log trovato per questa importazione.</p>');
                             return;
                         }
-                        const table = $('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dettagli</th></tr></thead><tbody class="bg-white divide-y divide-gray-200"></tbody></table>');
+                        const table = $('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Minsan</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dettagli Modifica</th></tr></thead><tbody class="bg-white divide-y divide-gray-200"></tbody></table>');
                         const tbody = table.find('tbody');
+                        
                         data.logs.forEach(log => {
                             const statusBadge = log.status === 'success' 
                                 ? '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Successo</span>'
                                 : '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Errore</span>';
-                            const details = log.details?.error || log.details?.message || 'N/A';
+                            
+                            let detailsHtml = '';
+                            const details = log.details?.error ? log.details.attemptedChanges : log.details?.changes;
+                            if (log.status === 'error') {
+                                detailsHtml = `<span class="text-red-600">${log.details.error}</span>`;
+                            } else if (details) {
+                                const parts = Object.entries(details).map(([key, value]) => {
+                                    const change = value; // Rimosso 'as'
+                                    return `<strong>${key}:</strong> ${change.old ?? 'N/A'} → ${change.new}`;
+                                });
+                                detailsHtml = parts.join('<br>');
+                            }
+
                             const date = new Date(log.created_at).toLocaleString('it-IT');
                             
                             tbody.append(`
                                 <tr>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${date}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${log.minsan || 'N/A'}</td>
                                     <td class="px-6 py-4 whitespace-nowrap">${statusBadge}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${details}</td>
+                                    <td class="px-6 py-4 text-sm text-gray-500">${detailsHtml || 'Nessun dettaglio'}</td>
                                 </tr>
                             `);
                         });
