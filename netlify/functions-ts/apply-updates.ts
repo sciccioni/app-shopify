@@ -75,13 +75,26 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
         // B. Aggiorna costo
         if (changes.cost && inventory_item_id) {
-            // --- CORREZIONE: Confronta i valori come numeri ---
-            const newCostAsNumber = changes.cost.new ? parseFloat(changes.cost.new) : null;
-            if (changes.cost.old !== newCostAsNumber) {
+            const oldCost = changes.cost.old;
+            const newCostStr = changes.cost.new;
+            let needsUpdate = false;
+
+            if (newCostStr === null) {
+                needsUpdate = false;
+            } else if (oldCost === null) {
+                needsUpdate = true;
+            } else {
+                const newCostNum = parseFloat(newCostStr);
+                if (oldCost.toFixed(2) !== newCostNum.toFixed(2)) {
+                    needsUpdate = true;
+                }
+            }
+            
+            if (needsUpdate) {
                 const mutation = `mutation inventoryItemUpdate($input: InventoryItemUpdateInput!) {
                     inventoryItemUpdate(input: $input) { userErrors { field message } }
                 }`;
-                await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: { id: inventory_item_id, cost: changes.cost.new } });
+                await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: { id: inventory_item_id, cost: newCostStr } });
             }
         }
 
