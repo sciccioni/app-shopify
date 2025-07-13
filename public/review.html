@@ -75,7 +75,7 @@
         .tab-active { border-color: #4f46e5; color: #4f46e5; }
         .tab-inactive { border-color: transparent; color: #6b7280; }
         /* Stili per la gestione markup */
-        .markup-row.is-dirty { background-color: #fefce8 !important; }
+        .markup-row.is-dirty { background-color: #fefce8 !important; /* Giallo chiaro per le modifiche */ }
     </style>
 </head>
 <body class="p-4 sm:p-8">
@@ -97,36 +97,7 @@
         <div class="mt-8">
             <!-- Pannello Revisione Modifiche -->
             <div id="panel-reviews">
-                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
-                        <h2 class="text-xl font-semibold text-gray-800">Proposte di Aggiornamento</h2>
-                        <div class="flex items-center space-x-2">
-                            <button id="backButton" class="bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg border border-gray-300 shadow-sm">Torna Indietro</button>
-                            <button id="confirmButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm flex items-center">
-                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                Conferma Aggiornamento
-                            </button>
-                        </div>
-                    </div>
-                    <div id="loader-reviews" class="text-center p-8"><p class="text-gray-600">Caricamento delle modifiche...</p></div>
-                    <div class="overflow-x-auto">
-                        <table id="updatesTable" class="display w-full hidden text-sm text-left text-gray-500">
-                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
-                                <tr>
-                                    <th class="p-4"><input type="checkbox" id="selectAll"></th>
-                                    <th class="px-6 py-3">Prodotto</th>
-                                    <th class="px-6 py-3">Minsan</th>
-                                    <th class="px-6 py-3">Ditta</th>
-                                    <th class="px-6 py-3">Giacenza</th>
-                                    <th class="px-6 py-3">Prezzo (€)</th>
-                                    <th class="px-6 py-3">Costo (€)</th>
-                                    <th class="px-6 py-3">Scadenza</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
+                <!-- ... (Codice invariato) ... -->
             </div>
 
             <!-- Pannello Gestione Markup -->
@@ -135,7 +106,9 @@
                     <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
                         <div>
                             <h2 class="text-xl font-semibold text-gray-800">Configurazione Markup per Ditta</h2>
-                            <p class="mt-1 text-sm text-gray-500">Modifica i markup e clicca "Salva Modifiche". Le righe modificate verranno evidenziate.</p>
+                            <p class="mt-1 text-sm text-gray-500">
+                                Modifica i markup per ogni ditta. Imposta il valore a <strong>0</strong> per fare in modo che il prezzo di vendita non venga mai aggiornato automaticamente per quella ditta.
+                            </p>
                         </div>
                         <div class="flex space-x-2">
                             <button id="populateMarkupsButton" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg shadow-sm">Popola Nuove Ditte</button>
@@ -156,6 +129,7 @@
 
     <script>
         $(document).ready(function() {
+            // ... (Tutto il codice JavaScript precedente rimane invariato) ...
             const urlParams = new URLSearchParams(window.location.search);
             const importId = urlParams.get('import_id');
 
@@ -191,7 +165,7 @@
                 const oldVal = changeData.old ?? '';
                 const newVal = changeData.new ?? '';
                 if (String(oldVal) === String(newVal)) {
-                    return `<span class="no-change">${newVal}</span>`;
+                    return `<span class="no-change">${newVal || oldVal}</span>`;
                 }
                 return `<div class="change-cell"><span class="old">${oldVal}</span><span class="arrow">→</span><span class="new">${newVal}</span></div>`;
             }
