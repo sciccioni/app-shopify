@@ -5,9 +5,10 @@ import fetch from "node-fetch";
 // --- INTERFACCE ---
 interface PendingUpdate {
   id: number;
-  product_id: string;           // GID del prodotto, es. "gid://shopify/Product/1234567890"
+  product_id: string;        // GID del prodotto, es. "gid://shopify/Product/1234567890"
   product_variant_id: string;   // GID della variante, es. "gid://shopify/ProductVariant/0987654321"
   inventory_item_id: string;    // GID dell’inventory item
+  minsan: string;
   changes: {
     quantity?: { old: number; new: number };
     price?: { old: string; new: string };
@@ -24,7 +25,7 @@ async function executeShopifyMutation(
   query: string,
   variables: object
 ) {
-  const url = `https://${domain}/admin/api/2025-07/graphql.json`;
+  const url = `https://${domain}/admin/api/2025-07/graphql.json`; // API AGGIORNATA
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -33,11 +34,13 @@ async function executeShopifyMutation(
     },
     body: JSON.stringify({ query, variables }),
   });
-  const json = await res.json() as any;
-  // raccogli eventuali errori
+  const json = (await res.json()) as any;
+  
   const errs =
     json.data?.productVariantsBulkUpdate?.userErrors ||
     json.data?.inventoryItemUpdate?.userErrors ||
+    json.data?.inventoryAdjustQuantities?.userErrors ||
+    json.data?.metafieldsSet?.userErrors ||
     json.errors ||
     [];
   if (errs.length > 0) {
@@ -78,10 +81,10 @@ const handler: Handler = async (event, context) => {
       return { statusCode: 400, body: JSON.stringify({ error: "Dati mancanti" }) };
     }
 
-    // 1. Fetch degli aggiornamenti pendenti (ora includono product_id)
+    // 1. Fetch degli aggiornamenti pendenti
     const { data: updates, error } = await supabase
       .from("pending_updates")
-      .select("id, product_id, product_variant_id, inventory_item_id, changes")
+      .select("id, product_id, product_variant_id, inventory_item_id, changes, minsan")
       .in("id", update_ids) as { data: PendingUpdate[]; error: any };
     if (error) throw error;
 
@@ -98,7 +101,7 @@ const handler: Handler = async (event, context) => {
     // 3. Per ogni gruppo di varianti, esegui bulkUpdate
     for (const [productId, group] of Object.entries(grouped)) {
       try {
-        // 3.1 Costruisci l’array variants per bulk
+        // 3.1 Costruisci l’array variants per bulk (prezzo e prezzo barrato)
         const variantsBulk = group.map((u) => {
           const v: any = { id: u.product_variant_id };
           if (u.changes.price && u.changes.price.old !== u.changes.price.new) {
@@ -108,13 +111,12 @@ const handler: Handler = async (event, context) => {
             v.compareAtPrice = u.changes.compare_at_price.new;
           }
           return v;
-        }).filter(v => Object.keys(v).length > 1); // scarta se nessuna mod
+        }).filter(v => Object.keys(v).length > 1);
 
         if (variantsBulk.length > 0) {
           const bulkMutation = `
             mutation bulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
               productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-                productVariants { id }
                 userErrors { field message }
               }
             }
@@ -129,12 +131,11 @@ const handler: Handler = async (event, context) => {
 
         // 3.2 Per ogni variante del gruppo: cost, expiry_date e quantity
         for (const u of group) {
-          // 3.2.a aggiornamento cost se serve
+          // 3.2.a Aggiornamento costo
           if (u.changes.cost && u.changes.cost.new !== null && String(u.changes.cost.old?.toFixed(2)) !== u.changes.cost.new) {
             const costMutation = `
               mutation updateInventoryItem($id: ID!, $input: InventoryItemInput!) {
                 inventoryItemUpdate(id: $id, input: $input) {
-                  inventoryItem { id unitCost { amount currencyCode } }
                   userErrors { field message }
                 }
               }
@@ -143,11 +144,11 @@ const handler: Handler = async (event, context) => {
               SHOPIFY_STORE_NAME,
               SHOPIFY_ADMIN_API_TOKEN,
               costMutation,
-              { id: u.inventory_item_id, input: { cost: u.changes.cost.new } }
+              { id: u.inventory_item_id, input: { cost: parseFloat(u.changes.cost.new) } }
             );
           }
 
-          // 3.2.b metafield expiry_date
+          // 3.2.b Metafield expiry_date
           if (u.changes.expiry_date && u.changes.expiry_date.old !== u.changes.expiry_date.new) {
             const mfMutation = `
               mutation setExpiry($metafields: [MetafieldsSetInput!]!) {
@@ -172,7 +173,7 @@ const handler: Handler = async (event, context) => {
             );
           }
 
-          // 3.2.c inventoryAdjustQuantities
+          // 3.2.c InventoryAdjustQuantities
           if (u.changes.quantity && u.changes.quantity.old !== u.changes.quantity.new) {
             const delta = u.changes.quantity.new - u.changes.quantity.old;
             const qtyMutation = `
@@ -188,8 +189,8 @@ const handler: Handler = async (event, context) => {
               qtyMutation,
               {
                 input: {
-                  reason: "CORRECTION",
-                  name: "Excel Sync",
+                  reason: "correction",
+                  name: "available",
                   changes: [
                     {
                       inventoryItemId: u.inventory_item_id,
@@ -206,28 +207,28 @@ const handler: Handler = async (event, context) => {
           logs.push({
             import_id,
             product_variant_id: u.product_variant_id,
+            minsan: u.minsan,
             status: "success",
-            action: "bulk-update",
-            details: {},
+            action: "update",
+            details: { changes: u.changes },
           });
         }
 
       } catch (e: any) {
-        // error handling per gruppo
         errorCount += group.length;
         for (const u of group) {
           logs.push({
             import_id,
             product_variant_id: u.product_variant_id,
+            minsan: u.minsan,
             status: "error",
-            action: "bulk-update",
-            details: { error: e.message },
+            action: "update",
+            details: { error: e.message, attemptedChanges: u.changes },
           });
         }
       }
     }
 
-    // 4. Salva log e pulisci pending_updates
     if (logs.length) {
       await supabase.from("sync_logs").insert(logs);
     }
@@ -241,7 +242,6 @@ const handler: Handler = async (event, context) => {
         errors: errorCount,
       }),
     };
-
   } catch (err: any) {
     console.error(err);
     return {
