@@ -98,6 +98,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         product_variant_id: shopify.id,
         product_title: shopify.displayName,
         minsan: local.minsan,
+        ditta: local.ditta,
         changes: changes
       });
     }
