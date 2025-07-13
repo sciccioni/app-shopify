@@ -6,6 +6,7 @@ import fetch from "node-fetch";
 interface PendingUpdate {
   id: number;
   product_variant_id: string;
+  inventory_item_id: string;
   changes: {
     quantity?: { old: number; new: number };
     price?: { old: string; new: string };
@@ -15,7 +16,7 @@ interface PendingUpdate {
 
 // --- FUNZIONI HELPER PER SHOPIFY ---
 async function executeShopifyMutation(domain: string, token: string, query: string, variables: object) {
-  const url = `https://${domain}/admin/api/2024-04/graphql.json`;
+  const url = `https://${domain}/admin/api/2025-07/graphql.json`; // API AGGIORNATA
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
@@ -46,14 +47,14 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   try {
     const { update_ids, import_id } = JSON.parse(event.body || "{}");
     if (!update_ids || !Array.isArray(update_ids) || update_ids.length === 0 || !import_id) {
-      return { statusCode: 400, body: JSON.stringify({ error: "Dati mancanti: sono richiesti 'update_ids' e 'import_id'." }) };
+      return { statusCode: 400, body: JSON.stringify({ error: "Dati mancanti." }) };
     }
 
     const { data: updates, error: fetchError } = await supabase
       .from('pending_updates')
-      .select('id, product_variant_id, changes')
+      .select('id, product_variant_id, inventory_item_id, changes')
       .in('id', update_ids)
-      .returns<Omit<PendingUpdate, 'import_id' | 'ditta' | 'minsan'>[]>();
+      .returns<PendingUpdate[]>();
     if (fetchError) throw fetchError;
 
     let successCount = 0;
@@ -61,9 +62,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     const logs = [];
 
     for (const update of updates) {
-      const { product_variant_id, changes } = update;
-      const variantIdNumber = product_variant_id.split('/').pop();
-
+      const { product_variant_id, inventory_item_id, changes } = update;
+      
       try {
         // A. Aggiorna prezzo e costo
         if (changes.price || changes.cost) {
@@ -78,15 +78,12 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         }
 
         // B. Aggiorna la giacenza
-        if (changes.quantity) {
+        if (changes.quantity && inventory_item_id) {
           const delta = changes.quantity.new - changes.quantity.old;
-          const inventoryResponse = await (await fetch(`https://${SHOPIFY_STORE_NAME}/admin/api/2024-04/variants/${variantIdNumber}.json`, { headers: {'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN} })).json() as any;
-          const inventoryItemId = inventoryResponse.variant.inventory_item_id;
-          
           const mutation = `mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
             inventoryAdjustQuantities(input: $input) { userErrors { field message } }
           }`;
-          const variables = { input: { reason: "correction", name: "Excel Sync", changes: [{ inventoryItemId: `gid://shopify/InventoryItem/${inventoryItemId}`, locationId: `gid://shopify/Location/${SHOPIFY_LOCATION_ID}`, delta: delta }] } };
+          const variables = { input: { reason: "correction", name: "Excel Sync", changes: [{ inventoryItemId: inventory_item_id, locationId: `gid://shopify/Location/${SHOPIFY_LOCATION_ID}`, delta: delta }] } };
           await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, variables);
         }
 
@@ -99,12 +96,9 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       }
     }
 
-    // 3. Salva i log su Supabase
     if (logs.length > 0) {
       await supabase.from('sync_logs').insert(logs);
     }
-
-    // Rimuovi le modifiche processate da pending_updates
     await supabase.from('pending_updates').delete().in('id', update_ids);
 
     return {
