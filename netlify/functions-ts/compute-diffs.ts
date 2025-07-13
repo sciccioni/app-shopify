@@ -2,7 +2,7 @@ import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import fetch from "node-fetch";
 
-// Interfacce
+// --- INTERFACCE PER TIPI PIÙ SICURI ---
 interface LocalProduct {
   minsan: string;
   ditta: string;
@@ -21,7 +21,16 @@ interface ShopifyVariant {
   inventoryItem: { unitCost: { amount: string } | null };
 }
 
-// Handler principale
+interface ShopifyGraphQLResponse {
+  data?: {
+    productVariants?: {
+      edges: { node: ShopifyVariant }[];
+    };
+  };
+  errors?: { message: string }[];
+}
+
+// --- HANDLER PRINCIPALE ---
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: JSON.stringify({ error: "Metodo non consentito." }) };
@@ -58,10 +67,12 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
     const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku displayName price inventoryQuantity inventoryItem { unitCost { amount } } } } } }`;
     const shopifyDomain = SHOPIFY_STORE_NAME;
-    const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2023-10/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as any;
+    const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2023-10/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
+    
     if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map((e: any) => e.message).join(', ')}`);
 
-    const shopifyVariantsMap = new Map(shopifyResponse.data?.productVariants?.edges?.map((edge: any) => [edge.node.sku, edge.node]) || []);
+    const shopifyVariants = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
+    const shopifyVariantsMap = new Map<string, ShopifyVariant>(shopifyVariants.map(v => [v.sku, v]));
     
     // 3. Consolida le differenze
     const pendingUpdates = [];
@@ -96,7 +107,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         changes.expiry = { new: local.scadenza };
       }
 
-      // Se ci sono modifiche, crea un singolo record
       if (Object.keys(changes).length > 0) {
         pendingUpdates.push({
           import_id: importId,
