@@ -22,6 +22,19 @@
             color: #374151 !important; /* Testo grigio scuro */
             padding: 1rem;
         }
+        /* --- NUOVI STILI PER INPUT E SELECT --- */
+        .dataTables_wrapper .dataTables_filter input,
+        .dataTables_wrapper .dataTables_length select {
+            background-color: white !important;
+            color: #374151 !important;
+            border: 1px solid #d1d5db !important;
+            border-radius: 0.375rem;
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+        }
+        /* --- STILI PAGINAZIONE CORRETTI --- */
         .dataTables_wrapper .dataTables_paginate .paginate_button {
             background-color: white !important;
             color: #374151 !important;
@@ -30,11 +43,16 @@
             margin: 0 0.125rem;
             border-radius: 0.375rem;
         }
-        .dataTables_wrapper .dataTables_paginate .paginate_button.current, 
-        .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current {
             background-color: #4f46e5 !important;
             color: white !important;
             border-color: #4f46e5 !important;
+        }
+        /* Hover solo per i bottoni non attivi */
+        .dataTables_wrapper .dataTables_paginate .paginate_button:not(.current):hover {
+            background-color: #f3f4f6 !important; /* Grigio chiaro su hover */
+            color: #374151 !important;
+            border-color: #d1d5db !important;
         }
         table.dataTable {
             border-collapse: collapse !important;
