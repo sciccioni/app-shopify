@@ -120,12 +120,22 @@
             }
 
             function loadPendingUpdates(id) {
+                const loader = $('#loader-reviews');
+                const tableElem = $('#updatesTable');
+                loader.show();
+                
+                // Distruggi la tabella esistente prima di ricaricarla
+                if ($.fn.DataTable.isDataTable(tableElem)) {
+                    tableElem.DataTable().destroy();
+                    tableElem.find('tbody').empty();
+                }
+
                 $.ajax({
                     url: `/api/get-pending-updates?import_id=${id}`,
                     method: 'GET',
                     success: function(data) {
-                        $('#loader-reviews').hide();
-                        $('#updatesTable').show().DataTable({
+                        loader.hide();
+                        tableElem.show().DataTable({
                             data: data.updates,
                             destroy: true,
                             columns: [
@@ -139,7 +149,7 @@
                             language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/it-IT.json' }
                         });
                     },
-                    error: (xhr) => $('#loader-reviews').html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
+                    error: (xhr) => loader.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
                 });
             }
 
@@ -194,11 +204,27 @@
                     data: JSON.stringify({ id: id, markup_percentage: percentage }),
                     success: function() {
                         statusSpan.text('✔ Salvato').addClass('text-green-600');
-                        btn.text('Salva').prop('disabled', false);
-                        setTimeout(() => statusSpan.text(''), 2000); // Rimuove il messaggio dopo 2 secondi
+                        // --- NUOVA LOGICA DI RICALCOLO ---
+                        statusSpan.append('<span class="recalc-status text-blue-600 ml-2">Ricalcolo prezzi...</span>');
+                        $.ajax({
+                            url: `/api/compute-diffs`,
+                            method: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({ importId: importId }),
+                            success: function() {
+                                loadPendingUpdates(importId); // Ricarica la tabella delle revisioni
+                                statusSpan.find('.recalc-status').text('Prezzi ricalcolati!').addClass('text-green-600');
+                                btn.text('Salva').prop('disabled', false);
+                                setTimeout(() => statusSpan.empty(), 3000);
+                            },
+                            error: function() {
+                                statusSpan.find('.recalc-status').text('Errore ricalcolo.').addClass('text-red-600');
+                                btn.text('Salva').prop('disabled', false);
+                            }
+                        });
                     },
                     error: function(xhr) {
-                        const errorMsg = xhr.responseJSON?.error || 'Errore durante il salvataggio.';
+                        const errorMsg = xhr.responseJSON?.error || 'Errore salvataggio.';
                         statusSpan.text(`✖ ${errorMsg}`).addClass('text-red-600');
                         btn.text('Salva').prop('disabled', false);
                     }
@@ -215,8 +241,8 @@
                     success: function(data) {
                         alert(`Successo! Ditte analizzate: ${data.ditteAnalizzate}. Nuovi markup aggiunti: ${data.ditteAggiunte}`);
                         btn.prop('disabled', false).text('Popola Nuove Ditte');
-                        panelMarkups.data('loaded', false); // Forza il ricaricamento al prossimo click
-                        loadMarkups(); // Ricarica la tabella per mostrare i nuovi dati
+                        panelMarkups.data('loaded', false);
+                        loadMarkups();
                     },
                     error: (xhr) => {
                         alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
@@ -228,7 +254,7 @@
             // Altri event listener
             $('#backButton').on('click', () => window.location.href = '/');
             $('#confirmButton').on('click', function() {
-                const selectedUpdates = $('.update-checkbox:checked').map(function() { return $(this).val(); }).get();
+                const selectedUpdates = $('#updatesTable').DataTable().rows().nodes().to$().find('.update-checkbox:checked').map(function() { return $(this).val(); }).get();
                 console.log("ID da applicare:", selectedUpdates);
                 alert(`Verranno applicate ${selectedUpdates.length} modifiche.`);
             });
