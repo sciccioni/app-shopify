@@ -6,13 +6,11 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     return { statusCode: 405, body: JSON.stringify({ error: "Metodo non consentito." }) };
   }
 
-  // 1. Estrai l'ID dell'importazione dai parametri della query URL
   const importId = event.queryStringParameters?.import_id;
   if (!importId) {
     return { statusCode: 400, body: JSON.stringify({ error: "Parametro import_id mancante." }) };
   }
 
-  // 2. Inizializza Supabase
   const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     return { statusCode: 500, body: JSON.stringify({ error: "Variabili d'ambiente mancanti." }) };
@@ -20,15 +18,14 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
-    // 3. Recupera le modifiche in sospeso dal database
+    // Seleziona tutte le colonne, inclusa la nuova colonna 'changes'
     const { data: updates, error } = await supabase
       .from('pending_updates')
-      .select('id, product_title, field, old_value, new_value')
+      .select('id, product_title, changes')
       .eq('import_id', importId);
 
     if (error) throw error;
 
-    // 4. Restituisci i dati
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
@@ -37,7 +34,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
   } catch (error: any) {
     console.error("Errore nel recuperare le modifiche:", error);
-    return { statusCode: 500, body: JSON.stringify({ error: error.message || "Errore interno del server." }) };
+    return { statusCode: 500, body: JSON.stringify({ error: error.message || "Errore interno." }) };
   }
 };
 
