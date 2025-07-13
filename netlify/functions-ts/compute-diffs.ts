@@ -46,7 +46,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
-    // 1. Recupera dati da Supabase
     const { data: localProducts, error: pError } = await supabase.from('products').select('minsan, ditta, iva, giacenza, costo_medio, scadenza').eq('import_id', importId).returns<LocalProduct[]>();
     if (pError) throw pError;
     const { data: markups, error: mError } = await supabase.from('company_markups').select('ditta, markup_percentage');
@@ -55,17 +54,15 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     const markupsMap = new Map(markups?.map(m => [m.ditta, m.markup_percentage]));
 
-    // 2. Interroga Shopify
     const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
     const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku displayName price inventoryQuantity inventoryItem { unitCost { amount } } } } } }`;
     const shopifyDomain = SHOPIFY_STORE_NAME;
-    const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2023-10/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
+    const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2024-04/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
     if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map((e) => e.message).join(', ')}`);
     
     const shopifyVariants = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
     const shopifyVariantsMap = new Map<string, ShopifyVariant>(shopifyVariants.map(v => [v.sku, v]));
     
-    // 3. Calcola le differenze e prepara gli aggiornamenti
     const pendingUpdates = [];
     const productPriceUpdates = [];
 
@@ -77,18 +74,19 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       const shopifyCost = shopify.inventoryItem?.unitCost ? parseFloat(shopify.inventoryItem.unitCost.amount) : null;
       let newPriceFormatted: string | undefined;
 
-      // Calcola il nuovo prezzo (se possibile)
+      // --- LOGICA DI CALCOLO AGGIORNATA ---
       const markup = markupsMap.get(local.ditta);
-      if (markup !== undefined && local.costo_medio != null) {
+      // Calcola il nuovo prezzo solo se il markup è definito e MAGGIORE DI ZERO
+      if (markup !== undefined && markup > 0 && local.costo_medio != null) {
         const newPrice = (local.costo_medio * (1 + markup / 100) * (1 + (local.iva || 0) / 100));
         newPriceFormatted = newPrice.toFixed(2);
         productPriceUpdates.push({ minsan: local.minsan, prezzo_calcolato: parseFloat(newPriceFormatted) });
       }
 
-      // Popola l'oggetto 'changes' con TUTTI i confronti
+      // Popola l'oggetto 'changes' con tutti i confronti
       changes.quantity = { old: shopify.inventoryQuantity, new: local.giacenza };
       changes.cost = { old: shopifyCost, new: local.costo_medio?.toFixed(2) };
-      changes.price = { old: shopify.price, new: newPriceFormatted };
+      changes.price = { old: shopify.price, new: newPriceFormatted }; // Sarà undefined se il markup è 0
       if (local.scadenza) {
         changes.expiry = { new: local.scadenza };
       }
@@ -103,13 +101,11 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       });
     }
 
-    // 4. Salva le differenze in 'pending_updates'
     await supabase.from('pending_updates').delete().eq('import_id', importId);
     if (pendingUpdates.length > 0) {
       await supabase.from('pending_updates').insert(pendingUpdates);
     }
 
-    // 5. SALVA I PREZZI CALCOLATI NELLA TABELLA 'products'
     if (productPriceUpdates.length > 0) {
         const updatePromises = productPriceUpdates.map(p =>
             supabase.from('products').update({ prezzo_calcolato: p.prezzo_calcolato }).eq('import_id', importId).eq('minsan', p.minsan)
