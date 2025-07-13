@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Revisione Modifiche Consolidata</title>
+    <title>Revisione e Gestione</title>
     <!-- Stili -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
@@ -16,11 +16,13 @@
         .change-cell .arrow { color: #2563eb; margin: 0 0.25rem; }
         .change-cell .new { font-weight: 600; color: #16a34a; }
         .no-change { color: #6b7280; }
+        .save-status { margin-left: 8px; font-size: 0.875rem; }
     </style>
 </head>
 <body class="bg-gray-50 p-4 sm:p-8">
     <div class="max-w-7xl mx-auto bg-white p-6 rounded-lg shadow">
-        <!-- ... (il codice per le tab rimane invariato) ... -->
+        
+        <!-- Navigazione a Tab -->
         <div class="border-b border-gray-200">
             <nav class="-mb-px flex space-x-8" aria-label="Tabs">
                 <a href="#" id="tab-reviews" class="border-indigo-500 text-indigo-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" aria-current="page">Revisione Modifiche</a>
@@ -46,6 +48,7 @@
                     <tr>
                         <th><input type="checkbox" id="selectAll"></th>
                         <th>Prodotto</th>
+                        <th>Minsan</th>
                         <th>Giacenza</th>
                         <th>Prezzo (€)</th>
                         <th>Costo (€)</th>
@@ -55,10 +58,20 @@
                 <tbody></tbody>
             </table>
         </div>
-        <!-- ... (il pannello markup rimane invariato) ... -->
+
+        <!-- Pannello Gestione Markup -->
         <div id="panel-markups" class="mt-6 hidden">
-            <!-- Contenuto del pannello markup -->
+            <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+                 <div>
+                    <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Gestione Markup</h1>
+                    <p class="mt-1 text-gray-600">Modifica la percentuale di markup per ogni ditta.</p>
+                </div>
+                <button id="populateMarkupsButton" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg">Popola Nuove Ditte</button>
+            </div>
+            <div id="loader-markups" class="text-center p-8"><p class="text-gray-600">Caricamento markup...</p></div>
+            <div id="markups-container"></div>
         </div>
+
     </div>
 
     <!-- Librerie JavaScript -->
@@ -67,25 +80,49 @@
 
     <script>
         $(document).ready(function() {
-            // ... (logica di gestione delle tab e dei bottoni invariata) ...
-            
-            // --- NUOVA FUNZIONE DI RENDERIZZAZIONE ---
+            const urlParams = new URLSearchParams(window.location.search);
+            const importId = urlParams.get('import_id');
+
+            // --- GESTIONE TAB ---
+            const tabReviews = $('#tab-reviews');
+            const tabMarkups = $('#tab-markups');
+            const panelReviews = $('#panel-reviews');
+            const panelMarkups = $('#panel-markups');
+
+            tabReviews.on('click', function(e) {
+                e.preventDefault();
+                $(this).addClass('border-indigo-500 text-indigo-600').removeClass('border-transparent text-gray-500');
+                tabMarkups.removeClass('border-indigo-500 text-indigo-600').addClass('border-transparent text-gray-500');
+                panelReviews.removeClass('hidden');
+                panelMarkups.addClass('hidden');
+            });
+
+            tabMarkups.on('click', function(e) {
+                e.preventDefault();
+                $(this).addClass('border-indigo-500 text-indigo-600').removeClass('border-transparent text-gray-500');
+                tabReviews.removeClass('border-indigo-500 text-indigo-600').addClass('border-transparent text-gray-500');
+                panelMarkups.removeClass('hidden');
+                panelReviews.addClass('hidden');
+                if (!panelMarkups.data('loaded')) {
+                    loadMarkups();
+                }
+            });
+
+            // --- LOGICA REVISIONE MODIFICHE ---
+            if (importId) {
+                loadPendingUpdates(importId);
+            } else {
+                $('#loader-reviews').html('<p class="text-gray-500">Nessuna importazione specificata. Torna alla home per iniziare.</p>');
+            }
+
             function renderChange(changeData) {
                 if (changeData === undefined || changeData === null) return '<span class="no-change">-</span>';
-                
                 const oldVal = changeData.old ?? '';
                 const newVal = changeData.new ?? '';
-
-                // Confronta i valori. Se sono uguali, mostra solo il nuovo valore senza modifiche.
                 if (String(oldVal) === String(newVal)) {
                     return `<span class="no-change">${newVal}</span>`;
                 }
-
-                return `<div class="change-cell">
-                          <span class="old">${oldVal}</span>
-                          <span class="arrow">→</span>
-                          <span class="new">${newVal}</span>
-                        </div>`;
+                return `<div class="change-cell"><span class="old">${oldVal}</span><span class="arrow">→</span><span class="new">${newVal}</span></div>`;
             }
 
             function loadPendingUpdates(id) {
@@ -109,6 +146,7 @@
                             columns: [
                                 { data: 'id', orderable: false, render: (d) => `<input type="checkbox" class="update-checkbox" value="${d}" checked>` },
                                 { data: 'product_title' },
+                                { data: 'minsan' },
                                 { data: 'changes.quantity', render: renderChange },
                                 { data: 'changes.price', render: renderChange },
                                 { data: 'changes.cost', render: renderChange },
@@ -120,17 +158,105 @@
                     error: (xhr) => loader.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
                 });
             }
-            
-            // Inizializzazione
-            const urlParams = new URLSearchParams(window.location.search);
-            const importId = urlParams.get('import_id');
-            if (importId) {
-                loadPendingUpdates(importId);
-            } else {
-                $('#loader-reviews').html('<p class="text-gray-500">Nessuna importazione specificata. Torna alla home per iniziare.</p>');
+
+            // --- LOGICA GESTIONE MARKUP ---
+            function loadMarkups() {
+                const container = $('#markups-container');
+                const loader = $('#loader-markups');
+                loader.show();
+                container.empty();
+
+                $.ajax({
+                    url: '/api/get-markups',
+                    method: 'GET',
+                    success: function(data) {
+                        loader.hide();
+                        panelMarkups.data('loaded', true);
+                        const table = $('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ditta</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Markup (%)</th><th class="px-6 py-3"></th></tr></thead><tbody></tbody></table>');
+                        const tbody = table.find('tbody');
+                        data.markups.forEach(m => {
+                            tbody.append(`
+                                <tr data-id="${m.id}">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${m.ditta}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap"><input type="number" step="0.01" class="markup-input w-24 rounded-md border-gray-300 shadow-sm" value="${m.markup_percentage}"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex items-center">
+                                        <button class="save-markup-btn text-indigo-600 hover:text-indigo-900">Salva</button>
+                                        <span class="save-status"></span>
+                                    </td>
+                                </tr>
+                            `);
+                        });
+                        container.append(table);
+                    },
+                    error: (xhr) => loader.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
+                });
             }
-            
-            // (Il resto del codice per la gestione dei markup e dei bottoni rimane qui)
+
+            $('#markups-container').on('click', '.save-markup-btn', function() {
+                const btn = $(this);
+                const row = btn.closest('tr');
+                const statusSpan = row.find('.save-status');
+                const id = row.data('id');
+                const percentage = row.find('.markup-input').val();
+                
+                btn.text('Salvataggio...').prop('disabled', true);
+                statusSpan.text('').removeClass('text-green-600 text-red-600');
+
+                $.ajax({
+                    url: '/api/update-markup',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ id: id, markup_percentage: percentage }),
+                    success: function() {
+                        statusSpan.text('✔ Salvato').addClass('text-green-600');
+                        statusSpan.append('<span class="recalc-status text-blue-600 ml-2">Ricalcolo...</span>');
+                        $.ajax({
+                            url: `/api/compute-diffs`,
+                            method: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({ importId: importId }),
+                            success: function() {
+                                loadPendingUpdates(importId);
+                                statusSpan.find('.recalc-status').text('Prezzi ricalcolati!').addClass('text-green-600');
+                                btn.text('Salva').prop('disabled', false);
+                                setTimeout(() => statusSpan.empty(), 3000);
+                            },
+                            error: () => statusSpan.find('.recalc-status').text('Errore ricalcolo.').addClass('text-red-600')
+                        });
+                    },
+                    error: (xhr) => {
+                        statusSpan.text(`✖ Errore`).addClass('text-red-600');
+                        btn.text('Salva').prop('disabled', false);
+                    }
+                });
+            });
+
+            $('#populateMarkupsButton').on('click', function() {
+                const btn = $(this);
+                btn.prop('disabled', true).text('Popolamento...');
+                $.ajax({
+                    url: '/api/populate-markups',
+                    method: 'POST',
+                    success: function(data) {
+                        alert(`Successo! Ditte analizzate: ${data.ditteAnalizzate}. Nuovi markup aggiunti: ${data.ditteAggiunte}`);
+                        btn.prop('disabled', false).text('Popola Nuove Ditte');
+                        panelMarkups.data('loaded', false);
+                        loadMarkups();
+                    },
+                    error: (xhr) => {
+                        alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
+                        btn.prop('disabled', false).text('Popola Nuove Ditte');
+                    }
+                });
+            });
+
+            // Altri event listener
+            $('#backButton').on('click', () => window.location.href = '/');
+            $('#confirmButton').on('click', function() {
+                const selectedUpdates = $('#updatesTable').DataTable().rows().nodes().to$().find('.update-checkbox:checked').map(function() { return $(this).val(); }).get();
+                console.log("ID da applicare:", selectedUpdates);
+                alert(`Verranno applicate ${selectedUpdates.length} modifiche.`);
+            });
         });
     </script>
 </body>
