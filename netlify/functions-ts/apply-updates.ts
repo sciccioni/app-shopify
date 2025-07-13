@@ -17,6 +17,7 @@ interface PendingUpdate {
 // --- FUNZIONI HELPER PER SHOPIFY ---
 async function executeShopifyMutation(domain: string, token: string, query: string, variables: object) {
   const url = `https://${domain}/admin/api/2025-07/graphql.json`;
+  console.log(`Esecuzione mutazione Shopify: ${query.substring(0, 80)}...`);
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
@@ -29,6 +30,7 @@ async function executeShopifyMutation(domain: string, token: string, query: stri
     const errorMessage = userErrors.map((e: any) => e.message).join(', ') || jsonResponse.errors?.map((e: any) => e.message).join(', ') || "Errore sconosciuto da Shopify.";
     throw new Error(errorMessage);
   }
+  console.log("Mutazione Shopify eseguita con successo.");
   return jsonResponse;
 }
 
@@ -49,6 +51,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     if (!update_ids || !Array.isArray(update_ids) || update_ids.length === 0 || !import_id) {
       return { statusCode: 400, body: JSON.stringify({ error: "Dati mancanti." }) };
     }
+    
+    console.log(`[apply-updates] Avviato per import_id: ${import_id} con ${update_ids.length} modifiche.`);
 
     const { data: updates, error: fetchError } = await supabase
       .from('pending_updates')
@@ -56,6 +60,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       .in('id', update_ids)
       .returns<PendingUpdate[]>();
     if (fetchError) throw fetchError;
+    
+    console.log(`[apply-updates] Trovate ${updates?.length || 0} modifiche da applicare nel DB.`);
 
     let successCount = 0;
     let errorCount = 0;
@@ -65,7 +71,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       const { product_variant_id, inventory_item_id, changes } = update;
       
       try {
-        // A. Aggiorna prezzo (sulla variante)
+        console.log(`[apply-updates] Processando product_variant_id: ${product_variant_id}`);
+        // A. Aggiorna prezzo
         if (changes.price) {
           const mutation = `mutation productVariantUpdate($input: ProductVariantInput!) {
             productVariantUpdate(input: $input) { userErrors { field message } }
@@ -73,7 +80,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: { id: product_variant_id, price: changes.price.new } });
         }
 
-        // B. Aggiorna costo (sull'articolo di magazzino)
+        // B. Aggiorna costo
         if (changes.cost && inventory_item_id) {
             const mutation = `mutation inventoryItemUpdate($input: InventoryItemUpdateInput!) {
                 inventoryItemUpdate(input: $input) { userErrors { field message } }
@@ -97,12 +104,22 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       } catch (e: any) {
         errorCount++;
         logs.push({ import_id, product_variant_id, status: 'error', action: 'update', details: { error: e.message } });
+        console.error(`[apply-updates] Errore per product_variant_id ${product_variant_id}:`, e.message);
       }
     }
 
+    // --- SEZIONE DI LOGGING MIGLIORATA ---
     if (logs.length > 0) {
-      await supabase.from('sync_logs').insert(logs);
+        console.log(`[apply-updates] Tentativo di inserire ${logs.length} record in sync_logs.`);
+        const { error: logError } = await supabase.from('sync_logs').insert(logs);
+        if (logError) {
+            console.error("[apply-updates] ERRORE CRITICO: Impossibile salvare i log su Supabase.", logError);
+        } else {
+            console.log("[apply-updates] Log salvati con successo.");
+        }
     }
+    
+    console.log("[apply-updates] Tentativo di eliminare le modifiche processate da pending_updates.");
     await supabase.from('pending_updates').delete().in('id', update_ids);
 
     return {
@@ -111,7 +128,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     };
 
   } catch (error: any) {
-    console.error("Errore durante l'applicazione delle modifiche:", error);
+    console.error("[apply-updates] Errore generale nell'handler:", error);
     return { statusCode: 500, body: JSON.stringify({ error: error.message || "Errore interno." }) };
   }
 };
