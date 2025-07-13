@@ -24,6 +24,7 @@ interface PendingUpdate {
   changes: ChangesObject; // Usiamo l'interfaccia specifica invece di 'any'
 }
 
+// Handler per recuperare le modifiche in sospeso
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   if (event.httpMethod !== "GET") {
     return { statusCode: 405, body: JSON.stringify({ error: "Metodo non consentito." }) };
@@ -41,11 +42,12 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
+    // Seleziona le colonne corrette, inclusa 'changes'
     const { data: updates, error } = await supabase
       .from('pending_updates')
       .select('id, product_title, changes')
       .eq('import_id', importId)
-      .returns<PendingUpdate[]>(); // Specifichiamo il tipo di dati che ci aspettiamo
+      .returns<PendingUpdate[]>();
 
     if (error) throw error;
 
