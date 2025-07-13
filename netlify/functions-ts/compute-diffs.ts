@@ -55,7 +55,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     const { data: markups, error: mError } = await supabase.from('company_markups').select('ditta, markup_percentage');
     if (mError) throw mError;
 
-    // --- LOG DI DEBUG ---
     console.log(`[compute-diffs] Trovati ${localProducts?.length || 0} prodotti normalizzati nel DB.`);
     if (!localProducts?.length) return { statusCode: 200, body: JSON.stringify({ message: "Nessun prodotto da analizzare.", updatesFound: 0 }) };
 
@@ -63,7 +62,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     // 2. Interroga Shopify
     const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
-    // --- LOG DI DEBUG ---
     console.log(`[compute-diffs] Query SKU inviata a Shopify: ${skusQuery}`);
     
     const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku displayName price inventoryQuantity inventoryItem { id unitCost { amount } } } } } }`;
@@ -74,39 +72,36 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     const shopifyVariants = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
     const shopifyVariantsMap = new Map<string, ShopifyVariant>(shopifyVariants.map(v => [v.sku, v]));
 
-    // --- LOG DI DEBUG ---
     console.log(`[compute-diffs] Shopify ha restituito ${shopifyVariants.length} prodotti corrispondenti.`);
     
     const pendingUpdates = [];
-    let firstProductLogged = false;
 
     for (const local of localProducts) {
       const shopify = shopifyVariantsMap.get(local.minsan);
-      
-      // --- LOG DI DEBUG PER IL PRIMO PRODOTTO TROVATO ---
-      if (shopify && !firstProductLogged) {
-          console.log('[compute-diffs] Dettaglio primo confronto:', {
-              localProduct: local,
-              shopifyProduct: shopify
-          });
-          firstProductLogged = true;
-      }
-
       if (!shopify) continue;
 
       const changes: any = {};
       const shopifyCost = shopify.inventoryItem?.unitCost ? parseFloat(shopify.inventoryItem.unitCost.amount) : null;
-      let newPriceFormatted: string | undefined;
+      
+      // --- LOGICA DI COSTRUZIONE 'changes' MIGLIORATA ---
+      changes.quantity = { old: shopify.inventoryQuantity, new: local.giacenza };
+      
+      // Aggiungi il costo solo se esiste
+      if (local.costo_medio !== undefined) {
+        changes.cost = { old: shopifyCost, new: local.costo_medio?.toFixed(2) };
+      } else {
+        changes.cost = { old: shopifyCost, new: null };
+      }
 
+      // Aggiungi il prezzo solo se è stato calcolato
       const markup = markupsMap.get(local.ditta);
       if (markup !== undefined && markup > 0 && local.costo_medio != null) {
         const newPrice = (local.costo_medio * (1 + markup / 100) * (1 + (local.iva || 0) / 100));
-        newPriceFormatted = newPrice.toFixed(2);
+        changes.price = { old: shopify.price, new: newPrice.toFixed(2) };
+      } else {
+        changes.price = { old: shopify.price, new: shopify.price }; // Nessuna modifica se non c'è markup
       }
 
-      changes.quantity = { old: shopify.inventoryQuantity, new: local.giacenza };
-      changes.cost = { old: shopifyCost, new: local.costo_medio?.toFixed(2) };
-      changes.price = { old: shopify.price, new: newPriceFormatted };
       if (local.scadenza) {
         changes.expiry = { new: local.scadenza };
       }
@@ -122,12 +117,16 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       });
     }
 
-    // --- LOG DI DEBUG ---
     console.log(`[compute-diffs] Creati ${pendingUpdates.length} record di aggiornamento.`);
 
     await supabase.from('pending_updates').delete().eq('import_id', importId);
     if (pendingUpdates.length > 0) {
-      await supabase.from('pending_updates').insert(pendingUpdates);
+      const { error: insertError } = await supabase.from('pending_updates').insert(pendingUpdates);
+      if (insertError) {
+          // Se l'inserimento fallisce, ora vedremo un errore chiaro.
+          console.error("[compute-diffs] Errore durante l'inserimento in pending_updates:", insertError);
+          throw insertError;
+      }
     }
 
     return { statusCode: 200, body: JSON.stringify({ message: "Calcolo differenze completato.", updatesFound: pendingUpdates.length }) };
