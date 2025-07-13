@@ -45,7 +45,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     // Seleziona le colonne corrette, inclusa 'changes'
     const { data: updates, error } = await supabase
       .from('pending_updates')
-      .select('id, product_title, changes')
+      .select('id, product_title, minsan, changes')
       .eq('import_id', importId)
       .returns<PendingUpdate[]>();
 
