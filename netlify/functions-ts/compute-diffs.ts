@@ -9,6 +9,7 @@ interface LocalProduct {
   iva: number;
   giacenza: number;
   costo_medio?: number;
+  prezzo_bd?: number;
   scadenza?: string;
 }
 interface ShopifyVariant {
@@ -16,22 +17,15 @@ interface ShopifyVariant {
   sku: string;
   displayName:string;
   price: string;
+  compareAtPrice: string | null;
   inventoryQuantity: number;
-  inventoryItem: { 
-      id: string;
-      unitCost: { amount: string } | null 
-  };
-}
-interface ShopifyGraphQLResponse {
-  data?: { productVariants?: { edges: { node: ShopifyVariant }[] } };
-  errors?: { message: string }[];
+  inventoryItem: { id: string; unitCost: { amount: string } | null };
+  metafield: { value: string } | null;
 }
 
 // --- HANDLER PRINCIPALE ---
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: JSON.stringify({ error: "Metodo non consentito." }) };
-  }
+  if (event.httpMethod !== "POST") return { statusCode: 405, body: JSON.stringify({ error: "Metodo non consentito." }) };
 
   let importId: string;
   try {
@@ -49,7 +43,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
-    const { data: localProducts, error: pError } = await supabase.from('products').select('minsan, ditta, iva, giacenza, costo_medio, scadenza').eq('import_id', importId).returns<LocalProduct[]>();
+    const { data: localProducts, error: pError } = await supabase.from('products').select('*').eq('import_id', importId).returns<LocalProduct[]>();
     if (pError) throw pError;
     const { data: markups, error: mError } = await supabase.from('company_markups').select('ditta, markup_percentage');
     if (mError) throw mError;
@@ -57,51 +51,84 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     const markupsMap = new Map(markups?.map(m => [m.ditta, m.markup_percentage]));
 
-    // 2. Interroga Shopify (con inventoryItem.id e API aggiornata)
+    // 2. Interroga Shopify (con compareAtPrice e metafield)
     const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
-    const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku displayName price inventoryQuantity inventoryItem { id unitCost { amount } } } } } }`;
+    const graphqlQuery = `
+      query { 
+        productVariants(first: 250, query: "${skusQuery}") { 
+          edges { 
+            node { 
+              id 
+              sku 
+              displayName 
+              price 
+              compareAtPrice
+              inventoryQuantity 
+              inventoryItem { id unitCost { amount } }
+              metafield(namespace: "custom", key: "data_di_scadenza") { value }
+            } 
+          } 
+        } 
+      }`;
     const shopifyDomain = SHOPIFY_STORE_NAME;
-    const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2024-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
-    if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map((e) => e.message).join(', ')}`);
+    const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2024-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as any;
+    if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map((e: any) => e.message).join(', ')}`);
     
-    const shopifyVariants = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
-    const shopifyVariantsMap = new Map<string, ShopifyVariant>(shopifyVariants.map(v => [v.sku, v]));
+    const shopifyVariantsMap = new Map(shopifyResponse.data?.productVariants?.edges?.map((edge: any) => [edge.node.sku, edge.node]) || []);
     
     const pendingUpdates = [];
-    const productPriceUpdates = [];
 
     for (const local of localProducts) {
       const shopify = shopifyVariantsMap.get(local.minsan);
       if (!shopify) continue;
 
       const changes: any = {};
+      
+      // Confronta Giacenza
+      if (local.giacenza !== shopify.inventoryQuantity) {
+        changes.quantity = { old: shopify.inventoryQuantity, new: local.giacenza };
+      }
+
+      // Confronta Costo
       const shopifyCost = shopify.inventoryItem?.unitCost ? parseFloat(shopify.inventoryItem.unitCost.amount) : null;
-      
-      changes.quantity = { old: shopify.inventoryQuantity, new: local.giacenza };
-      changes.cost = { old: shopifyCost, new: local.costo_medio?.toFixed(2) ?? null };
+      const localCost = local.costo_medio;
+      if (localCost != null && localCost.toFixed(2) !== shopifyCost?.toFixed(2)) {
+        changes.cost = { old: shopifyCost, new: localCost.toFixed(2) };
+      }
 
+      // Calcola e confronta Prezzo
       const markup = markupsMap.get(local.ditta);
-      if (markup !== undefined && markup > 0 && local.costo_medio != null) {
-        const newPrice = (local.costo_medio * (1 + markup / 100) * (1 + (local.iva || 0) / 100));
-        changes.price = { old: shopify.price, new: newPrice.toFixed(2) };
-        productPriceUpdates.push({ minsan: local.minsan, prezzo_calcolato: parseFloat(newPrice.toFixed(2)) });
-      } else {
-        changes.price = { old: shopify.price, new: shopify.price };
+      if (markup !== undefined && markup > 0 && localCost != null) {
+        const newPrice = (localCost * (1 + markup / 100) * (1 + (local.iva || 0) / 100)).toFixed(2);
+        if (newPrice !== shopify.price) {
+          changes.price = { old: shopify.price, new: newPrice };
+        }
       }
 
-      if (local.scadenza) {
-        changes.expiry = { new: local.scadenza };
+      // Confronta Prezzo Barrato (Compare At Price)
+      const localComparePrice = local.prezzo_bd?.toFixed(2);
+      if (localComparePrice != null && localComparePrice !== shopify.compareAtPrice) {
+        changes.compare_at_price = { old: shopify.compareAtPrice, new: localComparePrice };
+      }
+
+      // Confronta Scadenza (Metafield)
+      const localExpiry = local.scadenza;
+      if (localExpiry && localExpiry !== shopify.metafield?.value) {
+        changes.expiry_date = { old: shopify.metafield?.value, new: localExpiry };
       }
       
-      pendingUpdates.push({
-        import_id: importId,
-        product_variant_id: shopify.id,
-        inventory_item_id: shopify.inventoryItem?.id,
-        product_title: shopify.displayName,
-        minsan: local.minsan,
-        ditta: local.ditta,
-        changes: changes
-      });
+      // Aggiungi alla lista SOLO SE ci sono modifiche effettive
+      if (Object.keys(changes).length > 0) {
+        pendingUpdates.push({
+          import_id: importId,
+          product_variant_id: shopify.id,
+          inventory_item_id: shopify.inventoryItem?.id,
+          product_title: shopify.displayName,
+          minsan: local.minsan,
+          ditta: local.ditta,
+          changes: changes
+        });
+      }
     }
 
     await supabase.from('pending_updates').delete().eq('import_id', importId);
@@ -109,17 +136,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       await supabase.from('pending_updates').insert(pendingUpdates);
     }
 
-    if (productPriceUpdates.length > 0) {
-        const updatePromises = productPriceUpdates.map(p =>
-            supabase.from('products').update({ prezzo_calcolato: p.prezzo_calcolato }).eq('import_id', importId).eq('minsan', p.minsan)
-        );
-        await Promise.all(updatePromises);
-    }
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: "Calcolo differenze completato.", updatesFound: pendingUpdates.length }),
-    };
+    return { statusCode: 200, body: JSON.stringify({ message: "Calcolo differenze completato.", updatesFound: pendingUpdates.length }) };
 
   } catch (error: any) {
     console.error("Errore durante il calcolo delle differenze:", error);
