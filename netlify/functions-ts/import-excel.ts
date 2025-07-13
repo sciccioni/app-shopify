@@ -5,7 +5,6 @@ import xlsx from "xlsx";
 import { Readable } from "stream";
 
 // Colonne obbligatorie che ci aspettiamo di trovare nel file Excel.
-// Il controllo sarà case-insensitive.
 const REQUIRED_COLUMNS = [
   'Ditta', 'Minsan', 'EAN', 'Descrizione', 'Scadenza', 
   'Lotto', 'Giacenza', 'CostoBase', 'CostoMedio', 
@@ -64,10 +63,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   if (!supabaseUrl || !supabaseServiceKey || !appPassword) {
     return { statusCode: 500, body: JSON.stringify({ error: "Variabili d'ambiente non configurate." }) };
   }
-  
-  // Log per verificare che l'URL sia letto correttamente
-  console.log("Tentativo di connessione a Supabase URL:", supabaseUrl.substring(0, 20) + "...");
-
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
@@ -86,11 +81,13 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       return { statusCode: 400, body: JSON.stringify({ error: "Il file Excel è vuoto." }) };
     }
 
+    // --- LOGICA DI VALIDAZIONE AGGIORNATA E PIÙ ROBUSTA ---
     const headerOriginal = Object.keys(data[0]);
-    const headerLowercase = headerOriginal.map(h => h.toLowerCase());
+    // Pulisce gli header da spazi invisibili e li converte in minuscolo
+    const headerCleaned = headerOriginal.map(h => h.trim().toLowerCase());
 
     const missingColumns = REQUIRED_COLUMNS.filter(
-      reqCol => !headerLowercase.includes(reqCol.toLowerCase())
+      reqCol => !headerCleaned.includes(reqCol.toLowerCase())
     );
 
     if (missingColumns.length > 0) {
@@ -100,55 +97,47 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       };
     }
 
+    // Creiamo una mappa per passare dai nomi originali a quelli puliti
     const headerMap: { [key: string]: string } = {};
     headerOriginal.forEach(h => {
-        headerMap[h.toLowerCase()] = h;
+        headerMap[h.trim().toLowerCase()] = h;
     });
 
+    // Normalizziamo le chiavi di ogni riga per avere una struttura dati consistente
     const normalizedData = data.map(row => {
         const newRow: { [key: string]: any } = {};
         for (const requiredCol of REQUIRED_COLUMNS) {
             const originalColName = headerMap[requiredCol.toLowerCase()];
-            if (originalColName && row[originalColName] !== undefined) {
+            if (originalColName) {
                 newRow[requiredCol] = row[originalColName];
             }
         }
         return newRow;
     });
+    // --- FINE LOGICA AGGIORNATA ---
 
-    // --- 7. Salvataggio su Supabase con gestione errori migliorata ---
     const { data: importData, error: importError } = await supabase
       .from('imports')
       .insert({ file_name: 'uploaded_file.xlsx' })
       .select()
       .single();
 
-    if (importError) {
-        // Log dell'errore migliorato per vedere tutti i dettagli
-        console.error("Supabase error (imports):", JSON.stringify(importError, null, 2));
-        throw new Error("Impossibile creare un nuovo record di importazione nel database.");
-    }
+    if (importError) throw importError;
 
     const importId = importData.id;
 
-    try {
-        const rawDataToInsert = normalizedData.map(row => ({
-            import_id: importId,
-            row_data: row,
-        }));
+    const rawDataToInsert = normalizedData.map(row => ({
+      import_id: importId,
+      row_data: row,
+    }));
 
-        const { error: rawDataError } = await supabase
-            .from('imports_raw')
-            .insert(rawDataToInsert);
+    const { error: rawDataError } = await supabase
+      .from('imports_raw')
+      .insert(rawDataToInsert);
 
-        if (rawDataError) {
-            throw rawDataError; // Verrà catturato dal blocco catch sottostante
-        }
-    } catch(rawDataInsertError: any) {
-        console.error("Supabase error (imports_raw):", JSON.stringify(rawDataInsertError, null, 2));
-        // Rollback: se l'inserimento dei dati grezzi fallisce, cancella l'importazione creata
-        await supabase.from('imports').delete().eq('id', importId);
-        throw new Error("Errore durante il salvataggio dei dati del file nel database. L'operazione è stata annullata.");
+    if (rawDataError) {
+      await supabase.from('imports').delete().eq('id', importId);
+      throw rawDataError;
     }
 
     return {
@@ -161,7 +150,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     };
 
   } catch (error: any) {
-    console.error("Errore completo durante l'importazione:", error);
+    console.error("Errore durante l'importazione:", error);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message || "Errore interno del server." }),
