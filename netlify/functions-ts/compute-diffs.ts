@@ -57,6 +57,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     const markupsMap = new Map(markups?.map(m => [m.ditta, m.markup_percentage]));
 
+    // 2. Interroga Shopify (con inventoryItem.id e API aggiornata)
     const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
     const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku displayName price inventoryQuantity inventoryItem { id unitCost { amount } } } } } }`;
     const shopifyDomain = SHOPIFY_STORE_NAME;
@@ -115,7 +116,10 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         await Promise.all(updatePromises);
     }
 
-    return { statusCode: 200, body: JSON.stringify({ message: "Calcolo differenze completato.", updatesFound: pendingUpdates.length }) };
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ message: "Calcolo differenze completato.", updatesFound: pendingUpdates.length }),
+    };
 
   } catch (error: any) {
     console.error("Errore durante il calcolo delle differenze:", error);
