@@ -10,13 +10,13 @@ interface PendingUpdate {
   changes: {
     quantity?: { old: number; new: number };
     price?: { old: string; new: string };
-    cost?: { old: number | null; new: string };
+    cost?: { old: number | null; new: string | null };
   };
 }
 
 // --- FUNZIONI HELPER PER SHOPIFY ---
 async function executeShopifyMutation(domain: string, token: string, query: string, variables: object) {
-  const url = `https://${domain}/admin/api/2024-07/graphql.json`; // API AGGIORNATA
+  const url = `https://${domain}/admin/api/2024-07/graphql.json`;
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
@@ -65,7 +65,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       const { product_variant_id, inventory_item_id, changes } = update;
       
       try {
-        // A. Aggiorna prezzo (sulla variante)
+        // A. Aggiorna prezzo
         if (changes.price && changes.price.old !== changes.price.new) {
           const mutation = `mutation productVariantUpdate($input: ProductVariantInput!) {
             productVariantUpdate(input: $input) { userErrors { field message } }
@@ -73,12 +73,16 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: { id: product_variant_id, price: changes.price.new } });
         }
 
-        // B. Aggiorna costo (sull'articolo di magazzino)
-        if (changes.cost && inventory_item_id && changes.cost.old !== changes.cost.new) {
-            const mutation = `mutation inventoryItemUpdate($input: InventoryItemUpdateInput!) {
-                inventoryItemUpdate(input: $input) { userErrors { field message } }
-            }`;
-            await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: { id: inventory_item_id, cost: changes.cost.new } });
+        // B. Aggiorna costo
+        if (changes.cost && inventory_item_id) {
+            // --- CORREZIONE: Confronta i valori come numeri ---
+            const newCostAsNumber = changes.cost.new ? parseFloat(changes.cost.new) : null;
+            if (changes.cost.old !== newCostAsNumber) {
+                const mutation = `mutation inventoryItemUpdate($input: InventoryItemUpdateInput!) {
+                    inventoryItemUpdate(input: $input) { userErrors { field message } }
+                }`;
+                await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: { id: inventory_item_id, cost: changes.cost.new } });
+            }
         }
 
         // C. Aggiorna la giacenza
