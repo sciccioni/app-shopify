@@ -76,13 +76,17 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: { id: product_variant_id, price: changes.price.new } });
         }
 
-        // B. Aggiorna il costo (sull'articolo di magazzino)
+        // B. Aggiorna il costo (sull'articolo di magazzino) - STRUTTURA CORRETTA
         const costChanged = changes.cost && (changes.cost.old?.toFixed(2) !== changes.cost.new);
         if (costChanged && inventory_item_id) {
-            const mutation = `mutation inventoryItemUpdate($input: InventoryItemUpdateInput!) {
-                inventoryItemUpdate(input: $input) { userErrors { field message } }
+            const mutation = `mutation inventoryItemUpdate($id: ID!, $input: InventoryItemUpdateInput!) {
+                inventoryItemUpdate(id: $id, input: $input) { userErrors { field message } }
             }`;
-            await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: { id: inventory_item_id, cost: changes.cost!.new } });
+            const variables = {
+                id: inventory_item_id,
+                input: { cost: changes.cost!.new }
+            };
+            await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, variables);
         }
 
         // C. Aggiorna la giacenza (operazione separata)
