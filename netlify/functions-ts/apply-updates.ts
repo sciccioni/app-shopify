@@ -80,17 +80,19 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: { id: product_variant_id, price: changes.price.new } });
         }
 
-        // B. Aggiorna il costo (sull'articolo di magazzino) - STRUTTURA CORRETTA
-        const costChanged = changes.cost && (changes.cost.old?.toFixed(2) !== changes.cost.new);
-        if (costChanged && inventory_item_id && changes.cost.new !== null) {
-            const mutation = `mutation inventoryItemUpdate($id: ID!, $input: InventoryItemUpdateInput!) {
-                inventoryItemUpdate(id: $id, input: $input) { userErrors { field message } }
-            }`;
-            const variables = {
-                id: inventory_item_id,
-                input: { cost: changes.cost.new }
-            };
-            await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, variables);
+        // B. Aggiorna il costo (sull'articolo di magazzino) - LOGICA CORRETTA
+        if (changes.cost && inventory_item_id && changes.cost.new !== null) {
+            const costIsDifferent = changes.cost.old?.toFixed(2) !== changes.cost.new;
+            if (costIsDifferent) {
+                const mutation = `mutation inventoryItemUpdate($id: ID!, $input: InventoryItemUpdateInput!) {
+                    inventoryItemUpdate(id: $id, input: $input) { userErrors { field message } }
+                }`;
+                const variables = {
+                    id: inventory_item_id,
+                    input: { cost: changes.cost.new }
+                };
+                await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, variables);
+            }
         }
 
         // C. Aggiorna la giacenza (operazione separata)
