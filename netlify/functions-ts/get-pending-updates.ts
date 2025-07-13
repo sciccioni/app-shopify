@@ -1,6 +1,14 @@
 import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 
+// --- NUOVA INTERFACCIA PER LA TIPizzazione ---
+// Definiamo la struttura dei dati che ci aspettiamo dalla tabella pending_updates
+interface PendingUpdate {
+  id: number;
+  product_title: string;
+  changes: any; // La colonna JSONB può essere tipizzata come 'any' o con una struttura più dettagliata
+}
+
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   if (event.httpMethod !== "GET") {
     return { statusCode: 405, body: JSON.stringify({ error: "Metodo non consentito." }) };
@@ -21,11 +29,12 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
   try {
     // 3. Recupera le modifiche in sospeso dal database
-    // --- CORREZIONE: Seleziona la colonna 'changes' invece di 'field' ---
+    // --- CORREZIONE: Aggiungiamo .returns<PendingUpdate[]>() per una tipizzazione forte ---
     const { data: updates, error } = await supabase
       .from('pending_updates')
-      .select('id, product_title, changes') // Selezioniamo la nuova colonna JSON
-      .eq('import_id', importId);
+      .select('id, product_title, changes')
+      .eq('import_id', importId)
+      .returns<PendingUpdate[]>(); // Specifichiamo il tipo di dati che ci aspettiamo
 
     if (error) throw error;
 
