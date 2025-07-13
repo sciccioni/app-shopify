@@ -11,7 +11,7 @@
     <style>
         body { 
             font-family: 'Inter', sans-serif; 
-            background-color: #f9fafb; /* Sfondo grigio chiaro per tutta la pagina */
+            background-color: #f9fafb;
         }
         /* Stili per DataTables con Tailwind - FORZATURA TEMA CHIARO COMPLETA */
         .dataTables_wrapper .dataTables_length, 
@@ -19,7 +19,7 @@
         .dataTables_wrapper .dataTables_info, 
         .dataTables_wrapper .dataTables_processing,
         .dataTables_wrapper .dataTables_paginate {
-            color: #374151 !important; /* Testo grigio scuro */
+            color: #374151 !important;
             padding: 1rem;
         }
         .dataTables_wrapper .dataTables_filter input,
@@ -51,11 +51,11 @@
         table.dataTable td, table.dataTable th {
             padding: 0.75rem 1rem;
             border-bottom: 1px solid #e5e7eb;
-            background-color: transparent !important; /* Rimuove qualsiasi sfondo scuro */
-            color: #374151 !important; /* Forza testo scuro */
+            background-color: transparent !important;
+            color: #374151 !important;
         }
         table.dataTable thead th {
-            background-color: #f9fafb !important; /* Sfondo grigio chiaro per l'header */
+            background-color: #f9fafb !important;
             color: #374151 !important;
             font-weight: 600;
         }
@@ -75,7 +75,7 @@
         .tab-active { border-color: #4f46e5; color: #4f46e5; }
         .tab-inactive { border-color: transparent; color: #6b7280; }
         /* Stili per la gestione markup */
-        .markup-row.is-dirty { background-color: #fefce8 !important; /* Giallo chiaro per le modifiche */ }
+        .markup-row.is-dirty { background-color: #fefce8 !important; }
     </style>
 </head>
 <body class="p-4 sm:p-8">
@@ -377,7 +377,7 @@
                     url: '/api/apply-updates',
                     method: 'POST',
                     contentType: 'application/json',
-                    data: JSON.stringify({ update_ids: selectedUpdates }),
+                    data: JSON.stringify({ import_id: importId, update_ids: selectedUpdates }),
                     success: function(data) {
                         alert(`Processo completato!\nSuccessi: ${data.success}\nErrori: ${data.errors}`);
                         btn.prop('disabled', false).text('Conferma Aggiornamento');
