@@ -5,148 +5,249 @@ import fetch from "node-fetch";
 // --- INTERFACCE ---
 interface PendingUpdate {
   id: number;
-  product_variant_id: string;
-  inventory_item_id: string;
+  product_id: string;           // GID del prodotto, es. "gid://shopify/Product/1234567890"
+  product_variant_id: string;   // GID della variante, es. "gid://shopify/ProductVariant/0987654321"
+  inventory_item_id: string;    // GID dell’inventory item
   changes: {
     quantity?: { old: number; new: number };
     price?: { old: string; new: string };
+    compare_at_price?: { old: string | null; new: string | null };
     cost?: { old: number | null; new: string | null };
-    compare_at_price?: { old: string | null; new: string };
-    expiry_date?: { old: string | null; new: string };
+    expiry_date?: { old: string | null; new: string | null };
   };
 }
 
-// --- FUNZIONI HELPER PER SHOPIFY ---
-async function executeShopifyMutation(domain: string, token: string, query: string, variables: object) {
-  const url = `https://${domain}/admin/api/2024-07/graphql.json`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token },
+// --- HELPER PER SHOPIFY ---
+async function executeShopifyMutation(
+  domain: string,
+  token: string,
+  query: string,
+  variables: object
+) {
+  const url = `https://${domain}/admin/api/2025-07/graphql.json`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": token,
+    },
     body: JSON.stringify({ query, variables }),
   });
-  const jsonResponse = await response.json() as any;
-  
-  const userErrors = jsonResponse.data?.productVariantUpdate?.userErrors || 
-                     jsonResponse.data?.inventoryAdjustQuantities?.userErrors ||
-                     jsonResponse.data?.metafieldsSet?.userErrors || [];
-
-  if (jsonResponse.errors || userErrors.length > 0) {
-    console.error("Shopify API Error:", JSON.stringify(jsonResponse, null, 2));
-    const errorMessage = userErrors.map((e: any) => e.message).join(', ') || jsonResponse.errors?.map((e: any) => e.message).join(', ') || "Errore sconosciuto da Shopify.";
-    throw new Error(errorMessage);
+  const json = await res.json() as any;
+  // raccogli eventuali errori
+  const errs =
+    json.data?.productVariantsBulkUpdate?.userErrors ||
+    json.data?.inventoryItemUpdate?.userErrors ||
+    json.errors ||
+    [];
+  if (errs.length > 0) {
+    const msg = errs.map((e: any) => e.message).join("; ");
+    throw new Error(msg);
   }
-  return jsonResponse;
+  return json.data;
 }
 
 // --- HANDLER PRINCIPALE ---
-const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
+const handler: Handler = async (event, context) => {
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: JSON.stringify({ error: "Metodo non consentito." }) };
+    return { statusCode: 405, body: JSON.stringify({ error: "Metodo non consentito" }) };
   }
 
-  const { SUPABASE_URL, SUPABASE_SERVICE_KEY, SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, SHOPIFY_LOCATION_ID } = process.env;
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN || !SHOPIFY_LOCATION_ID) {
-    return { statusCode: 500, body: JSON.stringify({ error: "Variabili d'ambiente mancanti." }) };
+  const {
+    SUPABASE_URL,
+    SUPABASE_SERVICE_KEY,
+    SHOPIFY_STORE_NAME,
+    SHOPIFY_ADMIN_API_TOKEN,
+    SHOPIFY_LOCATION_ID,
+  } = process.env;
+  if (
+    !SUPABASE_URL ||
+    !SUPABASE_SERVICE_KEY ||
+    !SHOPIFY_STORE_NAME ||
+    !SHOPIFY_ADMIN_API_TOKEN ||
+    !SHOPIFY_LOCATION_ID
+  ) {
+    return { statusCode: 500, body: JSON.stringify({ error: "Env vars mancanti" }) };
   }
+
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
     const { update_ids, import_id } = JSON.parse(event.body || "{}");
-    if (!update_ids || !Array.isArray(update_ids) || update_ids.length === 0 || !import_id) {
-      return { statusCode: 400, body: JSON.stringify({ error: "Dati mancanti." }) };
+    if (!Array.isArray(update_ids) || update_ids.length === 0 || !import_id) {
+      return { statusCode: 400, body: JSON.stringify({ error: "Dati mancanti" }) };
     }
 
-    const { data: updates, error: fetchError } = await supabase
-      .from('pending_updates')
-      .select('id, product_variant_id, inventory_item_id, changes')
-      .in('id', update_ids)
-      .returns<PendingUpdate[]>();
-    if (fetchError) throw fetchError;
+    // 1. Fetch degli aggiornamenti pendenti (ora includono product_id)
+    const { data: updates, error } = await supabase
+      .from("pending_updates")
+      .select("id, product_id, product_variant_id, inventory_item_id, changes")
+      .in("id", update_ids) as { data: PendingUpdate[]; error: any };
+    if (error) throw error;
+
+    // 2. Raggruppa per product_id per bulk update
+    const grouped = updates.reduce((acc, upd) => {
+      (acc[upd.product_id] = acc[upd.product_id] || []).push(upd);
+      return acc;
+    }, {} as Record<string, PendingUpdate[]>);
 
     let successCount = 0;
     let errorCount = 0;
-    const logs = [];
+    const logs: any[] = [];
 
-    for (const update of updates) {
-      const { product_variant_id, inventory_item_id, changes } = update;
-      
+    // 3. Per ogni gruppo di varianti, esegui bulkUpdate
+    for (const [productId, group] of Object.entries(grouped)) {
       try {
-        // --- LOGICA DI AGGIORNAMENTO RISTRUTTURATA ---
+        // 3.1 Costruisci l’array variants per bulk
+        const variantsBulk = group.map((u) => {
+          const v: any = { id: u.product_variant_id };
+          if (u.changes.price && u.changes.price.old !== u.changes.price.new) {
+            v.price = u.changes.price.new;
+          }
+          if (u.changes.compare_at_price && u.changes.compare_at_price.old !== u.changes.compare_at_price.new) {
+            v.compareAtPrice = u.changes.compare_at_price.new;
+          }
+          return v;
+        }).filter(v => Object.keys(v).length > 1); // scarta se nessuna mod
 
-        // 1. Prepara l'oggetto per l'aggiornamento della variante (prezzo, costo, etc.)
-        const variantInput: any = { id: product_variant_id };
-        let hasVariantUpdate = false;
-
-        if (changes.price && changes.price.old !== changes.price.new) {
-          variantInput.price = changes.price.new;
-          hasVariantUpdate = true;
-        }
-        if (changes.compare_at_price && changes.compare_at_price.old !== changes.compare_at_price.new) {
-          variantInput.compareAtPrice = changes.compare_at_price.new;
-          hasVariantUpdate = true;
-        }
-        if (changes.cost && changes.cost.new !== null && changes.cost.old?.toFixed(2) !== changes.cost.new) {
-          variantInput.inventoryItem = { cost: changes.cost.new };
-          hasVariantUpdate = true;
-        }
-
-        // Esegui l'aggiornamento della variante solo se ci sono modifiche
-        if (hasVariantUpdate) {
-          const mutation = `mutation productVariantUpdate($input: ProductVariantInput!) {
-            productVariantUpdate(input: $input) { userErrors { field message } }
-          }`;
-          await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: variantInput });
+        if (variantsBulk.length > 0) {
+          const bulkMutation = `
+            mutation bulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+              productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+                productVariants { id }
+                userErrors { field message }
+              }
+            }
+          `;
+          await executeShopifyMutation(
+            SHOPIFY_STORE_NAME,
+            SHOPIFY_ADMIN_API_TOKEN,
+            bulkMutation,
+            { productId, variants: variantsBulk }
+          );
         }
 
-        // 2. Aggiorna il metafield della scadenza (operazione separata)
-        if (changes.expiry_date && changes.expiry_date.old !== changes.expiry_date.new) {
-            const mutation = `mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
-                metafieldsSet(metafields: $metafields) { userErrors { field message } }
-            }`;
-            const variables = {
+        // 3.2 Per ogni variante del gruppo: cost, expiry_date e quantity
+        for (const u of group) {
+          // 3.2.a aggiornamento cost se serve
+          if (u.changes.cost && u.changes.cost.new !== null && String(u.changes.cost.old?.toFixed(2)) !== u.changes.cost.new) {
+            const costMutation = `
+              mutation updateInventoryItem($id: ID!, $input: InventoryItemInput!) {
+                inventoryItemUpdate(id: $id, input: $input) {
+                  inventoryItem { id unitCost { amount currencyCode } }
+                  userErrors { field message }
+                }
+              }
+            `;
+            await executeShopifyMutation(
+              SHOPIFY_STORE_NAME,
+              SHOPIFY_ADMIN_API_TOKEN,
+              costMutation,
+              { id: u.inventory_item_id, input: { cost: u.changes.cost.new } }
+            );
+          }
+
+          // 3.2.b metafield expiry_date
+          if (u.changes.expiry_date && u.changes.expiry_date.old !== u.changes.expiry_date.new) {
+            const mfMutation = `
+              mutation setExpiry($metafields: [MetafieldsSetInput!]!) {
+                metafieldsSet(metafields: $metafields) {
+                  userErrors { field message }
+                }
+              }
+            `;
+            await executeShopifyMutation(
+              SHOPIFY_STORE_NAME,
+              SHOPIFY_ADMIN_API_TOKEN,
+              mfMutation,
+              {
                 metafields: [{
-                    key: "data_di_scadenza",
-                    namespace: "custom",
-                    ownerId: product_variant_id,
-                    type: "date",
-                    value: changes.expiry_date.new
+                  key: "data_di_scadenza",
+                  namespace: "custom",
+                  ownerId: u.product_variant_id,
+                  type: "date",
+                  value: u.changes.expiry_date.new!
                 }]
-            };
-            await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, variables);
-        }
+              }
+            );
+          }
 
-        // 3. Aggiorna la giacenza (operazione separata)
-        if (changes.quantity && inventory_item_id && changes.quantity.old !== changes.quantity.new) {
-          const delta = changes.quantity.new - changes.quantity.old;
-          const mutation = `mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
-            inventoryAdjustQuantities(input: $input) { userErrors { field message } }
-          }`;
-          const variables = { input: { reason: "correction", name: "Excel Sync", changes: [{ inventoryItemId: inventory_item_id, locationId: `gid://shopify/Location/${SHOPIFY_LOCATION_ID}`, delta: delta }] } };
-          await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, variables);
-        }
+          // 3.2.c inventoryAdjustQuantities
+          if (u.changes.quantity && u.changes.quantity.old !== u.changes.quantity.new) {
+            const delta = u.changes.quantity.new - u.changes.quantity.old;
+            const qtyMutation = `
+              mutation adjustQty($input: InventoryAdjustQuantitiesInput!) {
+                inventoryAdjustQuantities(input: $input) {
+                  userErrors { field message }
+                }
+              }
+            `;
+            await executeShopifyMutation(
+              SHOPIFY_STORE_NAME,
+              SHOPIFY_ADMIN_API_TOKEN,
+              qtyMutation,
+              {
+                input: {
+                  reason: "CORRECTION",
+                  name: "Excel Sync",
+                  changes: [
+                    {
+                      inventoryItemId: u.inventory_item_id,
+                      locationId: `gid://shopify/Location/${SHOPIFY_LOCATION_ID}`,
+                      delta,
+                    }
+                  ]
+                }
+              }
+            );
+          }
 
-        successCount++;
-        logs.push({ import_id, product_variant_id, status: 'success', action: 'update', details: { message: 'Aggiornato con successo.' } });
+          successCount++;
+          logs.push({
+            import_id,
+            product_variant_id: u.product_variant_id,
+            status: "success",
+            action: "bulk-update",
+            details: {},
+          });
+        }
 
       } catch (e: any) {
-        errorCount++;
-        logs.push({ import_id, product_variant_id, status: 'error', action: 'update', details: { error: e.message } });
+        // error handling per gruppo
+        errorCount += group.length;
+        for (const u of group) {
+          logs.push({
+            import_id,
+            product_variant_id: u.product_variant_id,
+            status: "error",
+            action: "bulk-update",
+            details: { error: e.message },
+          });
+        }
       }
     }
 
-    if (logs.length > 0) {
-      await supabase.from('sync_logs').insert(logs);
+    // 4. Salva log e pulisci pending_updates
+    if (logs.length) {
+      await supabase.from("sync_logs").insert(logs);
     }
-    await supabase.from('pending_updates').delete().in('id', update_ids);
+    await supabase.from("pending_updates").delete().in("id", update_ids);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: "Processo di aggiornamento completato.", success: successCount, errors: errorCount }),
+      body: JSON.stringify({
+        message: "Aggiornamento batch completato.",
+        success: successCount,
+        errors: errorCount,
+      }),
     };
 
-  } catch (error: any) {
-    console.error("Errore durante l'applicazione delle modifiche:", error);
-    return { statusCode: 500, body: JSON.stringify({ error: error.message || "Errore interno." }) };
+  } catch (err: any) {
+    console.error(err);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: err.message || "Errore interno" }),
+    };
   }
 };
 
