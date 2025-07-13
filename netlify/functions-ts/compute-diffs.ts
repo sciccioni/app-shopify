@@ -18,7 +18,7 @@ interface ShopifyVariant {
   price: string;
   inventoryQuantity: number;
   inventoryItem: { 
-      id: string; // <-- ID dell'articolo di magazzino
+      id: string;
       unitCost: { amount: string } | null 
   };
 }
@@ -49,16 +49,23 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
+    // 1. Recupera dati da Supabase
     const { data: localProducts, error: pError } = await supabase.from('products').select('minsan, ditta, iva, giacenza, costo_medio, scadenza').eq('import_id', importId).returns<LocalProduct[]>();
     if (pError) throw pError;
     const { data: markups, error: mError } = await supabase.from('company_markups').select('ditta, markup_percentage');
     if (mError) throw mError;
-    if (!localProducts?.length) return { statusCode: 404, body: JSON.stringify({ error: "Nessun prodotto normalizzato trovato." }) };
+
+    // --- LOG DI DEBUG ---
+    console.log(`[compute-diffs] Trovati ${localProducts?.length || 0} prodotti normalizzati nel DB.`);
+    if (!localProducts?.length) return { statusCode: 200, body: JSON.stringify({ message: "Nessun prodotto da analizzare.", updatesFound: 0 }) };
 
     const markupsMap = new Map(markups?.map(m => [m.ditta, m.markup_percentage]));
 
-    // 2. Interroga Shopify (con inventoryItem.id e API aggiornata)
+    // 2. Interroga Shopify
     const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
+    // --- LOG DI DEBUG ---
+    console.log(`[compute-diffs] Query SKU inviata a Shopify: ${skusQuery}`);
+    
     const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku displayName price inventoryQuantity inventoryItem { id unitCost { amount } } } } } }`;
     const shopifyDomain = SHOPIFY_STORE_NAME;
     const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2025-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
@@ -66,12 +73,25 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     
     const shopifyVariants = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
     const shopifyVariantsMap = new Map<string, ShopifyVariant>(shopifyVariants.map(v => [v.sku, v]));
+
+    // --- LOG DI DEBUG ---
+    console.log(`[compute-diffs] Shopify ha restituito ${shopifyVariants.length} prodotti corrispondenti.`);
     
     const pendingUpdates = [];
-    const productPriceUpdates = [];
+    let firstProductLogged = false;
 
     for (const local of localProducts) {
       const shopify = shopifyVariantsMap.get(local.minsan);
+      
+      // --- LOG DI DEBUG PER IL PRIMO PRODOTTO TROVATO ---
+      if (shopify && !firstProductLogged) {
+          console.log('[compute-diffs] Dettaglio primo confronto:', {
+              localProduct: local,
+              shopifyProduct: shopify
+          });
+          firstProductLogged = true;
+      }
+
       if (!shopify) continue;
 
       const changes: any = {};
@@ -82,7 +102,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       if (markup !== undefined && markup > 0 && local.costo_medio != null) {
         const newPrice = (local.costo_medio * (1 + markup / 100) * (1 + (local.iva || 0) / 100));
         newPriceFormatted = newPrice.toFixed(2);
-        productPriceUpdates.push({ minsan: local.minsan, prezzo_calcolato: parseFloat(newPriceFormatted) });
       }
 
       changes.quantity = { old: shopify.inventoryQuantity, new: local.giacenza };
@@ -103,22 +122,18 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       });
     }
 
+    // --- LOG DI DEBUG ---
+    console.log(`[compute-diffs] Creati ${pendingUpdates.length} record di aggiornamento.`);
+
     await supabase.from('pending_updates').delete().eq('import_id', importId);
     if (pendingUpdates.length > 0) {
       await supabase.from('pending_updates').insert(pendingUpdates);
     }
 
-    if (productPriceUpdates.length > 0) {
-        const updatePromises = productPriceUpdates.map(p =>
-            supabase.from('products').update({ prezzo_calcolato: p.prezzo_calcolato }).eq('import_id', importId).eq('minsan', p.minsan)
-        );
-        await Promise.all(updatePromises);
-    }
-
     return { statusCode: 200, body: JSON.stringify({ message: "Calcolo differenze completato.", updatesFound: pendingUpdates.length }) };
 
   } catch (error: any) {
-    console.error("Errore durante il calcolo delle differenze:", error);
+    console.error("[compute-diffs] Errore:", error);
     return { statusCode: 500, body: JSON.stringify({ error: error.message || "Errore interno." }) };
   }
 };
