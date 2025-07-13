@@ -240,8 +240,127 @@
                 });
             }
 
-            // --- LOGICA GESTIONE MARKUP ---
-            // (Il codice per la gestione markup rimane invariato)
+            // --- LOGICA GESTIONE MARKUP (CODICE RIPRISTINATO) ---
+            const saveAllBtn = $('#saveAllMarkupsButton');
+
+            function checkDirtyState() {
+                const dirtyRows = $('#markups-container .markup-row.is-dirty').length;
+                saveAllBtn.prop('disabled', dirtyRows === 0);
+            }
+
+            function loadMarkups() {
+                const container = $('#markups-container');
+                const loader = $('#loader-markups');
+                loader.show();
+                container.empty();
+                saveAllBtn.prop('disabled', true);
+
+                $.ajax({
+                    url: '/api/get-markups',
+                    method: 'GET',
+                    success: function(data) {
+                        loader.hide();
+                        $('#panel-markups').data('loaded', true);
+                        const table = $('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ditta</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Markup (%)</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th></tr></thead><tbody class="bg-white divide-y divide-gray-200"></tbody></table>');
+                        const tbody = table.find('tbody');
+                        data.markups.forEach(m => {
+                            const row = $(`
+                                <tr class="markup-row" data-id="${m.id}" data-original-value="${m.markup_percentage}">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${m.ditta}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap"><input type="number" step="0.01" class="markup-input w-24 rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500" value="${m.markup_percentage}"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 status-cell"></td>
+                                </tr>
+                            `);
+                            tbody.append(row);
+                        });
+                        container.append(table);
+                    },
+                    error: (xhr) => loader.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
+                });
+            }
+
+            $('#markups-container').on('input', '.markup-input', function() {
+                const input = $(this);
+                const row = input.closest('tr');
+                const originalValue = row.data('original-value');
+                const currentValue = input.val();
+
+                if (String(currentValue) !== String(originalValue)) {
+                    row.addClass('is-dirty');
+                    row.find('.status-cell').html('<span class="text-yellow-600 font-medium">Modificato</span>');
+                } else {
+                    row.removeClass('is-dirty');
+                    row.find('.status-cell').empty();
+                }
+                checkDirtyState();
+            });
+
+            saveAllBtn.on('click', function() {
+                const btn = $(this);
+                const dirtyRows = $('#markups-container .markup-row.is-dirty');
+                const updates = dirtyRows.map(function() {
+                    const row = $(this);
+                    return {
+                        id: row.data('id'),
+                        markup_percentage: row.find('.markup-input').val()
+                    };
+                }).get();
+                
+                if (updates.length === 0) return;
+
+                btn.prop('disabled', true).text('Salvataggio...');
+
+                $.ajax({
+                    url: '/api/update-markups-bulk',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ markups: updates }),
+                    success: function() {
+                        dirtyRows.each(function() {
+                            const row = $(this);
+                            row.removeClass('is-dirty');
+                            row.data('original-value', row.find('.markup-input').val());
+                            const statusCell = row.find('.status-cell');
+                            statusCell.html('<span class="text-green-600 font-medium">✔ Salvato</span>');
+                            setTimeout(() => statusCell.empty(), 2000);
+                        });
+                        btn.text('Salva Tutte le Modifiche');
+                        checkDirtyState();
+
+                        // Ricalcola i prezzi
+                        $.ajax({
+                            url: `/api/compute-diffs`,
+                            method: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({ importId: importId }),
+                            success: () => loadPendingUpdates(importId)
+                        });
+                    },
+                    error: function() {
+                        alert('Errore durante il salvataggio di massa.');
+                        btn.prop('disabled', false).text('Salva Tutte le Modifiche');
+                    }
+                });
+            });
+
+            $('#populateMarkupsButton').on('click', function() {
+                const btn = $(this);
+                btn.prop('disabled', true).text('Popolamento...');
+                $.ajax({
+                    url: '/api/populate-markups',
+                    method: 'POST',
+                    success: function(data) {
+                        alert(`Successo! Ditte analizzate: ${data.ditteAnalizzate}. Nuovi markup aggiunti: ${data.ditteAggiunte}`);
+                        btn.prop('disabled', false).text('Popola Nuove Ditte');
+                        $('#panel-markups').data('loaded', false);
+                        loadMarkups();
+                    },
+                    error: (xhr) => {
+                        alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
+                        btn.prop('disabled', false).text('Popola Nuove Ditte');
+                    }
+                });
+            });
 
             // --- GESTIONE BOTTONI ---
             $('#backButton').on('click', () => window.location.href = '/');
@@ -267,7 +386,7 @@
                     success: function(data) {
                         alert(`Processo completato!\nSuccessi: ${data.success}\nErrori: ${data.errors}`);
                         if (btnElement.hasClass('sync-single-btn')) {
-                            btnElement.replaceWith('<span class="text-green-500 font-bold">✔</span>');
+                            btnElement.closest('tr').fadeOut(); // Rimuove la riga dalla tabella
                         } else {
                             btnElement.prop('disabled', false).text(originalText);
                             loadPendingUpdates(importId); 
@@ -290,7 +409,6 @@
                 applyUpdates([updateId], $(this));
             });
             
-            // (Il resto del codice per i markup rimane qui)
         });
     </script>
 </body>
