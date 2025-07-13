@@ -21,13 +21,10 @@ interface ShopifyVariant {
   inventoryQuantity: number;
   inventoryItem: { id: string; unitCost: { amount: string } | null };
   metafield: { value: string } | null;
+  product: { id: string };
 }
 interface ShopifyGraphQLResponse {
-  data?: {
-    productVariants?: {
-      edges: { node: ShopifyVariant }[];
-    };
-  };
+  data?: { productVariants?: { edges: { node: ShopifyVariant }[] } };
   errors?: { message: string }[];
 }
 
@@ -51,14 +48,18 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
+    console.log(`[compute-diffs] Avviato per importId: ${importId}`);
     const { data: localProducts, error: pError } = await supabase.from('products').select('*').eq('import_id', importId).returns<LocalProduct[]>();
     if (pError) throw pError;
     const { data: markups, error: mError } = await supabase.from('company_markups').select('ditta, markup_percentage');
     if (mError) throw mError;
-    if (!localProducts?.length) return { statusCode: 404, body: JSON.stringify({ error: "Nessun prodotto normalizzato trovato." }) };
+
+    console.log(`[compute-diffs] Trovati ${localProducts?.length || 0} prodotti normalizzati.`);
+    if (!localProducts?.length) return { statusCode: 200, body: JSON.stringify({ message: "Nessun prodotto da analizzare.", updatesFound: 0 }) };
 
     const markupsMap = new Map(markups?.map(m => [m.ditta, m.markup_percentage]));
 
+    // 2. Interroga Shopify (con product.id)
     const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
     const graphqlQuery = `
       query { 
@@ -73,17 +74,32 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
               inventoryQuantity 
               inventoryItem { id unitCost { amount } }
               metafield(namespace: "custom", key: "data_di_scadenza") { value }
+              product { id }
             } 
           } 
         } 
       }`;
     const shopifyDomain = SHOPIFY_STORE_NAME;
-    const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2024-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
+    let shopifyResponse: ShopifyGraphQLResponse;
+
+    try {
+        console.log(`[compute-diffs] Esecuzione chiamata a Shopify per ${localProducts.length} SKU...`);
+        const response = await fetch(`https://${shopifyDomain}/admin/api/2024-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) });
+        if (!response.ok) {
+            throw new Error(`Shopify ha risposto con status ${response.status} ${response.statusText}`);
+        }
+        shopifyResponse = await response.json() as ShopifyGraphQLResponse;
+        console.log("[compute-diffs] Risposta da Shopify ricevuta e parsata.");
+    } catch (fetchError: any) {
+        console.error("[compute-diffs] Errore critico durante la chiamata a Shopify:", fetchError);
+        throw new Error(`Impossibile comunicare con Shopify: ${fetchError.message}`);
+    }
     
     if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map((e) => e.message).join(', ')}`);
     
     const shopifyVariants = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
     const shopifyVariantsMap = new Map<string, ShopifyVariant>(shopifyVariants.map(v => [v.sku, v]));
+    console.log(`[compute-diffs] Shopify ha restituito ${shopifyVariants.length} prodotti corrispondenti.`);
     
     const pendingUpdates = [];
 
@@ -124,6 +140,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       if (Object.keys(changes).length > 0) {
         pendingUpdates.push({
           import_id: importId,
+          product_id: shopify.product.id,
           product_variant_id: shopify.id,
           inventory_item_id: shopify.inventoryItem?.id,
           product_title: shopify.displayName,
@@ -134,16 +151,23 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       }
     }
 
+    console.log(`[compute-diffs] Creati ${pendingUpdates.length} record di aggiornamento da salvare.`);
     await supabase.from('pending_updates').delete().eq('import_id', importId);
     if (pendingUpdates.length > 0) {
-      await supabase.from('pending_updates').insert(pendingUpdates);
+      const { error: insertError } = await supabase.from('pending_updates').insert(pendingUpdates);
+      if (insertError) {
+          console.error("[compute-diffs] Errore durante l'inserimento in pending_updates:", insertError);
+          throw insertError;
+      }
     }
+    console.log("[compute-diffs] Operazioni su DB completate.");
 
     return { statusCode: 200, body: JSON.stringify({ message: "Calcolo differenze completato.", updatesFound: pendingUpdates.length }) };
 
   } catch (error: any) {
-    console.error("Errore durante il calcolo delle differenze:", error);
-    return { statusCode: 500, body: JSON.stringify({ error: error.message || "Errore interno." }) };
+    console.error("ERRORE COMPLETO durante il calcolo delle differenze:", error);
+    const errorMessage = error.message || "Errore sconosciuto. Controllare i log della funzione Netlify per i dettagli.";
+    return { statusCode: 500, body: JSON.stringify({ error: errorMessage }) };
   }
 };
 
