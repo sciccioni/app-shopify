@@ -88,9 +88,13 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: variantInput });
         }
 
-        // B. Aggiorna il costo (sull'articolo di magazzino)
-        const costChanged = changes.cost && (changes.cost.old?.toFixed(2) !== changes.cost.new);
-        if (costChanged && inventory_item_id && changes.cost.new !== null) {
+        // B. Aggiorna il costo (sull'articolo di magazzino) - LOGICA CORRETTA E SICURA
+        if (
+            changes.cost &&
+            changes.cost.new !== null &&
+            inventory_item_id &&
+            changes.cost.old?.toFixed(2) !== changes.cost.new
+        ) {
             const mutation = `mutation inventoryItemUpdate($input: InventoryItemUpdateInput!) {
                 inventoryItemUpdate(input: $input) { userErrors { field message } }
             }`;
