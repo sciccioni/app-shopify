@@ -49,32 +49,26 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
-    // 1. Recupera dati da Supabase
     const { data: localProducts, error: pError } = await supabase.from('products').select('minsan, ditta, iva, giacenza, costo_medio, scadenza').eq('import_id', importId).returns<LocalProduct[]>();
     if (pError) throw pError;
     const { data: markups, error: mError } = await supabase.from('company_markups').select('ditta, markup_percentage');
     if (mError) throw mError;
-
-    console.log(`[compute-diffs] Trovati ${localProducts?.length || 0} prodotti normalizzati nel DB.`);
-    if (!localProducts?.length) return { statusCode: 200, body: JSON.stringify({ message: "Nessun prodotto da analizzare.", updatesFound: 0 }) };
+    if (!localProducts?.length) return { statusCode: 404, body: JSON.stringify({ error: "Nessun prodotto normalizzato trovato." }) };
 
     const markupsMap = new Map(markups?.map(m => [m.ditta, m.markup_percentage]));
 
-    // 2. Interroga Shopify
+    // 2. Interroga Shopify (con inventoryItem.id e API aggiornata)
     const skusQuery = localProducts.map(p => `sku:'${p.minsan}'`).join(' OR ');
-    console.log(`[compute-diffs] Query SKU inviata a Shopify: ${skusQuery}`);
-    
     const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku displayName price inventoryQuantity inventoryItem { id unitCost { amount } } } } } }`;
     const shopifyDomain = SHOPIFY_STORE_NAME;
-    const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2025-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
+    const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2024-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
     if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map((e) => e.message).join(', ')}`);
     
     const shopifyVariants = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
     const shopifyVariantsMap = new Map<string, ShopifyVariant>(shopifyVariants.map(v => [v.sku, v]));
-
-    console.log(`[compute-diffs] Shopify ha restituito ${shopifyVariants.length} prodotti corrispondenti.`);
     
     const pendingUpdates = [];
+    const productPriceUpdates = [];
 
     for (const local of localProducts) {
       const shopify = shopifyVariantsMap.get(local.minsan);
@@ -83,23 +77,16 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       const changes: any = {};
       const shopifyCost = shopify.inventoryItem?.unitCost ? parseFloat(shopify.inventoryItem.unitCost.amount) : null;
       
-      // --- LOGICA DI COSTRUZIONE 'changes' MIGLIORATA ---
       changes.quantity = { old: shopify.inventoryQuantity, new: local.giacenza };
-      
-      // Aggiungi il costo solo se esiste
-      if (local.costo_medio !== undefined) {
-        changes.cost = { old: shopifyCost, new: local.costo_medio?.toFixed(2) };
-      } else {
-        changes.cost = { old: shopifyCost, new: null };
-      }
+      changes.cost = { old: shopifyCost, new: local.costo_medio?.toFixed(2) ?? null };
 
-      // Aggiungi il prezzo solo se è stato calcolato
       const markup = markupsMap.get(local.ditta);
       if (markup !== undefined && markup > 0 && local.costo_medio != null) {
         const newPrice = (local.costo_medio * (1 + markup / 100) * (1 + (local.iva || 0) / 100));
         changes.price = { old: shopify.price, new: newPrice.toFixed(2) };
+        productPriceUpdates.push({ minsan: local.minsan, prezzo_calcolato: parseFloat(newPrice.toFixed(2)) });
       } else {
-        changes.price = { old: shopify.price, new: shopify.price }; // Nessuna modifica se non c'è markup
+        changes.price = { old: shopify.price, new: shopify.price };
       }
 
       if (local.scadenza) {
@@ -117,22 +104,22 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       });
     }
 
-    console.log(`[compute-diffs] Creati ${pendingUpdates.length} record di aggiornamento.`);
-
     await supabase.from('pending_updates').delete().eq('import_id', importId);
     if (pendingUpdates.length > 0) {
-      const { error: insertError } = await supabase.from('pending_updates').insert(pendingUpdates);
-      if (insertError) {
-          // Se l'inserimento fallisce, ora vedremo un errore chiaro.
-          console.error("[compute-diffs] Errore durante l'inserimento in pending_updates:", insertError);
-          throw insertError;
-      }
+      await supabase.from('pending_updates').insert(pendingUpdates);
+    }
+
+    if (productPriceUpdates.length > 0) {
+        const updatePromises = productPriceUpdates.map(p =>
+            supabase.from('products').update({ prezzo_calcolato: p.prezzo_calcolato }).eq('import_id', importId).eq('minsan', p.minsan)
+        );
+        await Promise.all(updatePromises);
     }
 
     return { statusCode: 200, body: JSON.stringify({ message: "Calcolo differenze completato.", updatesFound: pendingUpdates.length }) };
 
   } catch (error: any) {
-    console.error("[compute-diffs] Errore:", error);
+    console.error("Errore durante il calcolo delle differenze:", error);
     return { statusCode: 500, body: JSON.stringify({ error: error.message || "Errore interno." }) };
   }
 };
