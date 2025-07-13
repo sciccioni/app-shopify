@@ -9,26 +9,20 @@ interface LocalProduct {
   iva: number;
   giacenza: number;
   costo_medio?: number;
+  scadenza?: string;
 }
 interface ShopifyVariant {
   id: string;
   sku: string;
-  displayName: string;
+  displayName:string;
   price: string;
   inventoryQuantity: number;
   inventoryItem: { unitCost: { amount: string } | null };
 }
-
-// --- NUOVA INTERFACCIA PER LA RISPOSTA DI SHOPIFY ---
 interface ShopifyGraphQLResponse {
-  data?: {
-    productVariants?: {
-      edges: { node: ShopifyVariant }[];
-    };
-  };
+  data?: { productVariants?: { edges: { node: ShopifyVariant }[] } };
   errors?: { message: string }[];
 }
-
 
 // --- HANDLER PRINCIPALE ---
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
@@ -53,7 +47,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
   try {
     // 1. Recupera dati da Supabase
-    const { data: localProducts, error: pError } = await supabase.from('products').select('minsan, ditta, iva, giacenza, costo_medio').eq('import_id', importId).returns<LocalProduct[]>();
+    const { data: localProducts, error: pError } = await supabase.from('products').select('minsan, ditta, iva, giacenza, costo_medio, scadenza').eq('import_id', importId).returns<LocalProduct[]>();
     if (pError) throw pError;
     const { data: markups, error: mError } = await supabase.from('company_markups').select('ditta, markup_percentage');
     if (mError) throw mError;
@@ -66,7 +60,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku displayName price inventoryQuantity inventoryItem { unitCost { amount } } } } } }`;
     const shopifyDomain = SHOPIFY_STORE_NAME;
     const shopifyResponse = await (await fetch(`https://${shopifyDomain}/admin/api/2023-10/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
-    
     if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map((e) => e.message).join(', ')}`);
     
     const shopifyVariants = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
@@ -74,50 +67,50 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     
     // 3. Calcola le differenze e prepara gli aggiornamenti
     const pendingUpdates = [];
-    const productPriceUpdates = []; // Array per salvare i prezzi calcolati
+    const productPriceUpdates = [];
 
     for (const local of localProducts) {
       const shopify = shopifyVariantsMap.get(local.minsan);
       if (!shopify) continue;
 
-      if (local.giacenza !== shopify.inventoryQuantity) {
-        pendingUpdates.push({ import_id: importId, product_variant_id: shopify.id, product_title: shopify.displayName, field: 'inventory_quantity', old_value: shopify.inventoryQuantity, new_value: local.giacenza });
-      }
+      const changes: any = {};
       const shopifyCost = shopify.inventoryItem?.unitCost ? parseFloat(shopify.inventoryItem.unitCost.amount) : null;
-      if (local.costo_medio != null && local.costo_medio.toFixed(2) !== shopifyCost?.toFixed(2)) {
-          pendingUpdates.push({ import_id: importId, product_variant_id: shopify.id, product_title: shopify.displayName, field: 'cost_per_item', old_value: shopifyCost, new_value: local.costo_medio.toFixed(2) });
-      }
+      let newPriceFormatted: string | undefined;
 
+      // Calcola il nuovo prezzo (se possibile)
       const markup = markupsMap.get(local.ditta);
       if (markup !== undefined && local.costo_medio != null) {
         const newPrice = (local.costo_medio * (1 + markup / 100) * (1 + (local.iva || 0) / 100));
-        const newPriceFormatted = newPrice.toFixed(2);
-
-        productPriceUpdates.push({
-            minsan: local.minsan,
-            prezzo_calcolato: parseFloat(newPriceFormatted),
-        });
-
-        if (newPriceFormatted !== shopify.price) {
-          pendingUpdates.push({ import_id: importId, product_variant_id: shopify.id, product_title: shopify.displayName, field: 'price', old_value: shopify.price, new_value: newPriceFormatted });
-        }
+        newPriceFormatted = newPrice.toFixed(2);
+        productPriceUpdates.push({ minsan: local.minsan, prezzo_calcolato: parseFloat(newPriceFormatted) });
       }
+
+      // Popola l'oggetto 'changes' con TUTTI i confronti
+      changes.quantity = { old: shopify.inventoryQuantity, new: local.giacenza };
+      changes.cost = { old: shopifyCost, new: local.costo_medio?.toFixed(2) };
+      changes.price = { old: shopify.price, new: newPriceFormatted };
+      if (local.scadenza) {
+        changes.expiry = { new: local.scadenza };
+      }
+      
+      pendingUpdates.push({
+        import_id: importId,
+        product_variant_id: shopify.id,
+        product_title: shopify.displayName,
+        changes: changes
+      });
     }
 
     // 4. Salva le differenze in 'pending_updates'
+    await supabase.from('pending_updates').delete().eq('import_id', importId);
     if (pendingUpdates.length > 0) {
-      await supabase.from('pending_updates').delete().eq('import_id', importId);
       await supabase.from('pending_updates').insert(pendingUpdates);
     }
 
     // 5. SALVA I PREZZI CALCOLATI NELLA TABELLA 'products'
     if (productPriceUpdates.length > 0) {
         const updatePromises = productPriceUpdates.map(p =>
-            supabase
-                .from('products')
-                .update({ prezzo_calcolato: p.prezzo_calcolato })
-                .eq('import_id', importId)
-                .eq('minsan', p.minsan)
+            supabase.from('products').update({ prezzo_calcolato: p.prezzo_calcolato }).eq('import_id', importId).eq('minsan', p.minsan)
         );
         await Promise.all(updatePromises);
     }
