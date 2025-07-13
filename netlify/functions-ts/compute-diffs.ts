@@ -97,6 +97,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         import_id: importId,
         product_variant_id: shopify.id,
         product_title: shopify.displayName,
+        minsan: local.minsan,
         changes: changes
       });
     }
