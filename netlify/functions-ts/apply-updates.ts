@@ -23,7 +23,8 @@ async function executeShopifyMutation(domain: string, token: string, query: stri
     body: JSON.stringify({ query, variables }),
   });
   const jsonResponse = await response.json() as any;
-  const userErrors = jsonResponse.data?.productVariantUpdate?.userErrors || jsonResponse.data?.inventoryAdjustQuantities?.userErrors || [];
+  // Gestisce diversi tipi di errori restituiti da Shopify
+  const userErrors = jsonResponse.data?.productVariantUpdate?.userErrors || jsonResponse.data?.inventoryItemUpdate?.userErrors || jsonResponse.data?.inventoryAdjustQuantities?.userErrors || [];
   if (jsonResponse.errors || userErrors.length > 0) {
     console.error("Shopify API Error:", JSON.stringify(jsonResponse, null, 2));
     const errorMessage = userErrors.map((e: any) => e.message).join(', ') || jsonResponse.errors?.map((e: any) => e.message).join(', ') || "Errore sconosciuto da Shopify.";
@@ -65,28 +66,26 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       const { product_variant_id, inventory_item_id, changes } = update;
       
       try {
-        // --- LOGICA DI AGGIORNAMENTO CORRETTA ---
+        // --- LOGICA DI AGGIORNAMENTO CORRETTA E SEPARATA ---
 
-        // A. Aggiorna prezzo e costo insieme (se necessario)
-        const priceChanged = changes.price && changes.price.old !== changes.price.new;
-        const costChanged = changes.cost && (changes.cost.old?.toFixed(2) !== changes.cost.new);
-
-        if (priceChanged || costChanged) {
-          const variantInput: any = { id: product_variant_id };
-          if (priceChanged) {
-            variantInput.price = changes.price!.new;
-          }
-          if (costChanged) {
-            variantInput.inventoryItem = { cost: changes.cost!.new };
-          }
-          
+        // A. Aggiorna il prezzo (sulla variante)
+        if (changes.price && changes.price.old !== changes.price.new) {
           const mutation = `mutation productVariantUpdate($input: ProductVariantInput!) {
             productVariantUpdate(input: $input) { userErrors { field message } }
           }`;
-          await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: variantInput });
+          await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: { id: product_variant_id, price: changes.price.new } });
         }
 
-        // B. Aggiorna la giacenza (operazione separata)
+        // B. Aggiorna il costo (sull'articolo di magazzino)
+        const costChanged = changes.cost && (changes.cost.old?.toFixed(2) !== changes.cost.new);
+        if (costChanged && inventory_item_id) {
+            const mutation = `mutation inventoryItemUpdate($input: InventoryItemUpdateInput!) {
+                inventoryItemUpdate(input: $input) { userErrors { field message } }
+            }`;
+            await executeShopifyMutation(SHOPIFY_STORE_NAME, SHOPIFY_ADMIN_API_TOKEN, mutation, { input: { id: inventory_item_id, cost: changes.cost!.new } });
+        }
+
+        // C. Aggiorna la giacenza (operazione separata)
         if (changes.quantity && inventory_item_id && changes.quantity.old !== changes.quantity.new) {
           const delta = changes.quantity.new - changes.quantity.old;
           const mutation = `mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
