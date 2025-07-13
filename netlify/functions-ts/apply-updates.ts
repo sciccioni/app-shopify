@@ -56,6 +56,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       .in('id', update_ids)
       .returns<PendingUpdate[]>();
     if (fetchError) throw fetchError;
+    
+    console.log(`Trovate ${updates?.length || 0} modifiche da applicare.`);
 
     let successCount = 0;
     let errorCount = 0;
@@ -65,6 +67,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       const { product_variant_id, inventory_item_id, changes } = update;
       
       try {
+        console.log(`Processando product_variant_id: ${product_variant_id}`);
         // A. Aggiorna prezzo e costo
         if (changes.price || changes.cost) {
           const variantInput: any = { id: product_variant_id };
@@ -96,9 +99,23 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       }
     }
 
+    // --- SEZIONE DI LOGGING MIGLIORATA ---
     if (logs.length > 0) {
-      await supabase.from('sync_logs').insert(logs);
+        console.log(`Tentativo di inserire ${logs.length} record in sync_logs.`);
+        try {
+            const { error: logError } = await supabase.from('sync_logs').insert(logs);
+            if (logError) {
+                // Se anche il logging fallisce, lo stampiamo nella console di Netlify
+                console.error("ERRORE CRITICO: Impossibile salvare i log su Supabase.", logError);
+                throw new Error("Impossibile salvare i log delle operazioni.");
+            }
+            console.log("Log salvati con successo.");
+        } catch (logCatchError) {
+             console.error("Eccezione durante il salvataggio dei log:", logCatchError);
+        }
     }
+    
+    console.log("Tentativo di eliminare le modifiche processate da pending_updates.");
     await supabase.from('pending_updates').delete().in('id', update_ids);
 
     return {
