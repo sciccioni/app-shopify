@@ -74,6 +74,13 @@
         /* Stili per le tab */
         .tab-active { border-color: #4f46e5; color: #4f46e5; }
         .tab-inactive { border-color: transparent; color: #6b7280; }
+        /* Stili per la modale */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 50;
+        }
     </style>
 </head>
 <body class="p-4 sm:p-8">
@@ -154,7 +161,7 @@
                 </div>
             </div>
 
-            <!-- Pannello Gestione Markup (NUOVO DESIGN) -->
+            <!-- Pannello Gestione Markup -->
             <div id="panel-markups" class="hidden">
                  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div class="lg:col-span-1">
@@ -177,10 +184,7 @@
                     </div>
                     <div class="lg:col-span-2">
                         <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                            <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
-                                <h2 class="text-xl font-semibold text-gray-800">Markup Registrati</h2>
-                                <button id="populateMarkupsButton" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg shadow-sm">Importa da Ultimo File</button>
-                            </div>
+                            <h2 class="text-xl font-semibold text-gray-800">Markup Registrati</h2>
                             <div id="loader-markups" class="text-center p-8"><p class="text-gray-600">Caricamento...</p></div>
                             <div id="markups-container" class="overflow-x-auto"></div>
                         </div>
@@ -196,6 +200,22 @@
                     <div id="loader-logs" class="text-center p-8"><p class="text-gray-600">Caricamento log...</p></div>
                     <div id="logs-container" class="overflow-x-auto mt-4"></div>
                  </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NUOVA FINESTRA MODALE PER ANTEPRIMA -->
+    <div id="recalc-modal" class="modal-overlay hidden">
+        <div class="bg-white rounded-lg shadow-xl m-4 max-w-3xl w-full max-h-[90vh] flex flex-col">
+            <div class="p-6 border-b">
+                <h3 class="text-xl font-semibold text-gray-800">Anteprima Ricalcolo Prezzi</h3>
+                <p class="text-sm text-gray-500">Questi prezzi verranno aggiornati su Shopify. Sei sicuro di voler procedere?</p>
+            </div>
+            <div id="modal-loader" class="text-center p-8"><p>Caricamento anteprima...</p></div>
+            <div id="modal-content" class="p-6 overflow-y-auto"></div>
+            <div class="p-6 border-t bg-gray-50 flex justify-end space-x-3">
+                <button id="modal-cancel" class="bg-white hover:bg-gray-100 text-gray-700 font-medium py-2 px-4 rounded-lg border">Annulla</button>
+                <button id="modal-confirm" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Conferma e Aggiorna</button>
             </div>
         </div>
     </div>
@@ -377,7 +397,7 @@
                         const table = $('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-4 py-2 text-left">Ditta</th><th class="px-4 py-2 text-left">Markup (%)</th><th class="px-4 py-2"></th></tr></thead><tbody></tbody></table>');
                         const tbody = table.find('tbody');
                         data.markups.forEach(m => {
-                            tbody.append(`<tr data-id="${m.id}"><td class="px-4 py-2 font-medium">${m.ditta}</td><td class="px-4 py-2"><input type="number" step="0.01" class="markup-input w-24 rounded-md" value="${m.markup_percentage}"></td><td class="px-4 py-2 text-right"><button class="save-markup-btn text-indigo-600 text-sm">Salva</button><button class="delete-markup-btn text-red-600 text-sm ml-2">Elimina</button></td></tr>`);
+                            tbody.append(`<tr data-id="${m.id}" data-ditta="${m.ditta}"><td class="px-4 py-2 font-medium">${m.ditta}</td><td class="px-4 py-2"><input type="number" step="0.01" class="markup-input w-24 rounded-md" value="${m.markup_percentage}"></td><td class="px-4 py-2 text-right action-cell"><button class="save-markup-btn text-indigo-600 text-sm">Salva</button><button class="delete-markup-btn text-red-600 text-sm ml-2">Elimina</button></td></tr>`);
                         });
                         container.append(table);
                     },
@@ -410,6 +430,7 @@
                 const btn = $(this);
                 const row = btn.closest('tr');
                 const id = row.data('id');
+                const ditta = row.data('ditta');
                 const percentage = row.find('.markup-input').val();
                 
                 btn.text('Salvataggio...').prop('disabled', true);
@@ -420,12 +441,68 @@
                     contentType: 'application/json',
                     data: JSON.stringify({ id: id, markup_percentage: percentage }),
                     success: function() {
-                        alert('Markup salvato!');
-                        btn.text('Salva').prop('disabled', false);
+                        const actionCell = row.find('.action-cell');
+                        actionCell.html(`<span class="text-green-600 font-medium">✔ Salvato</span><button class="recalc-preview-btn ml-4 text-blue-600 hover:text-blue-900 text-sm" data-ditta="${ditta}">Anteprima Ricalcolo</button>`);
                     },
                     error: (xhr) => {
                         alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
                         btn.text('Salva').prop('disabled', false);
+                    }
+                });
+            });
+
+            $('#markups-container').on('click', '.recalc-preview-btn', function() {
+                const btn = $(this);
+                const ditta = btn.data('ditta');
+                
+                $('#modal-loader').show();
+                $('#modal-content').empty();
+                $('#recalc-modal').removeClass('hidden');
+
+                $.ajax({
+                    url: '/api/preview-recalculation',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ ditta: ditta }),
+                    success: function(data) {
+                        $('#modal-loader').hide();
+                        if (!data.changes || data.changes.length === 0) {
+                            $('#modal-content').html('<p>Nessun prezzo da aggiornare per questa ditta.</p>');
+                            $('#modal-confirm').prop('disabled', true);
+                            return;
+                        }
+                        
+                        $('#modal-confirm').prop('disabled', false).data('updates', data.changes);
+                        const table = $('<table class="min-w-full"><thead><tr><th class="text-left py-2">Prodotto</th><th class="text-left py-2">Prezzo Precedente</th><th class="text-left py-2">Nuovo Prezzo</th></tr></thead><tbody></tbody></table>');
+                        const tbody = table.find('tbody');
+                        data.changes.forEach(c => {
+                            tbody.append(`<tr><td class="py-1">${c.product_title}</td><td class="py-1">${c.old_price}</td><td class="py-1 font-bold text-green-600">${c.new_price}</td></tr>`);
+                        });
+                        $('#modal-content').append(table);
+                    },
+                    error: (xhr) => $('#modal-loader').html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
+                });
+            });
+
+            $('#modal-cancel').on('click', () => $('#recalc-modal').addClass('hidden'));
+            $('#modal-confirm').on('click', function() {
+                const btn = $(this);
+                const updates = btn.data('updates');
+                
+                btn.prop('disabled', true).text('Aggiornamento...');
+
+                $.ajax({
+                    url: '/api/apply-recalculation',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ updates: updates }),
+                    success: function(data) {
+                        alert(data.message);
+                        $('#recalc-modal').addClass('hidden');
+                    },
+                    error: (xhr) => {
+                        alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
+                        btn.prop('disabled', false).text('Conferma e Aggiorna');
                     }
                 });
             });
@@ -447,7 +524,7 @@
                     error: (xhr) => alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`)
                 });
             });
-            
+
             // --- LOGICA TAB LOGS ---
             function loadSyncLogs() {
                 const container = $('#logs-container');
