@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Sync Inventario</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    nav { margin-bottom: 20px; }
+    nav button { margin-right: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+  </style>
+</head>
+<body>
+  <nav>
+    <button id="tab-review-btn">Revisione Modifiche</button>
+    <!-- aggiungi altri tab qui -->
+  </nav>
+
+  <section id="tab-review" style="display:none;">
+    <h2>Revisione Modifiche</h2>
+    <button id="approve-all">Approva Tutto</button>
+    <table id="updates-table">
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="select-all"/></th>
+          <th>MINSAN</th>
+          <th>Old Qty</th><th>New Qty</th>
+          <th>Old Price</th><th>New Price</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <script src="review.js"></script>
+</body>
+</html>
