@@ -6,15 +6,11 @@
   <title>🔄 Inventory Sync</title>
 
   <!-- Bootswatch Lux Theme -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootswatch@5/dist/lux/bootstrap.min.css"
-    rel="stylesheet"
-  />
+  <link href="https://cdn.jsdelivr.net/npm/bootswatch@5/dist/lux/bootstrap.min.css" rel="stylesheet" />
+
   <!-- Bootstrap Icons -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
-    rel="stylesheet"
-  />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet" />
+
   <!-- Alpine.js -->
   <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 
@@ -32,99 +28,69 @@
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top shadow-sm">
     <div class="container">
       <a class="navbar-brand" href="#"><i class="bi bi-arrow-repeat"></i> Inventory Sync</a>
-      <button
-        class="navbar-toggler"
-        type="button"
-        data-bs-toggle="collapse"
-        data-bs-target="#navMenu"
-      >
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse" id="navMenu">
         <ul class="navbar-nav ms-auto">
           <li class="nav-item">
-            <a
-              class="nav-link"
-              :class="{ active: tab==='upload' }"
-              @click.prevent="tab='upload'"
-              href="#"
-            ><i class="bi bi-upload"></i> Importa</a>
+            <a class="nav-link" :class="{ active: tab==='upload' }" @click.prevent="tab='upload'" href="#">
+              <i class="bi bi-upload"></i> Importa
+            </a>
           </li>
           <li class="nav-item">
-            <a
-              class="nav-link"
-              :class="{ active: tab==='review' }"
-              @click.prevent="tab='review'"
-              href="#"
-            ><i class="bi bi-journal-check"></i> Revisione</a>
+            <a class="nav-link" :class="{ active: tab==='review' }" @click.prevent="tab='review'" href="#">
+              <i class="bi bi-journal-check"></i> Revisione
+            </a>
           </li>
           <li class="nav-item">
-            <a
-              class="nav-link"
-              :class="{ active: tab==='markup' }"
-              @click.prevent="tab='markup'"
-              href="#"
-            ><i class="bi bi-percent"></i> Markup</a>
+            <a class="nav-link" :class="{ active: tab==='markup' }" @click.prevent="tab='markup'" href="#">
+              <i class="bi bi-percent"></i> Markup
+            </a>
           </li>
           <li class="nav-item">
-            <a
-              class="nav-link"
-              :class="{ active: tab==='logs' }"
-              @click.prevent="tab='logs'"
-              href="#"
-            ><i class="bi bi-clock-history"></i> Log</a>
+            <a class="nav-link" :class="{ active: tab==='logs' }" @click.prevent="tab='logs'" href="#">
+              <i class="bi bi-clock-history"></i> Log
+            </a>
           </li>
           <li class="nav-item">
-            <a
-              class="nav-link"
-              :class="{ active: tab==='data' }"
-              @click.prevent="tab='data'; loadStaging(); loadNormalized()"
-              href="#"
-            ><i class="bi bi-table"></i> Dati</a>
+            <a class="nav-link" :class="{ active: tab==='data' }" @click.prevent="tab='data'; loadStaging(); loadNormalized()" href="#">
+              <i class="bi bi-table"></i> Dati
+            </a>
           </li>
         </ul>
       </div>
     </div>
   </nav>
 
-  <!-- Main container (x-cloak qui) -->
+  <!-- Main container -->
   <div class="container mt-4" x-cloak x-data="app()" x-init="init()">
 
     <!-- Global status -->
-    <div
-      class="alert alert-info"
-      x-show="uploadStatus"
-      x-text="uploadStatus"
-    ></div>
+    <div class="alert alert-info" x-show="uploadStatus" x-text="uploadStatus"></div>
 
-    <!-- UPLOAD -->
+    <!-- UPLOAD SECTION -->
     <section :class="{ 'active': tab==='upload' }" class="mb-5">
       <div class="card shadow-sm">
         <div class="card-header bg-primary text-white">
           <i class="bi bi-upload"></i> Importa Inventario
         </div>
         <div class="card-body">
-          <input
-            type="file"
-            class="form-control mb-3"
-            @change="onFileChange"
-          />
+          <input type="file" class="form-control mb-3" @change="onFileChange" />
           <button class="btn btn-success" @click="uploadFile()">
             <i class="bi bi-play-circle"></i> Avvia Importazione
           </button>
           <div class="progress mt-3" x-show="uploadProgress !== null">
-            <div
-              class="progress-bar progress-bar-striped progress-bar-animated"
-              role="progressbar"
-              :style="'width:' + uploadProgress + '%'"
-              x-text="uploadProgress + '%'"
-            ></div>
+            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                 role="progressbar"
+                 :style="'width:' + uploadProgress + '%'"
+                 x-text="uploadProgress + '%'"></div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- REVIEW -->
+    <!-- REVIEW SECTION -->
     <section :class="{ 'active': tab==='review' }" class="mb-5">
       <div class="card shadow-sm">
         <div class="card-header d-flex justify-content-between">
@@ -158,7 +124,7 @@
       </div>
     </section>
 
-    <!-- MARKUP -->
+    <!-- MARKUP SECTION -->
     <section :class="{ 'active': tab==='markup' }" class="mb-5">
       <div class="card shadow-sm">
         <div class="card-header bg-primary text-white">
@@ -168,10 +134,7 @@
           <div class="table-responsive mb-4">
             <table class="table">
               <thead>
-                <tr>
-                  <th>Nome Ditta</th>
-                  <th>Markup (%)</th>
-                </tr>
+                <tr><th>Nome Ditta</th><th>Markup (%)</th></tr>
               </thead>
               <tbody>
                 <template x-for="c in companies" :key="c.id">
@@ -186,35 +149,17 @@
           <form @submit.prevent="saveCompany" class="row g-3 mb-4">
             <input type="hidden" x-model="form.id" />
             <div class="col-md-5">
-              <input
-                class="form-control"
-                x-model="form.name"
-                placeholder="Nome Ditta"
-                required
-              />
+              <input class="form-control" x-model="form.name" placeholder="Nome Ditta" required />
             </div>
             <div class="col-md-4">
-              <input
-                class="form-control"
-                type="number"
-                x-model="form.markup_pct"
-                placeholder="Markup %"
-                step="0.01"
-                required
-              />
+              <input class="form-control" type="number" x-model="form.markup_pct" placeholder="Markup %" step="0.01" required />
             </div>
             <div class="col-md-3 d-flex">
-              <button class="btn btn-success me-2">
-                <i class="bi bi-save"></i> Salva
-              </button>
-              <button class="btn btn-secondary" @click="formReset()">
-                <i class="bi bi-x-circle"></i> Annulla
-              </button>
+              <button class="btn btn-success me-2"><i class="bi bi-save"></i> Salva</button>
+              <button class="btn btn-secondary" @click="formReset()"><i class="bi bi-x-circle"></i> Annulla</button>
             </div>
           </form>
-          <button class="btn btn-info" @click="previewMarkup()">
-            <i class="bi bi-binoculars"></i> Anteprima
-          </button>
+          <button class="btn btn-info" @click="previewMarkup()"><i class="bi bi-binoculars"></i> Anteprima</button>
           <ul class="list-group mt-3">
             <template x-for="p in preview" :key="p.minsan">
               <li class="list-group-item d-flex justify-content-between">
@@ -227,7 +172,7 @@
       </div>
     </section>
 
-    <!-- LOG -->
+    <!-- LOG SECTION -->
     <section :class="{ 'active': tab==='logs' }" class="mb-5">
       <div class="card shadow-sm">
         <div class="card-header bg-primary text-white">
@@ -235,24 +180,14 @@
         </div>
         <div class="card-body table-responsive">
           <table class="table table-sm">
-            <thead class="table-light">
-              <tr>
-                <th>Data</th><th>MINSAN</th><th>Azione</th><th>Esito</th>
-              </tr>
-            </thead>
+            <thead class="table-light"><tr><th>Data</th><th>MINSAN</th><th>Azione</th><th>Esito</th></tr></thead>
             <tbody>
               <template x-for="l in logs" :key="l.id">
                 <tr>
                   <td x-text="new Date(l.executed_at).toLocaleString()"></td>
                   <td x-text="l.minsan"></td>
                   <td x-text="l.action"></td>
-                  <td>
-                    <span
-                      class="badge"
-                      :class="l.status==='success'?'bg-success':'bg-danger'"
-                      x-text="l.status"
-                    ></span>
-                  </td>
+                  <td><span class="badge" :class="l.status==='success'?'bg-success':'bg-danger'" x-text="l.status"></span></td>
                 </tr>
               </template>
             </tbody>
@@ -261,20 +196,16 @@
       </div>
     </section>
 
-    <!-- DATI -->
+    <!-- DATA SECTION -->
     <section :class="{ 'active': tab==='data' }" class="mb-5">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h3><i class="bi bi-database-fill"></i> Staging Inventory</h3>
-        <button class="btn btn-warning" @click="normalizeAndReload()">
-          <i class="bi bi-arrow-repeat"></i> Normalizza
-        </button>
+        <button class="btn btn-warning" @click="normalizeAndReload()"><i class="bi bi-arrow-repeat"></i> Normalizza</button>
       </div>
       <div class="card mb-4 shadow-sm">
         <div class="card-body table-responsive">
           <table class="table table-sm table-striped">
-            <thead>
-              <tr><th>MINSAN</th><th>Batch</th><th>Giacenza</th><th>Scadenza</th></tr>
-            </thead>
+            <thead><tr><th>MINSAN</th><th>Batch</th><th>Giacenza</th><th>Scadenza</th></tr></thead>
             <tbody>
               <template x-for="r in staging" :key="r.id">
                 <tr>
@@ -290,16 +221,12 @@
       </div>
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h3><i class="bi bi-bounding-box-circles"></i> Normalized Inventory</h3>
-        <button class="btn btn-secondary" @click="loadNormalized()">
-          <i class="bi bi-arrow-clockwise"></i> Ricarica
-        </button>
+        <button class="btn btn-secondary" @click="loadNormalized()"><i class="bi bi-arrow-clockwise"></i> Ricarica</button>
       </div>
       <div class="card shadow-sm">
         <div class="card-body table-responsive">
           <table class="table table-sm table-striped">
-            <thead>
-              <tr><th>MINSAN</th><th>Totale Qty</th><th>Expiry</th></tr>
-            </thead>
+            <thead><tr><th>MINSAN</th><th>Totale Qty</th><th>Expiry</th></tr></thead>
             <tbody>
               <template x-for="n in normalized" :key="n.minsan">
                 <tr>
@@ -386,7 +313,12 @@
               if (!cmpRes.ok) { this.uploadStatus = `Errore compare: ${cmpJson.error}`; return; }
               const count = cmpJson.updates_count || 0;
 
-              // Load all views
+              // Forza lo switch prima di caricare i dati
+              this.$nextTick(() => {
+                this.tab = 'data';
+              });
+
+              // Carica tutte le viste
               this.uploadStatus = 'Caricamento dati…';
               await Promise.all([
                 this.loadUpdates(),
@@ -396,14 +328,13 @@
                 this.loadLogs()
               ]);
 
-              // Switch to Dati
-              this.tab = 'data';
+              // Mostra completamento
               this.uploadStatus = `Completato: ${count} modifiche pronte.`;
             } else {
               this.uploadStatus = `Errore upload: ${xhr.responseText}`;
             }
           };
-          xhr.onerror = () => this.uploadStatus = 'Errore rete durante upload';
+          xhr.onerror = () => this.uploadStatus = 'Errore di rete durante upload';
           xhr.send(form);
         },
 
@@ -465,8 +396,8 @@
         async normalizeAndReload() {
           if (!this.importId) return alert('Prima importa un file');
           const r = await fetch('/.netlify/functions/normalize', {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json' },
+            method: 'POST',
+            headers: { 'Content-Type':'application/json' },
             body: JSON.stringify({ import_id: this.importId })
           });
           const j = await r.json();
@@ -478,7 +409,7 @@
     }
   </script>
 
-  <!-- Bootstrap Bundle -->
+  <!-- Bootstrap Bundle JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
