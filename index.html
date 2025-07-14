@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sync Inventario</title>
+  <!-- Alpine.js via CDN -->
+  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <style>
+    body { font-family: sans-serif; margin:20px; }
+    nav button { margin-right:10px; padding:5px 10px; }
+    section { display: none; }
+    section.active { display: block; margin-top:20px; }
+    table { width:100%; border-collapse:collapse; margin-top:10px; }
+    th,td { border:1px solid #ccc; padding:8px; text-align:left; }
+    input, button { margin:5px 0; }
+  </style>
+</head>
+<body x-data="app()" x-init="init()">
+
+  <h1>Inventory Sync</h1>
+  <nav>
+    <button @click="tab='upload'">Importa</button>
+    <button @click="tab='review'">Revisione</button>
+    <button @click="tab='markup'">Markup</button>
+    <button @click="tab='logs'">Log</button>
+  </nav>
+
+  <!-- 1) IMPORTAZIONE EXCEL -->
+  <section :class="{ 'active': tab==='upload' }">
+    <h2>Importa Inventario</h2>
+    <input type="file" @change="onFileChange"/>
+    <button @click="uploadFile()">Importa</button>
+    <div style="color:green; margin-top:10px;" x-text="uploadStatus"></div>
+  </section>
+
+  <!-- 2) REVISONE MODIFICHE -->
+  <section :class="{ 'active': tab==='review' }">
+    <h2>Revisione Modifiche</h2>
+    <button @click="approveSelected()">Approva Selezionati</button>
+    <table>
+      <thead>
+        <tr>
+          <th><input type="checkbox" @click="toggleAll($event)"/></th>
+          <th>MINSAN</th>
+          <th>Old Qty → New Qty</th>
+          <th>Old Price → New Price</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="u in updates" :key="u.id">
+          <tr>
+            <td><input type="checkbox" x-model="u.sel"/></td>
+            <td x-text="u.minsan"></td>
+            <td x-text="u.old_qty + ' → ' + u.new_qty"></td>
+            <td x-text="u.old_price.toFixed(2) + ' → ' + u.new_price.toFixed(2)"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 3) GESTIONE MARKUP -->
+  <section :class="{ 'active': tab==='markup' }">
+    <h2>Gestione Markup</h2>
+    <table>
+      <thead>
+        <tr><th>Nome Ditta</th><th>Markup (%)</th></tr>
+      </thead>
+      <tbody>
+        <template x-for="c in companies" :key="c.id">
+          <tr>
+            <td x-text="c.name"></td>
+            <td x-text="c.markup_pct.toFixed(2)"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+    <h3>Aggiungi / Modifica</h3>
+    <form @submit.prevent="saveCompany()">
+      <input type="hidden" x-model="form.id"/>
+      <label>
+        Nome: <input type="text" x-model="form.name" required/>
+      </label><br/>
+      <label>
+        Markup: <input type="number" x-model="form.markup_pct" step="0.01" required/>
+      </label><br/>
+      <button type="submit">Salva</button>
+      <button type="button" @click="formReset()">Annulla</button>
+    </form>
+    <button @click="previewMarkup()">Anteprima Ricalcolo</button>
+    <div>
+      <template x-for="p in preview" :key="p.minsan">
+        <div x-text="p.minsan + ': ' + p.old_price.toFixed(2) + ' → ' + p.new_price.toFixed(2)"></div>
+      </template>
+    </div>
+  </section>
+
+  <!-- 4) LOG AGGIORNAMENTI -->
+  <section :class="{ 'active': tab==='logs' }">
+    <h2>Log Aggiornamenti</h2>
+    <table>
+      <thead>
+        <tr><th>Data</th><th>MINSAN</th><th>Azione</th><th>Esito</th></tr>
+      </thead>
+      <tbody>
+        <template x-for="l in logs" :key="l.id">
+          <tr>
+            <td x-text="new Date(l.executed_at).toLocaleString()"></td>
+            <td x-text="l.minsan"></td>
+            <td x-text="l.action"></td>
+            <td x-text="l.status"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- Alpine.js logic -->
+  <script>
+    function app() {
+      return {
+        tab: 'upload',
+        importId: '',
+        file: null,
+        uploadStatus: '',
+        updates: [],
+        companies: [],
+        preview: [],
+        logs: [],
+        init() {
+          // su init, carica le tabelle (se importId già presente)
+          if (this.importId) this.loadUpdates();
+          this.loadCompanies();
+          this.loadLogs();
+        },
+        onFileChange(e) {
+          this.file = e.target.files[0];
+          this.uploadStatus = '';
+        },
+        async uploadFile() {
+          if (!this.file) return alert('Seleziona un file Excel');
+          this.uploadStatus = 'Importazione in corso…';
+          const form = new FormData();
+          form.append('file', this.file);
+          const res = await fetch('/.netlify/functions/upload', {
+            method: 'POST',
+            body: form
+          });
+          if (!res.ok) {
+            this.uploadStatus = 'Errore: ' + await res.text();
+            return;
+          }
+          const { import_id, rows_imported } = await res.json();
+          this.importId = import_id;
+          this.uploadStatus = `Importate ${rows_imported} righe (import_id: ${import_id})`;
+          this.loadUpdates();
+        },
+        async loadUpdates() {
+          if (!this.importId) return;
+          const r = await fetch(`/.netlify/functions/list-updates?import_id=${this.importId}`);
+          this.updates = (await r.json()).map(u => ({ ...u, sel: false }));
+        },
+        toggleAll(e) {
+          this.updates.forEach(u => u.sel = e.target.checked);
+        },
+        async approveSelected() {
+          const ids = this.updates.filter(u => u.sel).map(u => u.id);
+          if (!ids.length) return alert('Seleziona almeno una modifica');
+          const r = await fetch('/.netlify/functions/approve', {
+            method: 'POST',
+            body: JSON.stringify({ update_ids: ids })
+          });
+          if (r.ok) {
+            alert('Approvati con successo');
+            this.loadUpdates();
+            this.loadLogs();
+          } else {
+            alert(await r.text());
+          }
+        },
+        async loadCompanies() {
+          const r = await fetch('/.netlify/functions/companies');
+          this.companies = await r.json();
+        },
+        form: { id:'', name:'', markup_pct:0 },
+        formReset() {
+          this.form = { id:'', name:'', markup_pct:0 };
+        },
+        async saveCompany() {
+          const url = '/.netlify/functions/companies';
+          const opts = {
+            method: this.form.id ? 'PATCH' : 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(this.form)
+          };
+          const r = await fetch(url, opts);
+          if (r.ok) {
+            this.formReset();
+            this.loadCompanies();
+          } else {
+            alert(await r.text());
+          }
+        },
+        async previewMarkup() {
+          const r = await fetch('/.netlify/functions/preview-markup', { method:'POST' });
+          this.preview = await r.json();
+        },
+        async loadLogs() {
+          const r = await fetch('/.netlify/functions/logs');
+          this.logs = await r.json();
+        }
+      }
+    }
+  </script>
+</body>
+</html>
