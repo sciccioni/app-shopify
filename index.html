@@ -335,56 +335,88 @@
           this.uploadProgress = 0;
         },
 
-        uploadFile() {
-          if (!this.file) return alert('Seleziona file Excel');
-          this.uploadStatus = 'Importazione in corso…';
-          this.uploadProgress = 0;
-          const form = new FormData();
-          form.append('file', this.file);
-          const xhr = new XMLHttpRequest();
-          xhr.open('POST', '/.netlify/functions/upload');
+       uploadFile() {
+  if (!this.file) return alert('Seleziona file Excel');
+  this.uploadStatus = 'Importazione in corso…';
+  this.uploadProgress = 0;
 
-          xhr.upload.addEventListener('progress', e => {
-            if (e.lengthComputable) {
-              this.uploadProgress = Math.round(e.loaded / e.total * 100);
-            }
-          });
+  const form = new FormData();
+  form.append('file', this.file);
 
-          xhr.addEventListener('load', async () => {
-            if (xhr.status < 300) {
-              const { import_id, rows_imported } = JSON.parse(xhr.responseText);
-              this.importId = import_id;
-              // dopo upload, chiami normalize e compare
-              this.uploadStatus = `Importate ${rows_imported} righe… Normalizzazione`;
-              await fetch('/.netlify/functions/normalize', {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ import_id })
-              });
-              this.uploadStatus = 'Confronto in corso…';
-              const cmp = await fetch('/.netlify/functions/compare', {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ import_id })
-              });
-              const { updates_count } = await cmp.json();
-              this.uploadStatus = `Pronte ${updates_count} modifiche`;
-              // ricarica tutte le viste
-              this.loadUpdates();
-              this.loadStagesAndNormalized();
-              this.loadCompanies();
-              this.loadLogs();
-            } else {
-              this.uploadStatus = `Errore upload: ${xhr.responseText}`;
-            }
-          });
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/.netlify/functions/upload');
 
-          xhr.addEventListener('error', () => {
-            this.uploadStatus = 'Errore di rete durante l\'upload';
-          });
+  xhr.upload.addEventListener('progress', e => {
+    if (e.lengthComputable) {
+      this.uploadProgress = Math.round(e.loaded / e.total * 100);
+    }
+  });
 
-          xhr.send(form);
-        },
+  xhr.addEventListener('load', async () => {
+    if (xhr.status < 300) {
+      const { import_id, rows_imported } = JSON.parse(xhr.responseText);
+      this.importId = import_id;
+      this.uploadStatus = `Importate ${rows_imported} righe… Normalizzazione in corso`;
+      this.uploadProgress = 100;
+
+      // Normalize
+      const normRes = await fetch('/.netlify/functions/normalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ import_id })
+      });
+      const normJson = await normRes.json();
+      if (!normRes.ok) {
+        this.uploadStatus = `Errore normalizzazione: ${normJson.error}`;
+        console.error('Normalize Error', normJson);
+        return;
+      }
+
+      this.uploadStatus = 'Confronto in corso…';
+
+      // Compare
+      const cmpRes = await fetch('/.netlify/functions/compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ import_id })
+      });
+      let cmpJson;
+      try {
+        cmpJson = await cmpRes.json();
+      } catch(err) {
+        this.uploadStatus = `Errore parsing JSON compare: ${err.message}`;
+        console.error('Compare parse error', await cmpRes.text());
+        return;
+      }
+      if (!cmpRes.ok) {
+        this.uploadStatus = `Errore confronto: ${cmpJson.error}`;
+        console.error('Compare Error', cmpJson);
+        return;
+      }
+
+      const updates_count = cmpJson.updates_count;
+      this.uploadStatus = `Pronte ${updates_count} modifiche. Caricamento dati…`;
+
+      // Ricarica tutte le viste
+      this.loadUpdates();
+      await this.loadStagesAndNormalized();
+      this.loadCompanies();
+      this.loadLogs();
+
+      this.uploadStatus = `Pronte ${updates_count} modifiche. Tutto aggiornato.`;
+    } else {
+      this.uploadStatus = `Errore upload: ${xhr.responseText}`;
+      console.error('Upload Error', xhr.responseText);
+    }
+  });
+
+  xhr.addEventListener('error', () => {
+    this.uploadStatus = 'Errore di rete durante l\'upload';
+  });
+
+  xhr.send(form);
+}
+
 
         async loadUpdates() {
           if (!this.importId) return;
