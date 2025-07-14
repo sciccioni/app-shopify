@@ -74,8 +74,13 @@
         /* Stili per le tab */
         .tab-active { border-color: #4f46e5; color: #4f46e5; }
         .tab-inactive { border-color: transparent; color: #6b7280; }
-        /* Stili per la gestione markup */
-        .markup-row.is-dirty { background-color: #fefce8 !important; }
+        /* Stili per la modale */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 50;
+        }
     </style>
 </head>
 <body class="p-4 sm:p-8">
@@ -158,7 +163,6 @@
                     <div class="lg:col-span-1 space-y-8">
                         <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                             <h3 class="text-lg font-semibold text-gray-800">Aggiungi Nuova Ditta</h3>
-                            <p class="mt-1 text-sm text-gray-500">Inserisci una ditta e il suo markup manualmente.</p>
                             <form id="addMarkupForm" class="mt-4 space-y-4">
                                 <div>
                                     <label for="newDitta" class="block text-sm font-medium text-gray-700">Nome Ditta</label>
@@ -172,13 +176,16 @@
                             </form>
                             <div id="addMarkupStatus" class="mt-4 text-sm"></div>
                         </div>
+                        <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Ditte Nuove dall'Import</h3>
+                            <p class="text-sm text-gray-500 mb-4">Ditte trovate nel file ma senza un markup. Clicca per aggiungerle alla lista a destra.</p>
+                            <div id="loader-ditte-mancanti" class="text-center p-4"><p class="text-gray-600">Analisi in corso...</p></div>
+                            <div id="ditte-mancanti-container" class="space-y-2"></div>
+                        </div>
                     </div>
                     <div class="lg:col-span-2">
                         <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                            <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
-                                <h2 class="text-xl font-semibold text-gray-800">Markup Registrati</h2>
-                                <button id="saveAllMarkupsButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm disabled:bg-indigo-400 disabled:cursor-not-allowed" disabled>Salva Modifiche</button>
-                            </div>
+                            <h2 class="text-xl font-semibold text-gray-800 mb-6">Markup Registrati</h2>
                             <div id="loader-markups" class="text-center p-8"><p class="text-gray-600">Caricamento...</p></div>
                             <div id="markups-container" class="overflow-x-auto"></div>
                         </div>
@@ -397,7 +404,7 @@
             
             function loadMarkups() {
                 const container = $('#markups-registrati-container');
-                const loader = $('#loader-markups-registrati');
+                const loader = $('#loader-markups');
                 loader.show();
                 container.empty();
                 $('#panel-markups').data('loaded', true);
