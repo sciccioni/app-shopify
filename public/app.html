@@ -465,6 +465,7 @@
                     contentType: 'application/json',
                     data: JSON.stringify({ ditta: ditta }),
                     success: function(data) {
+                        console.log("Dati ricevuti per l'anteprima:", data); // LOG DI DEBUG
                         $('#modal-loader').hide();
                         if (!data.changes || data.changes.length === 0) {
                             $('#modal-content').html('<p>Nessun prezzo da aggiornare per questa ditta.</p>');
