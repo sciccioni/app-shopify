@@ -10,11 +10,10 @@ interface ProductData {
 }
 interface ShopifyVariant {
   id: string;
-  sku: string; // Aggiunto per la mappatura
+  sku: string;
   price: string;
   product: { id: string };
 }
-// --- NUOVA INTERFACCIA PER UNA TIPizzazione SICURA ---
 interface ShopifyGraphQLResponse {
   data?: {
     productVariants?: {
@@ -23,7 +22,6 @@ interface ShopifyGraphQLResponse {
   };
   errors?: { message: string }[];
 }
-
 
 // --- HELPER PER SHOPIFY ---
 async function executeShopifyMutation(domain: string, token: string, query: string, variables: object) {
@@ -74,31 +72,15 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         return { statusCode: 200, body: JSON.stringify({ message: "Nessun prodotto storico trovato per questa ditta." }) };
     }
 
-    // 3. Interroga Shopify per i dati attuali
     const skusQuery = products.map((p: ProductData) => `sku:'${p.minsan}'`).join(' OR ');
     const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku price product { id } } } } }`;
-    
-    // --- CORREZIONE: Gestione più esplicita della chiamata e del tipo di ritorno ---
-    const shopifyApiUrl = `https://${SHOPIFY_STORE_NAME}/admin/api/2024-07/graphql.json`;
-    const shopifyResponseRaw = await fetch(shopifyApiUrl, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, 
-        body: JSON.stringify({ query: graphqlQuery }) 
-    });
-    
-    if (!shopifyResponseRaw.ok) {
-        throw new Error(`Errore di rete da Shopify: ${shopifyResponseRaw.statusText}`);
-    }
-    
-    const shopifyResponse: ShopifyGraphQLResponse = await shopifyResponseRaw.json();
+    const shopifyResponse: ShopifyGraphQLResponse = await (await fetch(`https://${SHOPIFY_STORE_NAME}/admin/api/2024-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json();
     
     if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map(e => e.message).join(', ')}`);
 
-    const shopifyVariants: ShopifyVariant[] = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
+    const shopifyVariants = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
     const shopifyVariantsMap = new Map<string, ShopifyVariant>(shopifyVariants.map(v => [v.sku, v]));
 
-
-    // 4. Calcola i nuovi prezzi e prepara l'aggiornamento di massa
     const variantsToUpdate: any[] = [];
     for (const p of products as ProductData[]) {
       const shopifyVariant = shopifyVariantsMap.get(p.minsan);
@@ -118,7 +100,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         return { statusCode: 200, body: JSON.stringify({ message: "Nessun prezzo da aggiornare per questa ditta." }) };
     }
 
-    // 5. Raggruppa per productId ed esegui il bulk update
     const groupedByProduct = variantsToUpdate.reduce((acc, v) => {
         (acc[v.productId] = acc[v.productId] || []).push({id: v.id, price: v.price});
         return acc;
