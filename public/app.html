@@ -355,35 +355,33 @@
             const saveAllBtn = $('#saveAllMarkupsButton');
 
             function checkDirtyState() {
-                const dirtyRows = $('#markups-container .markup-row.is-dirty').length;
+                const dirtyRows = $('#markups-registrati-container .markup-row.is-dirty').length;
                 saveAllBtn.prop('disabled', dirtyRows === 0);
             }
 
             function loadMarkups() {
-                const container = $('#markups-container');
-                const loader = $('#loader-markups');
-                loader.show();
-                container.empty();
+                const containerRegistrati = $('#markups-registrati-container');
+                const loaderRegistrati = $('#loader-markups-registrati');
+                const containerMancanti = $('#ditte-mancanti-container');
+                const loaderMancanti = $('#loader-ditte-mancanti');
+                
+                $('#panel-markups').data('loaded', true);
+                loaderRegistrati.show();
+                containerRegistrati.empty();
                 saveAllBtn.prop('disabled', true);
 
                 $.ajax({
                     url: `/api/get-ditte-status?import_id=${importId}`,
                     method: 'GET',
                     success: function(data) {
-                        loader.hide();
-                        $('#panel-markups').data('loaded', true);
-                        
-                        // Popola tabella markup registrati
+                        loaderRegistrati.hide();
                         const table = $('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ditta</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Markup (%)</th><th class="px-6 py-3"></th></tr></thead><tbody class="bg-white divide-y divide-gray-200"></tbody></table>');
                         const tbody = table.find('tbody');
                         data.markupsRegistrati.forEach(m => {
                             tbody.append(`<tr class="markup-row" data-id="${m.id}" data-original-value="${m.markup_percentage}"><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${m.ditta}</td><td class="px-6 py-4"><input type="number" step="0.01" class="markup-input w-24 rounded-md" value="${m.markup_percentage}"></td><td class="px-6 py-4 text-right"><button class="delete-markup-btn text-red-500 hover:text-red-700 text-sm">Elimina</button></td></tr>`);
                         });
-                        container.append(table);
+                        containerRegistrati.append(table);
 
-                        // Popola lista ditte mancanti
-                        const containerMancanti = $('#ditte-mancanti-container');
-                        const loaderMancanti = $('#loader-ditte-mancanti');
                         loaderMancanti.hide();
                         if (data.ditteMancanti.length > 0) {
                             const list = $('<ul class="list-disc list-inside space-y-1 text-gray-700"></ul>');
@@ -394,13 +392,13 @@
                         }
                     },
                     error: (xhr) => {
-                        $('#loader-markups-registrati').html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`);
-                        $('#loader-ditte-mancanti').hide();
+                        loaderRegistrati.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`);
+                        loaderMancanti.hide();
                     }
                 });
             }
 
-            $('#markups-container').on('input', '.markup-input', function() {
+            $('#markups-registrati-container').on('input', '.markup-input', function() {
                 const input = $(this);
                 const row = input.closest('tr');
                 const originalValue = row.data('original-value');
@@ -416,7 +414,7 @@
 
             saveAllBtn.on('click', function() {
                 const btn = $(this);
-                const dirtyRows = $('#markups-container .markup-row.is-dirty');
+                const dirtyRows = $('#markups-registrati-container .markup-row.is-dirty');
                 const updates = dirtyRows.map(function() {
                     const row = $(this);
                     return {
@@ -435,7 +433,7 @@
                     contentType: 'application/json',
                     data: JSON.stringify({ markups: updates }),
                     success: function() {
-                        loadMarkups(); // Ricarica tutto per resettare lo stato
+                        loadMarkups();
                         if(importId) {
                            $.ajax({ url: `/api/compute-diffs`, method: 'POST', contentType: 'application/json', data: JSON.stringify({ importId: importId }), success: () => loadPendingUpdates(importId) });
                         }
@@ -468,7 +466,7 @@
                 });
             });
 
-            $('#markups-container').on('click', '.delete-markup-btn', function() {
+            $('#markups-registrati-container').on('click', '.delete-markup-btn', function() {
                 if (!confirm("Sei sicuro di voler eliminare questo markup?")) return;
                 
                 const row = $(this).closest('tr');
