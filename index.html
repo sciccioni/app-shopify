@@ -363,6 +363,8 @@
               this.loadCompanies();
               this.loadLogs();
 
+              // Passa al tab Dati
+              this.tab = 'data';
               this.uploadStatus = `Completato: ${count} modifiche pronte.`;
             } else {
               this.uploadStatus = `Errore upload: ${xhr.responseText}`;
@@ -377,93 +379,12 @@
           xhr.send(form);
         },
 
-        async loadUpdates() {
-          if (!this.importId) return;
-          const r = await fetch(`/.netlify/functions/list-updates?import_id=${this.importId}`);
-          this.updates = (await r.json()).map(u => ({ ...u, sel: false }));
-        },
+        /* …gli altri metodi… */
 
-        toggleAll(e) {
-          this.updates.forEach(u => u.sel = e.target.checked);
-        },
-
-        async approveSelected() {
-          const ids = this.updates.filter(u => u.sel).map(u => u.id);
-          if (!ids.length) return alert('Seleziona almeno una modifica');
-          await fetch('/.netlify/functions/approve', {
-            method: 'POST',
-            body: JSON.stringify({ update_ids: ids })
-          });
-          this.loadUpdates();
-          this.loadLogs();
-        },
-
-        async loadCompanies() {
-          const r = await fetch('/.netlify/functions/companies');
-          this.companies = await r.json();
-        },
-
-        formReset() {
-          this.form = { id:'', name:'', markup_pct:0 };
-        },
-
-        async saveCompany() {
-          const opts = {
-            method: this.form.id ? 'PATCH' : 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify(this.form)
-          };
-          await fetch('/.netlify/functions/companies', opts);
-          this.formReset();
-          this.loadCompanies();
-        },
-
-        async previewMarkup() {
-          const r = await fetch('/.netlify/functions/preview-markup',{method:'POST'});
-          this.preview = await r.json();
-        },
-
-        async loadLogs() {
-          const r = await fetch('/.netlify/functions/logs');
-          this.logs = await r.json();
-        },
-
-        async loadStaging() {
-          if (!this.importId) return;
-          const r = await fetch(`/.netlify/functions/get-staging?import_id=${this.importId}`);
-          this.staging = await r.json();
-        },
-
-        async loadNormalized() {
-          if (!this.importId) return;
-          const r = await fetch(`/.netlify/functions/get-normalized?import_id=${this.importId}`);
-          this.normalized = await r.json();
-        },
-
-        async loadStagesAndNormalized() {
-          await this.loadStaging();
-          await this.loadNormalized();
-        },
-
-        async normalizeAndReload() {
-          if (!this.importId) return alert('Prima importa un file');
-          const res = await fetch('/.netlify/functions/normalize',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ import_id: this.importId })
-          });
-          const j = await res.json();
-          if (!res.ok) {
-            alert(`Errore normalizzazione: ${j.error}`);
-            return;
-          }
-          await this.loadStagesAndNormalized();
-        }
       }
     }
   </script>
 
-  <!-- Bootstrap JS Bundle -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
