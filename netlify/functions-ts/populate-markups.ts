@@ -13,35 +13,36 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   try {
-    // 1. Recupera tutte le ditte uniche dalla tabella 'products'
+    // --- CORREZIONE: Legge l'importId dal corpo della richiesta ---
+    const { importId } = JSON.parse(event.body || "{}");
+    if (!importId) {
+      return { statusCode: 400, body: JSON.stringify({ error: "ID importazione non fornito." }) };
+    }
+
+    // 1. Recupera le ditte uniche DALL'IMPORTAZIONE SPECIFICA
     const { data: products, error: fetchError } = await supabase
       .from('products')
-      .select('ditta');
+      .select('ditta')
+      .eq('import_id', importId);
 
     if (fetchError) throw fetchError;
     if (!products || products.length === 0) {
       return { statusCode: 200, body: JSON.stringify({ message: "Nessun prodotto trovato da cui estrarre le ditte." }) };
     }
 
-    // Estrai i nomi unici delle ditte, filtrando valori nulli o vuoti
     const uniqueDitte = [...new Set(products.map(p => p.ditta).filter(Boolean))];
 
     if (uniqueDitte.length === 0) {
         return { statusCode: 200, body: JSON.stringify({ message: "Nessuna ditta valida trovata nei prodotti." }) };
     }
 
-    // 2. Prepara i dati da inserire con un markup casuale
-    const markupsToInsert = uniqueDitte.map(dittaName => {
-      // Genera un markup casuale tra 15.00 e 50.00
-      const randomMarkup = (Math.random() * (50 - 15) + 15).toFixed(2);
-      return {
-        ditta: dittaName,
-        markup_percentage: Number(randomMarkup)
-      };
-    });
+    // 2. Prepara i dati da inserire con un markup di default (es. 20%)
+    const markupsToInsert = uniqueDitte.map(dittaName => ({
+      ditta: dittaName,
+      markup_percentage: 20.00 // Un valore di default ragionevole
+    }));
 
     // 3. Inserisci i nuovi markup, ignorando i duplicati
-    // Upsert con ignoreDuplicates=true inserisce solo le righe la cui 'ditta' non esiste già.
     const { data, error: upsertError } = await supabase
       .from('company_markups')
       .upsert(markupsToInsert, { onConflict: 'ditta', ignoreDuplicates: true })
