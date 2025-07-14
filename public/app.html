@@ -74,13 +74,8 @@
         /* Stili per le tab */
         .tab-active { border-color: #4f46e5; color: #4f46e5; }
         .tab-inactive { border-color: transparent; color: #6b7280; }
-        /* Stili per la modale */
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex; align-items: center; justify-content: center;
-            z-index: 50;
-        }
+        /* Stili per la gestione markup */
+        .markup-row.is-dirty { background-color: #fefce8 !important; }
     </style>
 </head>
 <body class="p-4 sm:p-8">
@@ -181,15 +176,6 @@
                             </form>
                             <div id="addMarkupStatus" class="mt-4 text-sm"></div>
                         </div>
-                        <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 class="text-lg font-semibold text-gray-800">Ditte Nuove dall'Import</h3>
-                                <button id="populateMarkupsButton" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-1 px-3 rounded-lg shadow-sm">Aggiungi Mancanti</button>
-                            </div>
-                            <p class="mt-1 text-sm text-gray-500 mb-4">Ditte trovate nel file ma senza un markup. Clicca "Aggiungi" per inserirle nella lista a destra con un markup di default.</p>
-                            <div id="loader-ditte-mancanti" class="text-center p-4"><p class="text-gray-600">Analisi in corso...</p></div>
-                            <div id="ditte-mancanti-container"></div>
-                        </div>
                     </div>
                     <div class="lg:col-span-2">
                         <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -197,8 +183,8 @@
                                 <h2 class="text-xl font-semibold text-gray-800">Markup Registrati</h2>
                                 <button id="saveAllMarkupsButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm disabled:bg-indigo-400 disabled:cursor-not-allowed" disabled>Salva Modifiche</button>
                             </div>
-                            <div id="loader-markups-registrati" class="text-center p-8"><p class="text-gray-600">Caricamento markup...</p></div>
-                            <div id="markups-registrati-container" class="overflow-x-auto"></div>
+                            <div id="loader-markups" class="text-center p-8"><p class="text-gray-600">Caricamento markup...</p></div>
+                            <div id="markups-container" class="overflow-x-auto"></div>
                         </div>
                     </div>
                  </div>
@@ -212,22 +198,6 @@
                     <div id="loader-logs" class="text-center p-8"><p class="text-gray-600">Caricamento log...</p></div>
                     <div id="logs-container" class="overflow-x-auto mt-4"></div>
                  </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- NUOVA FINESTRA MODALE PER ANTEPRIMA -->
-    <div id="recalc-modal" class="modal-overlay hidden">
-        <div class="bg-white rounded-lg shadow-xl m-4 max-w-3xl w-full max-h-[90vh] flex flex-col">
-            <div class="p-6 border-b">
-                <h3 class="text-xl font-semibold text-gray-800">Anteprima Ricalcolo Prezzi</h3>
-                <p class="text-sm text-gray-500">Questi prezzi verranno aggiornati su Shopify. Sei sicuro di voler procedere?</p>
-            </div>
-            <div id="modal-loader" class="text-center p-8"><p>Caricamento anteprima...</p></div>
-            <div id="modal-content" class="p-6 overflow-y-auto"></div>
-            <div class="p-6 border-t bg-gray-50 flex justify-end space-x-3">
-                <button id="modal-cancel" class="bg-white hover:bg-gray-100 text-gray-700 font-medium py-2 px-4 rounded-lg border">Annulla</button>
-                <button id="modal-confirm" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Conferma e Aggiorna</button>
             </div>
         </div>
     </div>
@@ -425,10 +395,10 @@
                     method: 'GET',
                     success: function(data) {
                         loaderRegistrati.hide();
-                        const table = $('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ditta</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Markup (%)</th><th class="px-6 py-3"></th></tr></thead><tbody class="bg-white divide-y divide-gray-200"></tbody></table>');
+                        const table = $('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ditta</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Markup (%)</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stato</th><th class="px-6 py-3"></th></tr></thead><tbody class="bg-white divide-y divide-gray-200"></tbody></table>');
                         const tbody = table.find('tbody');
                         data.markupsRegistrati.forEach(m => {
-                            tbody.append(`<tr class="markup-row" data-id="${m.id}" data-ditta="${m.ditta}" data-original-value="${m.markup_percentage}"><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${m.ditta}</td><td class="px-6 py-4"><input type="number" step="0.01" class="markup-input w-24 rounded-md" value="${m.markup_percentage}"></td><td class="px-6 py-4 text-right action-cell"><button class="save-markup-btn text-indigo-600 text-sm">Salva</button><button class="delete-markup-btn text-red-600 text-sm ml-2">Elimina</button></td></tr>`);
+                            tbody.append(`<tr class="markup-row" data-id="${m.id}" data-original-value="${m.markup_percentage}"><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${m.ditta}</td><td class="px-6 py-4"><input type="number" step="0.01" class="markup-input w-24 rounded-md" value="${m.markup_percentage}"></td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 status-cell"></td><td class="px-6 py-4 text-right"><button class="delete-markup-btn text-red-500 hover:text-red-700 text-sm">Elimina</button></td></tr>`);
                         });
                         containerRegistrati.append(table);
 
@@ -458,8 +428,10 @@
 
                 if (String(currentValue) !== String(originalValue)) {
                     row.addClass('is-dirty');
+                    row.find('.status-cell').html('<span class="text-yellow-600 font-medium">Modificato</span>');
                 } else {
                     row.removeClass('is-dirty');
+                    row.find('.status-cell').empty();
                 }
                 checkDirtyState();
             });
@@ -556,87 +528,6 @@
                     error: (xhr) => {
                         alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
                         btn.prop('disabled', false).text('Aggiungi Mancanti');
-                    }
-                });
-            });
-
-            $('#markups-container').on('click', '.save-markup-btn', function() {
-                const btn = $(this);
-                const row = btn.closest('tr');
-                const id = row.data('id');
-                const ditta = row.data('ditta');
-                const percentage = row.find('.markup-input').val();
-                
-                btn.text('Salvataggio...').prop('disabled', true);
-
-                $.ajax({
-                    url: '/api/update-markup',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({ id: id, markup_percentage: percentage }),
-                    success: function() {
-                        const actionCell = row.find('.action-cell');
-                        actionCell.html(`<span class="text-green-600 font-medium">✔ Salvato</span><button class="recalc-preview-btn ml-4 text-blue-600 hover:text-blue-900 text-sm" data-ditta="${ditta}">Anteprima Ricalcolo</button>`);
-                    },
-                    error: (xhr) => {
-                        alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
-                        btn.text('Salva').prop('disabled', false);
-                    }
-                });
-            });
-
-            $('#markups-container').on('click', '.recalc-preview-btn', function() {
-                const btn = $(this);
-                const ditta = btn.data('ditta');
-                
-                $('#modal-loader').show();
-                $('#modal-content').empty();
-                $('#recalc-modal').removeClass('hidden');
-
-                $.ajax({
-                    url: '/api/preview-recalculation',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({ ditta: ditta }),
-                    success: function(data) {
-                        $('#modal-loader').hide();
-                        if (!data.changes || data.changes.length === 0) {
-                            $('#modal-content').html('<p>Nessun prezzo da aggiornare per questa ditta.</p>');
-                            $('#modal-confirm').prop('disabled', true);
-                            return;
-                        }
-                        
-                        $('#modal-confirm').prop('disabled', false).data('updates', data.changes);
-                        const table = $('<table class="min-w-full"><thead><tr><th class="text-left py-2">Prodotto</th><th class="text-left py-2">Prezzo Precedente</th><th class="text-left py-2">Nuovo Prezzo</th></tr></thead><tbody></tbody></table>');
-                        const tbody = table.find('tbody');
-                        data.changes.forEach(c => {
-                            tbody.append(`<tr><td class="py-1">${c.product_title}</td><td class="py-1">${c.old_price}</td><td class="py-1 font-bold text-green-600">${c.new_price}</td></tr>`);
-                        });
-                        $('#modal-content').append(table);
-                    },
-                    error: (xhr) => $('#modal-loader').html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
-                });
-            });
-
-            $('#modal-cancel').on('click', () => $('#recalc-modal').addClass('hidden'));
-            $('#modal-confirm').on('click', function() {
-                const btn = $(this);
-                const updates = btn.data('updates');
-                
-                btn.prop('disabled', true).text('Aggiornamento...');
-
-                $.ajax({
-                    url: '/api/apply-recalculation',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({ updates: updates }),
-                    success: function(data) {
-                        alert(data.message);
-                        $('#recalc-modal').addClass('hidden');
-                    },
-                    error: (xhr) => {
-                        alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
-                        btn.prop('disabled', false).text('Conferma e Aggiorna');
                     }
                 });
             });
