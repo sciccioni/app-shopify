@@ -56,7 +56,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     const { data: products, error: pError } = await supabase.rpc('get_latest_products_by_ditta', { ditta_name: ditta });
     if (pError) throw pError;
     if (!products || products.length === 0) {
-        return { statusCode: 200, body: JSON.stringify({ changes: [] }) };
+        return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ changes: [] }) };
     }
     console.log(`[preview-recalc] Trovati ${products.length} prodotti storici per la ditta.`);
 
@@ -76,7 +76,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       if (shopifyVariant && p.costo_medio && markup > 0) {
         const newPrice = (p.costo_medio * (1 + markup / 100) * (1 + (p.iva || 0) / 100)).toFixed(2);
         
-        // --- CONFRONTO ROBUSTO ---
         const currentPrice = parseFloat(shopifyVariant.price).toFixed(2);
 
         console.log(`[preview-recalc] Minsan: ${p.minsan} | Prezzo Shopify: ${currentPrice} | Nuovo Prezzo Calcolato: ${newPrice}`);
@@ -95,7 +94,11 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     }
     
     console.log(`[preview-recalc] Trovate ${priceChanges.length} modifiche di prezzo da proporre.`);
-    return { statusCode: 200, body: JSON.stringify({ changes: priceChanges }) };
+    return { 
+        statusCode: 200, 
+        headers: { "Content-Type": "application/json" }, // <-- CORREZIONE FONDAMENTALE
+        body: JSON.stringify({ changes: priceChanges }) 
+    };
 
   } catch (err: any) {
     console.error("[preview-recalc] Errore:", err);
