@@ -1,121 +1,188 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="it" x-data="app()" x-init="init()">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Sync Inventario</title>
-  <!-- Alpine.js via CDN -->
-  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
+  <!-- Bootstrap 5 CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+    integrity="sha384-ENjdO4Dr2bkBIFxQpeoA6uH5f5b7u1F3yF7G5kq5R5h5oJw1yNVh+8WvCWPIPm49"
+    crossorigin="anonymous"
+  />
+
+  <!-- Alpine.js -->
+  <script
+    src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"
+    defer
+  ></script>
+
   <style>
-    body { font-family: sans-serif; margin:20px; }
-    nav button { margin-right:10px; padding:5px 10px; }
-    section { display: none; }
-    section.active { display: block; margin-top:20px; }
-    table { width:100%; border-collapse:collapse; margin-top:10px; }
-    th,td { border:1px solid #ccc; padding:8px; text-align:left; }
-    input, button { margin:5px 0; }
+    body { padding-top: 2rem; }
+    table th, table td { vertical-align: middle; }
   </style>
 </head>
-<body x-data="app()" x-init="init()">
+<body class="bg-light">
 
-  <h1>Inventory Sync</h1>
-  <nav>
-    <button @click="tab='upload'">Importa</button>
-    <button @click="tab='review'">Revisione</button>
-    <button @click="tab='markup'">Markup</button>
-    <button @click="tab='logs'">Log</button>
-  </nav>
+  <div class="container">
+    <h1 class="mb-4">Inventory Sync</h1>
 
-  <!-- 1) IMPORTAZIONE EXCEL -->
-  <section :class="{ 'active': tab==='upload' }">
-    <h2>Importa Inventario</h2>
-    <input type="file" @change="onFileChange"/>
-    <button @click="uploadFile()">Importa</button>
-    <div style="color:green; margin-top:10px;" x-text="uploadStatus"></div>
-  </section>
+    <!-- Nav Tabs -->
+    <ul class="nav nav-tabs mb-4">
+      <li class="nav-item">
+        <a class="nav-link" :class="{ 'active': tab==='upload' }" @click.prevent="tab='upload'" href="#">Importa</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" :class="{ 'active': tab==='review' }" @click.prevent="tab='review'" href="#">Revisione</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" :class="{ 'active': tab==='markup' }" @click.prevent="tab='markup'" href="#">Markup</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" :class="{ 'active': tab==='logs' }" @click.prevent="tab='logs'" href="#">Log</a>
+      </li>
+    </ul>
 
-  <!-- 2) REVISONE MODIFICHE -->
-  <section :class="{ 'active': tab==='review' }">
-    <h2>Revisione Modifiche</h2>
-    <button @click="approveSelected()">Approva Selezionati</button>
-    <table>
-      <thead>
-        <tr>
-          <th><input type="checkbox" @click="toggleAll($event)"/></th>
-          <th>MINSAN</th>
-          <th>Old Qty → New Qty</th>
-          <th>Old Price → New Price</th>
-        </tr>
-      </thead>
-      <tbody>
-        <template x-for="u in updates" :key="u.id">
-          <tr>
-            <td><input type="checkbox" x-model="u.sel"/></td>
-            <td x-text="u.minsan"></td>
-            <td x-text="u.old_qty + ' → ' + u.new_qty"></td>
-            <td x-text="u.old_price.toFixed(2) + ' → ' + u.new_price.toFixed(2)"></td>
-          </tr>
+    <!-- 1) IMPORTAZIONE EXCEL -->
+    <section x-show="tab==='upload'" class="card p-4 mb-4">
+      <h2 class="h5 mb-3">Importa Inventario</h2>
+      <div class="mb-3">
+        <input type="file" class="form-control" @change="onFileChange" />
+      </div>
+      <button class="btn btn-primary" @click="uploadFile()">Avvia Importazione</button>
+
+      <!-- Barra di avanzamento -->
+      <div class="progress mt-3" x-show="uploadProgress !== null">
+        <div
+          class="progress-bar"
+          role="progressbar"
+          :style="'width: ' + uploadProgress + '%'"
+          x-text="uploadProgress + '%'"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        ></div>
+      </div>
+
+      <div class="mt-3 text-success" x-text="uploadStatus"></div>
+    </section>
+
+    <!-- 2) REVISIONE MODIFICHE -->
+    <section x-show="tab==='review'" class="card p-4 mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 m-0">Revisione Modifiche</h2>
+        <button class="btn btn-success" @click="approveSelected()">Approva Selezionati</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-striped table-bordered">
+          <thead class="table-light">
+            <tr>
+              <th><input type="checkbox" @click="toggleAll($event)" /></th>
+              <th>MINSAN</th>
+              <th>Qty (Old → New)</th>
+              <th>Prezzo (Old → New)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="u in updates" :key="u.id">
+              <tr>
+                <td><input type="checkbox" x-model="u.sel" /></td>
+                <td x-text="u.minsan"></td>
+                <td x-text="u.old_qty + ' → ' + u.new_qty"></td>
+                <td x-text="u.old_price.toFixed(2) + ' → ' + u.new_price.toFixed(2)"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 3) GESTIONE MARKUP -->
+    <section x-show="tab==='markup'" class="card p-4 mb-4">
+      <h2 class="h5 mb-3">Gestione Markup</h2>
+      <div class="table-responsive mb-4">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>Nome Ditta</th>
+              <th>Markup (%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="c in companies" :key="c.id">
+              <tr>
+                <td x-text="c.name"></td>
+                <td x-text="c.markup_pct.toFixed(2)"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+      <div class="mb-4">
+        <h3 class="h6" x-text="form.id ? 'Modifica Ditta' : 'Aggiungi Nuova Ditta'"></h3>
+        <form @submit.prevent="saveCompany" class="row g-3 align-items-end">
+          <input type="hidden" x-model="form.id" />
+          <div class="col-md-6">
+            <label class="form-label">Nome</label>
+            <input type="text" class="form-control" x-model="form.name" required />
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Markup (%)</label>
+            <input type="number" class="form-control" x-model="form.markup_pct" step="0.01" required />
+          </div>
+          <div class="col-md-2 d-flex">
+            <button class="btn btn-primary me-2" type="submit">Salva</button>
+            <button class="btn btn-secondary" type="button" @click="formReset()">Annulla</button>
+          </div>
+        </form>
+      </div>
+      <button class="btn btn-outline-info mb-3" @click="previewMarkup()">Anteprima Ricalcolo</button>
+      <ul class="list-group">
+        <template x-for="p in preview" :key="p.minsan">
+          <li class="list-group-item">
+            <strong x-text="p.minsan"></strong>:
+            <span x-text="p.old_price.toFixed(2) + ' → ' + p.new_price.toFixed(2)"></span>
+          </li>
         </template>
-      </tbody>
-    </table>
-  </section>
+      </ul>
+    </section>
 
-  <!-- 3) GESTIONE MARKUP -->
-  <section :class="{ 'active': tab==='markup' }">
-    <h2>Gestione Markup</h2>
-    <table>
-      <thead>
-        <tr><th>Nome Ditta</th><th>Markup (%)</th></tr>
-      </thead>
-      <tbody>
-        <template x-for="c in companies" :key="c.id">
-          <tr>
-            <td x-text="c.name"></td>
-            <td x-text="c.markup_pct.toFixed(2)"></td>
-          </tr>
-        </template>
-      </tbody>
-    </table>
-    <h3>Aggiungi / Modifica</h3>
-    <form @submit.prevent="saveCompany()">
-      <input type="hidden" x-model="form.id"/>
-      <label>
-        Nome: <input type="text" x-model="form.name" required/>
-      </label><br/>
-      <label>
-        Markup: <input type="number" x-model="form.markup_pct" step="0.01" required/>
-      </label><br/>
-      <button type="submit">Salva</button>
-      <button type="button" @click="formReset()">Annulla</button>
-    </form>
-    <button @click="previewMarkup()">Anteprima Ricalcolo</button>
-    <div>
-      <template x-for="p in preview" :key="p.minsan">
-        <div x-text="p.minsan + ': ' + p.old_price.toFixed(2) + ' → ' + p.new_price.toFixed(2)"></div>
-      </template>
-    </div>
-  </section>
+    <!-- 4) LOG AGGIORNAMENTI -->
+    <section x-show="tab==='logs'" class="card p-4 mb-4">
+      <h2 class="h5 mb-3">Log Aggiornamenti</h2>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover">
+          <thead class="table-light">
+            <tr>
+              <th>Data</th>
+              <th>MINSAN</th>
+              <th>Azione</th>
+              <th>Esito</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="l in logs" :key="l.id">
+              <tr>
+                <td x-text="new Date(l.executed_at).toLocaleString()"></td>
+                <td x-text="l.minsan"></td>
+                <td x-text="l.action"></td>
+                <td>
+                  <span
+                    class="badge"
+                    :class="l.status==='success' ? 'bg-success' : 'bg-danger'"
+                    x-text="l.status"
+                  ></span>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
 
-  <!-- 4) LOG AGGIORNAMENTI -->
-  <section :class="{ 'active': tab==='logs' }">
-    <h2>Log Aggiornamenti</h2>
-    <table>
-      <thead>
-        <tr><th>Data</th><th>MINSAN</th><th>Azione</th><th>Esito</th></tr>
-      </thead>
-      <tbody>
-        <template x-for="l in logs" :key="l.id">
-          <tr>
-            <td x-text="new Date(l.executed_at).toLocaleString()"></td>
-            <td x-text="l.minsan"></td>
-            <td x-text="l.action"></td>
-            <td x-text="l.status"></td>
-          </tr>
-        </template>
-      </tbody>
-    </table>
-  </section>
-
-  <!-- Alpine.js logic -->
+  <!-- Alpine.js App Logic -->
   <script>
     function app() {
       return {
@@ -123,46 +190,70 @@
         importId: '',
         file: null,
         uploadStatus: '',
+        uploadProgress: null,
         updates: [],
         companies: [],
+        form: { id: '', name: '', markup_pct: 0 },
         preview: [],
         logs: [],
+
         init() {
-          // su init, carica le tabelle (se importId già presente)
           if (this.importId) this.loadUpdates();
           this.loadCompanies();
           this.loadLogs();
         },
+
         onFileChange(e) {
           this.file = e.target.files[0];
           this.uploadStatus = '';
+          this.uploadProgress = 0;
         },
-        async uploadFile() {
+
+        uploadFile() {
           if (!this.file) return alert('Seleziona un file Excel');
           this.uploadStatus = 'Importazione in corso…';
+          this.uploadProgress = 0;
           const form = new FormData();
           form.append('file', this.file);
-          const res = await fetch('/.netlify/functions/upload', {
-            method: 'POST',
-            body: form
+
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', '/.netlify/functions/upload');
+
+          xhr.upload.addEventListener('progress', e => {
+            if (e.lengthComputable) {
+              this.uploadProgress = Math.round((e.loaded / e.total) * 100);
+            }
           });
-          if (!res.ok) {
-            this.uploadStatus = 'Errore: ' + await res.text();
-            return;
-          }
-          const { import_id, rows_imported } = await res.json();
-          this.importId = import_id;
-          this.uploadStatus = `Importate ${rows_imported} righe (import_id: ${import_id})`;
-          this.loadUpdates();
+
+          xhr.addEventListener('load', async () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              const { import_id, rows_imported } = JSON.parse(xhr.responseText);
+              this.importId = import_id;
+              this.uploadStatus = `Importate ${rows_imported} righe (import_id: ${import_id})`;
+              this.uploadProgress = 100;
+              this.loadUpdates();
+            } else {
+              this.uploadStatus = `Errore: ${xhr.responseText}`;
+            }
+          });
+
+          xhr.addEventListener('error', () => {
+            this.uploadStatus = 'Errore di rete durante l\'upload';
+          });
+
+          xhr.send(form);
         },
+
         async loadUpdates() {
           if (!this.importId) return;
           const r = await fetch(`/.netlify/functions/list-updates?import_id=${this.importId}`);
           this.updates = (await r.json()).map(u => ({ ...u, sel: false }));
         },
+
         toggleAll(e) {
-          this.updates.forEach(u => u.sel = e.target.checked);
+          this.updates.forEach(u => (u.sel = e.target.checked));
         },
+
         async approveSelected() {
           const ids = this.updates.filter(u => u.sel).map(u => u.id);
           if (!ids.length) return alert('Seleziona almeno una modifica');
@@ -178,19 +269,21 @@
             alert(await r.text());
           }
         },
+
         async loadCompanies() {
           const r = await fetch('/.netlify/functions/companies');
           this.companies = await r.json();
         },
-        form: { id:'', name:'', markup_pct:0 },
+
         formReset() {
-          this.form = { id:'', name:'', markup_pct:0 };
+          this.form = { id: '', name: '', markup_pct: 0 };
         },
+
         async saveCompany() {
           const url = '/.netlify/functions/companies';
           const opts = {
             method: this.form.id ? 'PATCH' : 'POST',
-            headers: {'Content-Type':'application/json'},
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(this.form)
           };
           const r = await fetch(url, opts);
@@ -201,10 +294,12 @@
             alert(await r.text());
           }
         },
+
         async previewMarkup() {
-          const r = await fetch('/.netlify/functions/preview-markup', { method:'POST' });
+          const r = await fetch('/.netlify/functions/preview-markup', { method: 'POST' });
           this.preview = await r.json();
         },
+
         async loadLogs() {
           const r = await fetch('/.netlify/functions/logs');
           this.logs = await r.json();
@@ -212,5 +307,12 @@
       }
     }
   </script>
+
+  <!-- Bootstrap 5 JS Bundle -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-qm4z+1fQYsrMJDQ7q3u+u9E+eF+jAE+amYHegQ6UnATrZD+YWHa0G+FxP0iQYzR8"
+    crossorigin="anonymous"
+  ></script>
 </body>
 </html>
