@@ -10,9 +10,20 @@ interface ProductData {
 }
 interface ShopifyVariant {
   id: string;
+  sku: string; // Aggiunto per la mappatura
   price: string;
   product: { id: string };
 }
+// --- NUOVA INTERFACCIA PER UNA TIPizzazione SICURA ---
+interface ShopifyGraphQLResponse {
+  data?: {
+    productVariants?: {
+      edges: { node: ShopifyVariant }[];
+    };
+  };
+  errors?: { message: string }[];
+}
+
 
 // --- HELPER PER SHOPIFY ---
 async function executeShopifyMutation(domain: string, token: string, query: string, variables: object) {
@@ -22,7 +33,7 @@ async function executeShopifyMutation(domain: string, token: string, query: stri
     headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
     body: JSON.stringify({ query, variables }),
   });
-  const json = (await res.json()) as any;
+  const json = await res.json() as any;
   const errs = json.data?.productVariantsBulkUpdate?.userErrors || json.errors || [];
   if (errs.length > 0) {
     const msg = errs.map((e: any) => e.message).join("; ");
@@ -49,7 +60,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       return { statusCode: 400, body: JSON.stringify({ error: "Nome ditta mancante" }) };
     }
 
-    // 1. Prende il markup aggiornato per la ditta
     const { data: markupData, error: mError } = await supabase
       .from("company_markups")
       .select("markup_percentage")
@@ -58,7 +68,6 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     if (mError || !markupData) throw new Error("Markup non trovato per la ditta.");
     const markup = markupData.markup_percentage;
 
-    // 2. Prende l'ultimo record valido per ogni prodotto di quella ditta
     const { data: products, error: pError } = await supabase.rpc('get_latest_products_by_ditta', { ditta_name: ditta });
     if (pError) throw pError;
     if (!products || products.length === 0) {
@@ -67,9 +76,15 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     // 3. Interroga Shopify per i dati attuali
     const skusQuery = products.map((p: ProductData) => `sku:'${p.minsan}'`).join(' OR ');
-    const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id price product { id } } } } }`;
-    const shopifyResponse = await (await fetch(`https://${SHOPIFY_STORE_NAME}/admin/api/2024-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as any;
-    const shopifyVariantsMap = new Map(shopifyResponse.data?.productVariants?.edges?.map((edge: any) => [edge.node.sku, edge.node]) || []);
+    // --- QUERY AGGIORNATA PER INCLUDERE SKU ---
+    const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku price product { id } } } } }`;
+    const shopifyResponse = await (await fetch(`https://${SHOPIFY_STORE_NAME}/admin/api/2024-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
+    
+    if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map(e => e.message).join(', ')}`);
+
+    const shopifyVariants = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
+    const shopifyVariantsMap = new Map<string, ShopifyVariant>(shopifyVariants.map(v => [v.sku, v]));
+
 
     // 4. Calcola i nuovi prezzi e prepara l'aggiornamento di massa
     const variantsToUpdate: any[] = [];
