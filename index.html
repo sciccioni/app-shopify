@@ -59,7 +59,7 @@
     </div>
   </nav>
 
-  <!-- Main container with Alpine -->
+  <!-- Main container -->
   <div class="container mt-4" x-data="app()" x-init="init()">
 
     <!-- UPLOAD SECTION -->
@@ -84,11 +84,10 @@
       </div>
     </section>
 
-    <!-- ...le altre sezioni (review, markup, logs, data) rimangono invariate... -->
+    <!-- REVISIONE, MARKUP, LOG, DATI sections as before… -->
 
   </div>
 
-  <!-- Alpine.js App Logic -->
   <script>
     function app() {
       return {
@@ -97,13 +96,7 @@
         file: null,
         uploadStatus: '',
         uploadProgress: null,
-        updates: [],
-        companies: [],
-        form: { id:'', name:'', markup_pct:0 },
-        preview: [],
-        logs: [],
-        staging: [],
-        normalized: [],
+        // …altri stati: updates, companies, logs, staging, normalized, etc.
 
         init() {
           this.loadCompanies();
@@ -117,7 +110,7 @@
         },
 
         uploadFile() {
-          if (!this.file) return alert('Seleziona file Excel');
+          if (!this.file) return alert('Seleziona un file Excel');
           this.uploadStatus = 'Importazione in corso…';
           this.uploadProgress = 0;
           const form = new FormData();
@@ -139,7 +132,7 @@
               this.uploadStatus = `Importate ${rows_imported} righe… Normalizzazione in corso`;
               this.uploadProgress = 100;
 
-              // Normalize
+              // NORMALIZE
               const normRes = await fetch('/.netlify/functions/normalize', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -154,35 +147,40 @@
 
               this.uploadStatus = 'Confronto in corso…';
 
-              // Compare
+              // COMPARE
               const cmpRes = await fetch('/.netlify/functions/compare', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ import_id })
               });
-              let cmpJson;
-              try {
-                cmpJson = await cmpRes.json();
-              } catch(err) {
-                this.uploadStatus = `Errore parsing JSON compare: ${err.message}`;
-                console.error('Compare parse error', await cmpRes.text());
-                return;
+              // leggi come testo per gestire body vuoti
+              const cmpText = await cmpRes.text();
+              let cmpJson = {};
+              if (cmpText.trim()) {
+                try {
+                  cmpJson = JSON.parse(cmpText);
+                } catch (e) {
+                  this.uploadStatus = `Errore parsing JSON compare: ${e.message}`;
+                  console.error('Compare raw response:', cmpText);
+                  return;
+                }
               }
               if (!cmpRes.ok) {
-                this.uploadStatus = `Errore confronto: ${cmpJson.error}`;
+                this.uploadStatus = `Errore confronto: ${cmpJson.error || cmpText}`;
                 console.error('Compare Error', cmpJson);
                 return;
               }
 
-              this.uploadStatus = `Pronte ${cmpJson.updates_count} modifiche. Caricamento dati…`;
+              const count = cmpJson.updates_count ?? 0;
+              this.uploadStatus = `Pronte ${count} modifiche. Caricamento dati…`;
 
-              // Aggiorna tutte le viste
+              // AGGIORNA TUTTE LE VISTE
               this.loadUpdates();
               await this.loadStagesAndNormalized();
               this.loadCompanies();
               this.loadLogs();
 
-              this.uploadStatus = `Pronte ${cmpJson.updates_count} modifiche. Tutto aggiornato.`;
+              this.uploadStatus = `Completato: ${count} modifiche pronte.`;
             } else {
               this.uploadStatus = `Errore upload: ${xhr.responseText}`;
               console.error('Upload Error', xhr.responseText);
@@ -196,12 +194,12 @@
           xhr.send(form);
         },
 
-        /* ...gli altri metodi (loadUpdates, loadStagesAndNormalized, loadCompanies, loadLogs, etc.) ... */
+        // …qui vanno tutti gli altri metodi: loadUpdates, loadStagesAndNormalized,
+        // loadCompanies, loadLogs, loadStaging, loadNormalized, saveCompany, previewMarkup, etc.
       }
     }
   </script>
 
-  <!-- Bootstrap JS Bundle -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
