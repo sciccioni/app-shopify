@@ -128,44 +128,35 @@
 
             <!-- Pannello Revisione Modifiche -->
             <div id="panel-reviews" class="hidden">
-                <!-- Sezione Statistiche -->
-                <div class="mb-8 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Riepilogo Importazione</h2>
-                    <div id="stats-loader" class="text-center"><p>Caricamento statistiche...</p></div>
-                    <div id="stats-container" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                        <div><p class="text-2xl font-bold text-indigo-600" id="stats-total-rows">0</p><p class="text-sm text-gray-500">Righe nel File</p></div>
-                        <div><p class="text-2xl font-bold text-indigo-600" id="stats-unique-products">0</p><p class="text-sm text-gray-500">Prodotti Unici</p></div>
-                        <div><p class="text-2xl font-bold text-green-600" id="stats-products-to-update">0</p><p class="text-sm text-gray-500">Prodotti da Aggiornare</p></div>
-                        <div><p class="text-2xl font-bold text-yellow-600" id="stats-new-companies">0</p><p class="text-sm text-gray-500">Ditte Nuove</p></div>
-                    </div>
-                <!-- Elenco Ditte mancanti -->
-                <div class="mt-6">
-                    <h3 class="text-lg font-medium text-gray-800">Ditte mancanti</h3>
-                
-                    <!-- loader -->
-                    <div id="loader-ditte-mancanti" class="text-center">
-                        <p class="text-gray-600">Caricamento…</p>
-                    </div>
-                
-                    <!-- pulsanti per ogni ditta nuova -->
-                    <div id="ditte-mancanti-container" class="space-y-2 mt-2"></div>
-                </div>
-                    
-                </div>
-                <!-- Tabella Modifiche -->
-                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
-                        <h2 class="text-xl font-semibold text-gray-800">Proposte di Aggiornamento</h2>
-                        <div class="flex items-center space-x-2">
-                            <button id="confirmButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm flex items-center">Conferma Selezionati</button>
+                 <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <div id="reviews-content">
+                        <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+                            <h2 class="text-xl font-semibold text-gray-800">Proposte di Aggiornamento</h2>
+                            <div class="flex items-center space-x-2">
+                                <button id="confirmButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm flex items-center">Conferma Selezionati</button>
+                            </div>
+                        </div>
+                        <div id="loader-reviews" class="text-center p-8"><p class="text-gray-600">Caricamento delle modifiche...</p></div>
+                        <div class="overflow-x-auto">
+                            <table id="updatesTable" class="display w-full hidden">
+                                <thead><tr><th><input type="checkbox" id="selectAll"></th><th>Prodotto</th><th>Minsan</th><th>Ditta</th><th>Giacenza</th><th>Prezzo (€)</th><th>Prezzo Barrato (€)</th><th>Costo (€)</th><th>Scadenza</th><th>Azioni</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
                         </div>
                     </div>
-                    <div id="loader-reviews" class="text-center p-8"><p class="text-gray-600">Caricamento delle modifiche...</p></div>
-                    <div class="overflow-x-auto">
-                        <table id="updatesTable" class="display w-full hidden">
-                            <thead><tr><th><input type="checkbox" id="selectAll"></th><th>Prodotto</th><th>Minsan</th><th>Ditta</th><th>Giacenza</th><th>Prezzo (€)</th><th>Prezzo Barrato (€)</th><th>Costo (€)</th><th>Scadenza</th><th>Azioni</th></tr></thead>
-                            <tbody></tbody>
-                        </table>
+                    <div id="bulk-update-progress" class="hidden text-center p-8">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4">Aggiornamento in Corso...</h2>
+                        <div class="w-full bg-gray-200 rounded-full h-4">
+                            <div id="bulk-progress-bar" class="bg-blue-600 h-4 rounded-full text-xs font-medium text-blue-100 text-center p-0.5 leading-none" style="width: 0%">0%</div>
+                        </div>
+                        <div class="mt-4 text-gray-600">
+                            <span id="progress-counter">0</span> di <span id="progress-total">0</span> prodotti processati.
+                        </div>
+                        <div class="mt-2 flex justify-center space-x-4">
+                            <span class="text-green-600">✅ Successi: <span id="progress-success">0</span></span>
+                            <span class="text-red-600">❌ Errori: <span id="progress-errors">0</span></span>
+                        </div>
+                        <div id="final-status" class="mt-6"></div>
                     </div>
                 </div>
             </div>
@@ -173,17 +164,18 @@
             <!-- Pannello Gestione Markup -->
             <div id="panel-markups" class="hidden">
                  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div class="lg:col-span-1 space-y-8">
+                    <div class="lg:col-span-1">
                         <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                             <h3 class="text-lg font-semibold text-gray-800">Aggiungi Nuova Ditta</h3>
+                            <p class="mt-1 text-sm text-gray-500">Inserisci una ditta e il suo markup manualmente.</p>
                             <form id="addMarkupForm" class="mt-4 space-y-4">
                                 <div>
                                     <label for="newDitta" class="block text-sm font-medium text-gray-700">Nome Ditta</label>
-                                    <input type="text" id="newDitta" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                    <input type="text" id="newDitta" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label for="newMarkup" class="block text-sm font-medium text-gray-700">Markup (%)</label>
-                                    <input type="number" step="0.01" id="newMarkup" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                    <input type="number" step="0.01" id="newMarkup" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Aggiungi</button>
                             </form>
@@ -192,7 +184,7 @@
                     </div>
                     <div class="lg:col-span-2">
                         <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                            <h2 class="text-xl font-semibold text-gray-800 mb-6">Markup Registrati</h2>
+                            <h2 class="text-xl font-semibold text-gray-800">Markup Registrati</h2>
                             <div id="loader-markups" class="text-center p-8"><p class="text-gray-600">Caricamento...</p></div>
                             <div id="markups-container" class="overflow-x-auto"></div>
                         </div>
@@ -208,6 +200,22 @@
                     <div id="loader-logs" class="text-center p-8"><p class="text-gray-600">Caricamento log...</p></div>
                     <div id="logs-container" class="overflow-x-auto mt-4"></div>
                  </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NUOVA FINESTRA MODALE PER ANTEPRIMA -->
+    <div id="recalc-modal" class="modal-overlay hidden">
+        <div class="bg-white rounded-lg shadow-xl m-4 max-w-3xl w-full max-h-[90vh] flex flex-col">
+            <div class="p-6 border-b">
+                <h3 class="text-xl font-semibold text-gray-800">Anteprima Ricalcolo Prezzi</h3>
+                <p class="text-sm text-gray-500">Questi prezzi verranno aggiornati su Shopify. Sei sicuro di voler procedere?</p>
+            </div>
+            <div id="modal-loader" class="text-center p-8"><p>Caricamento anteprima...</p></div>
+            <div id="modal-content" class="p-6 overflow-y-auto"></div>
+            <div class="p-6 border-t bg-gray-50 flex justify-end space-x-3">
+                <button id="modal-cancel" class="bg-white hover:bg-gray-100 text-gray-700 font-medium py-2 px-4 rounded-lg border">Annulla</button>
+                <button id="modal-confirm" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Conferma e Aggiorna</button>
             </div>
         </div>
     </div>
@@ -246,7 +254,6 @@
             if (importId) {
                 switchTab('#tab-reviews');
                 loadPendingUpdates(importId);
-                loadImportStats(importId);
                 $('nav a').removeClass('opacity-50 pointer-events-none');
             } else {
                 switchTab('#tab-upload');
@@ -267,22 +274,6 @@
                 }
             });
 
-            // gestisce la sezione “ditte mancanti”
-$('#loader-ditte-mancanti').hide();
-const container = $('#ditte-mancanti-container').empty();
-
-if (data.stats.newCompanies.length) {
-    data.stats.newCompanies.forEach(name => {
-        container.append(`
-            <button class="add-new-ditta-btn w-full text-left text-sm p-2
-                            bg-gray-100 hover:bg-gray-200 rounded-md">
-                ${name}
-            </button>
-        `);
-    });
-} else {
-    container.html('<p class="text-sm text-gray-500">Nessuna ditta nuova trovata.</p>');
-}
             // --- LOGICA UPLOAD FILE ---
             $('#uploadForm').on('submit', async (event) => {
                 event.preventDefault();
@@ -390,41 +381,7 @@ if (data.stats.newCompanies.length) {
                 });
             }
 
-            // --- LOGICA STATISTICHE E GESTIONE MARKUP ---
-            function loadImportStats(id) {
-                const loader = $('#stats-loader');
-                const container = $('#stats-container');
-                loader.show();
-                container.hide();
-
-                $.ajax({
-                    url: `/api/get-import-stats?import_id=${id}`,
-                    method: 'GET',
-                    success: function(data) {
-                        loader.hide();
-                        container.show();
-                        $('#stats-total-rows').text(data.stats.totalRows);
-                        $('#stats-unique-products').text(data.stats.uniqueProductCount);
-                        $('#stats-products-to-update').text(data.stats.productsToUpdate);
-                        $('#stats-new-companies').text(data.stats.newCompanies.length);
-                        
-                        const ditteMancantiContainer = $('#ditte-mancanti-container');
-                        $('#loader-ditte-mancanti').hide();
-                        ditteMancantiContainer.empty();
-                        if (data.stats.newCompanies.length > 0) {
-                            const list = $('<div class="space-y-2"></div>');
-                            data.stats.newCompanies.forEach(ditta => {
-                                list.append(`<button class="add-new-ditta-btn w-full text-left text-sm p-2 bg-gray-100 hover:bg-gray-200 rounded-md">${ditta}</button>`);
-                            });
-                            ditteMancantiContainer.append(list);
-                        } else {
-                            ditteMancantiContainer.html('<p class="text-sm text-gray-500">Nessuna ditta nuova trovata in questo import.</p>');
-                        }
-                    },
-                    error: (xhr) => loader.html(`<p class="text-red-500">Errore caricamento statistiche.</p>`)
-                });
-            }
-            
+            // --- LOGICA GESTIONE MARKUP ---
             function loadMarkups() {
                 const container = $('#markups-container');
                 const loader = $('#loader-markups');
@@ -440,19 +397,13 @@ if (data.stats.newCompanies.length) {
                         const table = $('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-4 py-2 text-left">Ditta</th><th class="px-4 py-2 text-left">Markup (%)</th><th class="px-4 py-2"></th></tr></thead><tbody></tbody></table>');
                         const tbody = table.find('tbody');
                         data.markups.forEach(m => {
-                            tbody.append(`<tr data-id="${m.id}"><td class="px-4 py-2 font-medium">${m.ditta}</td><td class="px-4 py-2"><input type="number" step="0.01" class="markup-input w-24 rounded-md" value="${m.markup_percentage}"></td><td class="px-4 py-2 text-right"><button class="save-markup-btn text-indigo-600 text-sm">Salva</button><button class="delete-markup-btn text-red-600 text-sm ml-2">Elimina</button></td></tr>`);
+                            tbody.append(`<tr data-id="${m.id}" data-ditta="${m.ditta}"><td class="px-4 py-2 font-medium">${m.ditta}</td><td class="px-4 py-2"><input type="number" step="0.01" class="markup-input w-24 rounded-md" value="${m.markup_percentage}"></td><td class="px-4 py-2 text-right action-cell"><button class="save-markup-btn text-indigo-600 text-sm">Salva</button><button class="delete-markup-btn text-red-600 text-sm ml-2">Elimina</button></td></tr>`);
                         });
                         container.append(table);
                     },
                     error: (xhr) => loader.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
                 });
             }
-
-            $('#ditte-mancanti-container').on('click', '.add-new-ditta-btn', function() {
-                const dittaName = $(this).text();
-                $('#newDitta').val(dittaName);
-                $('#newMarkup').focus();
-            });
 
             $('#addMarkupForm').on('submit', function(e) {
                 e.preventDefault();
@@ -469,17 +420,17 @@ if (data.stats.newCompanies.length) {
                         statusDiv.html('<p class="text-green-600">Ditta aggiunta!</p>');
                         $('#addMarkupForm')[0].reset();
                         loadMarkups();
-                        if (importId) loadImportStats(importId);
                         setTimeout(() => statusDiv.empty(), 3000);
                     },
                     error: (xhr) => statusDiv.html(`<p class="text-red-600">${xhr.responseJSON?.error || "Errore."}</p>`)
                 });
             });
 
-            $('#markups-registrati-container').on('click', '.save-markup-btn', function() {
+            $('#markups-container').on('click', '.save-markup-btn', function() {
                 const btn = $(this);
                 const row = btn.closest('tr');
                 const id = row.data('id');
+                const ditta = row.data('ditta');
                 const percentage = row.find('.markup-input').val();
                 
                 btn.text('Salvataggio...').prop('disabled', true);
@@ -490,8 +441,8 @@ if (data.stats.newCompanies.length) {
                     contentType: 'application/json',
                     data: JSON.stringify({ id: id, markup_percentage: percentage }),
                     success: function() {
-                        alert('Markup salvato!');
-                        btn.text('Salva').prop('disabled', false);
+                        const actionCell = row.find('.action-cell');
+                        actionCell.html(`<span class="text-green-600 font-medium">✔ Salvato</span><button class="recalc-preview-btn ml-4 text-blue-600 hover:text-blue-900 text-sm" data-ditta="${ditta}">Anteprima Ricalcolo</button>`);
                     },
                     error: (xhr) => {
                         alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
@@ -500,7 +451,64 @@ if (data.stats.newCompanies.length) {
                 });
             });
 
-            $('#markups-registrati-container').on('click', '.delete-markup-btn', function() {
+            $('#markups-container').on('click', '.recalc-preview-btn', function() {
+                const btn = $(this);
+                const ditta = btn.data('ditta');
+                
+                $('#modal-loader').show();
+                $('#modal-content').empty();
+                $('#recalc-modal').removeClass('hidden');
+
+                $.ajax({
+                    url: '/api/preview-recalculation',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ ditta: ditta }),
+                    success: function(data) {
+                        console.log("Dati ricevuti per l'anteprima:", data); // LOG DI DEBUG
+                        $('#modal-loader').hide();
+                        if (!data.changes || data.changes.length === 0) {
+                            $('#modal-content').html('<p>Nessun prezzo da aggiornare per questa ditta.</p>');
+                            $('#modal-confirm').prop('disabled', true);
+                            return;
+                        }
+                        
+                        $('#modal-confirm').prop('disabled', false).data('updates', data.changes);
+                        const table = $('<table class="min-w-full"><thead><tr><th class="text-left py-2">Prodotto</th><th class="text-left py-2">Prezzo Precedente</th><th class="text-left py-2">Nuovo Prezzo</th></tr></thead><tbody></tbody></table>');
+                        const tbody = table.find('tbody');
+                        data.changes.forEach(c => {
+                            tbody.append(`<tr><td class="py-1">${c.product_title}</td><td class="py-1">${c.old_price}</td><td class="py-1 font-bold text-green-600">${c.new_price}</td></tr>`);
+                        });
+                        $('#modal-content').append(table);
+                    },
+                    error: (xhr) => $('#modal-loader').html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
+                });
+            });
+
+            $('#modal-cancel').on('click', () => $('#recalc-modal').addClass('hidden'));
+            $('#modal-confirm').on('click', function() {
+                const btn = $(this);
+                const updates = btn.data('updates');
+                
+                btn.prop('disabled', true).text('Aggiornamento...');
+
+                $.ajax({
+                    url: '/api/apply-recalculation',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ updates: updates }),
+                    success: function(data) {
+                        alert(data.message);
+                        $('#recalc-modal').addClass('hidden');
+                    },
+                    error: (xhr) => {
+                        alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
+                        btn.prop('disabled', false).text('Conferma e Aggiorna');
+                    }
+                });
+            });
+
+            $('#markups-container').on('click', '.delete-markup-btn', function() {
                 if (!confirm("Sei sicuro di voler eliminare questo markup?")) return;
                 
                 const row = $(this).closest('tr');
@@ -518,52 +526,7 @@ if (data.stats.newCompanies.length) {
                 });
             });
 
-            // --- GESTIONE BOTTONI ---
-            function applyUpdates(updateIds, btnElement) {
-                if (updateIds.length === 0) {
-                    alert("Nessuna modifica selezionata.");
-                    return;
-                }
-
-                if (!confirm(`Sei sicuro di voler applicare ${updateIds.length} modifiche su Shopify? L'operazione non è reversibile.`)) {
-                    return;
-                }
-
-                const originalText = btnElement.text();
-                btnElement.prop('disabled', true).text('Applicazione...');
-
-                $.ajax({
-                    url: '/api/apply-updates',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({ import_id: importId, update_ids: updateIds }),
-                    success: function(data) {
-                        alert(`Processo completato!\nSuccessi: ${data.success}\nErrori: ${data.errors}`);
-                        if (btnElement.hasClass('sync-single-btn')) {
-                            const row = updatesTable.row(btnElement.closest('tr'));
-                            row.remove().draw(false);
-                        } else {
-                            btnElement.prop('disabled', false).text(originalText);
-                            loadPendingUpdates(importId); 
-                        }
-                    },
-                    error: function(xhr) {
-                        alert(`Errore critico: ${xhr.responseJSON?.error || "Sconosciuto"}`);
-                        btnElement.prop('disabled', false).text(originalText);
-                    }
-                });
-            }
-
-            $('#confirmButton').on('click', function() {
-                const selectedUpdates = updatesTable.rows({ search: 'applied' }).nodes().to$().find('.update-checkbox:checked').map(function() { return $(this).val(); }).get();
-                applyUpdates(selectedUpdates, $(this));
-            });
-
-            $('#updatesTable tbody').on('click', '.sync-single-btn', function () {
-                const updateId = $(this).data('id');
-                applyUpdates([updateId], $(this));
-            });
-            
+            // --- LOGICA TAB LOGS ---
             function loadSyncLogs() {
                 const container = $('#logs-container');
                 const loader = $('#loader-logs');
@@ -616,6 +579,77 @@ if (data.stats.newCompanies.length) {
                     error: (xhr) => loader.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
                 });
             }
+
+            // --- GESTIONE BOTTONI ---
+            $('#populateMarkupsButton').on('click', function() {
+                if (!importId) {
+                    alert("Per usare questa funzione, devi prima caricare un file.");
+                    return;
+                }
+                const btn = $(this);
+                btn.prop('disabled', true).text('Popolamento...');
+                $.ajax({
+                    url: '/api/populate-markups',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ importId: importId }),
+                    success: function(data) {
+                        alert(`Successo! Ditte analizzate: ${data.ditteAnalizzate}. Nuovi markup aggiunti: ${data.ditteAggiunte}`);
+                        btn.prop('disabled', false).text('Aggiungi Mancanti');
+                        loadMarkups();
+                    },
+                    error: (xhr) => {
+                        alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
+                        btn.prop('disabled', false).text('Aggiungi Mancanti');
+                    }
+                });
+            });
+            
+            function applyUpdates(updateIds, btnElement) {
+                if (updateIds.length === 0) {
+                    alert("Nessuna modifica selezionata.");
+                    return;
+                }
+
+                if (!confirm(`Sei sicuro di voler applicare ${updateIds.length} modifiche su Shopify? L'operazione non è reversibile.`)) {
+                    return;
+                }
+
+                const originalText = btnElement.text();
+                btnElement.prop('disabled', true).text('Applicazione...');
+
+                $.ajax({
+                    url: '/api/apply-updates',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ import_id: importId, update_ids: updateIds }),
+                    success: function(data) {
+                        alert(`Processo completato!\nSuccessi: ${data.success}\nErrori: ${data.errors}`);
+                        if (btnElement.hasClass('sync-single-btn')) {
+                            const row = updatesTable.row(btnElement.closest('tr'));
+                            row.remove().draw(false);
+                        } else {
+                            btnElement.prop('disabled', false).text(originalText);
+                            loadPendingUpdates(importId); 
+                        }
+                    },
+                    error: function(xhr) {
+                        alert(`Errore critico: ${xhr.responseJSON?.error || "Sconosciuto"}`);
+                        btnElement.prop('disabled', false).text(originalText);
+                    }
+                });
+            }
+
+            $('#confirmButton').on('click', function() {
+                const selectedUpdates = updatesTable.rows({ search: 'applied' }).nodes().to$().find('.update-checkbox:checked').map(function() { return $(this).val(); }).get();
+                applyUpdates(selectedUpdates, $(this));
+            });
+
+            $('#updatesTable tbody').on('click', '.sync-single-btn', function () {
+                const updateId = $(this).data('id');
+                applyUpdates([updateId], $(this));
+            });
+            
         });
     </script>
 </body>
