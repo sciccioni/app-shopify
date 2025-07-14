@@ -76,13 +76,25 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     // 3. Interroga Shopify per i dati attuali
     const skusQuery = products.map((p: ProductData) => `sku:'${p.minsan}'`).join(' OR ');
-    // --- QUERY AGGIORNATA PER INCLUDERE SKU ---
     const graphqlQuery = `query { productVariants(first: 250, query: "${skusQuery}") { edges { node { id sku price product { id } } } } }`;
-    const shopifyResponse = await (await fetch(`https://${SHOPIFY_STORE_NAME}/admin/api/2024-07/graphql.json`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, body: JSON.stringify({ query: graphqlQuery }) })).json() as ShopifyGraphQLResponse;
+    
+    // --- CORREZIONE: Gestione più esplicita della chiamata e del tipo di ritorno ---
+    const shopifyApiUrl = `https://${SHOPIFY_STORE_NAME}/admin/api/2024-07/graphql.json`;
+    const shopifyResponseRaw = await fetch(shopifyApiUrl, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN }, 
+        body: JSON.stringify({ query: graphqlQuery }) 
+    });
+    
+    if (!shopifyResponseRaw.ok) {
+        throw new Error(`Errore di rete da Shopify: ${shopifyResponseRaw.statusText}`);
+    }
+    
+    const shopifyResponse: ShopifyGraphQLResponse = await shopifyResponseRaw.json();
     
     if (shopifyResponse.errors) throw new Error(`Errore GraphQL: ${shopifyResponse.errors.map(e => e.message).join(', ')}`);
 
-    const shopifyVariants = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
+    const shopifyVariants: ShopifyVariant[] = shopifyResponse.data?.productVariants?.edges?.map(edge => edge.node) || [];
     const shopifyVariantsMap = new Map<string, ShopifyVariant>(shopifyVariants.map(v => [v.sku, v]));
 
 
