@@ -1,3 +1,42 @@
+// compare.ts (snippet)
+
+import { createClient } from '@supabase/supabase-js';
+// ... altri import
+
+export const handler = async (event) => {
+  const supa = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+  const { import_id } = JSON.parse(event.body);
+
+  // 1. Recupera tutti i products con vat_rate null
+  const { data: badProducts, error: fetchError } = await supa
+    .from('products')
+    .select('minsan, shopify_sku')
+    .is('vat_rate', null);
+
+  if (fetchError) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Errore fetch vat_rate: ' + fetchError.message })
+    };
+  }
+
+  if (badProducts.length > 0) {
+    // Lista i MINSAN mancanti e blocca la procedura
+    const missing = badProducts.map(p => p.minsan).join(', ');
+    return {
+      statusCode: 400,
+      body: JSON.stringify({
+        error: `I seguenti prodotti non hanno VAT configurato: ${missing}`
+      })
+    };
+  }
+
+  // 2. Prosegui col flusso di compare solo se tutti i vat_rate sono presenti
+  //    -> recupera i dati normalizzati, calcola differenze, popola pending_updates
+  // ...
+};
+
+
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import fetch from 'node-fetch';
