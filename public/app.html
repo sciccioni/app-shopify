@@ -428,7 +428,7 @@
                         const table = $('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ditta</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Markup (%)</th><th class="px-6 py-3"></th></tr></thead><tbody class="bg-white divide-y divide-gray-200"></tbody></table>');
                         const tbody = table.find('tbody');
                         data.markupsRegistrati.forEach(m => {
-                            tbody.append(`<tr class="markup-row" data-id="${m.id}" data-original-value="${m.markup_percentage}"><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${m.ditta}</td><td class="px-6 py-4"><input type="number" step="0.01" class="markup-input w-24 rounded-md" value="${m.markup_percentage}"></td><td class="px-6 py-4 text-right action-cell"><button class="save-markup-btn text-indigo-600 text-sm">Salva</button><button class="delete-markup-btn text-red-600 text-sm ml-2">Elimina</button></td></tr>`);
+                            tbody.append(`<tr class="markup-row" data-id="${m.id}" data-ditta="${m.ditta}" data-original-value="${m.markup_percentage}"><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${m.ditta}</td><td class="px-6 py-4"><input type="number" step="0.01" class="markup-input w-24 rounded-md" value="${m.markup_percentage}"></td><td class="px-6 py-4 text-right action-cell"><button class="save-markup-btn text-indigo-600 text-sm">Salva</button><button class="delete-markup-btn text-red-600 text-sm ml-2">Elimina</button></td></tr>`);
                         });
                         containerRegistrati.append(table);
 
@@ -556,6 +556,87 @@
                     error: (xhr) => {
                         alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
                         btn.prop('disabled', false).text('Aggiungi Mancanti');
+                    }
+                });
+            });
+
+            $('#markups-registrati-container').on('click', '.save-markup-btn', function() {
+                const btn = $(this);
+                const row = btn.closest('tr');
+                const id = row.data('id');
+                const ditta = row.data('ditta');
+                const percentage = row.find('.markup-input').val();
+                
+                btn.text('Salvataggio...').prop('disabled', true);
+
+                $.ajax({
+                    url: '/api/update-markup',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ id: id, markup_percentage: percentage }),
+                    success: function() {
+                        const actionCell = row.find('.action-cell');
+                        actionCell.html(`<span class="text-green-600 font-medium">✔ Salvato</span><button class="recalc-preview-btn ml-4 text-blue-600 hover:text-blue-900 text-sm" data-ditta="${ditta}">Anteprima Ricalcolo</button>`);
+                    },
+                    error: (xhr) => {
+                        alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
+                        btn.text('Salva').prop('disabled', false);
+                    }
+                });
+            });
+
+            $('#markups-registrati-container').on('click', '.recalc-preview-btn', function() {
+                const btn = $(this);
+                const ditta = btn.data('ditta');
+                
+                $('#modal-loader').show();
+                $('#modal-content').empty();
+                $('#recalc-modal').removeClass('hidden');
+
+                $.ajax({
+                    url: '/api/preview-recalculation',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ ditta: ditta }),
+                    success: function(data) {
+                        $('#modal-loader').hide();
+                        if (!data.changes || data.changes.length === 0) {
+                            $('#modal-content').html('<p>Nessun prezzo da aggiornare per questa ditta.</p>');
+                            $('#modal-confirm').prop('disabled', true);
+                            return;
+                        }
+                        
+                        $('#modal-confirm').prop('disabled', false).data('updates', data.changes);
+                        const table = $('<table class="min-w-full"><thead><tr><th class="text-left py-2">Prodotto</th><th class="text-left py-2">Prezzo Precedente</th><th class="text-left py-2">Nuovo Prezzo</th></tr></thead><tbody></tbody></table>');
+                        const tbody = table.find('tbody');
+                        data.changes.forEach(c => {
+                            tbody.append(`<tr><td class="py-1">${c.product_title}</td><td class="py-1">${c.old_price}</td><td class="py-1 font-bold text-green-600">${c.new_price}</td></tr>`);
+                        });
+                        $('#modal-content').append(table);
+                    },
+                    error: (xhr) => $('#modal-loader').html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
+                });
+            });
+
+            $('#modal-cancel').on('click', () => $('#recalc-modal').addClass('hidden'));
+            $('#modal-confirm').on('click', function() {
+                const btn = $(this);
+                const updates = btn.data('updates');
+                
+                btn.prop('disabled', true).text('Aggiornamento...');
+
+                $.ajax({
+                    url: '/api/apply-recalculation',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ updates: updates }),
+                    success: function(data) {
+                        alert(data.message);
+                        $('#recalc-modal').addClass('hidden');
+                    },
+                    error: (xhr) => {
+                        alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
+                        btn.prop('disabled', false).text('Conferma e Aggiorna');
                     }
                 });
             });
