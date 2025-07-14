@@ -176,7 +176,7 @@
                             </form>
                             <div id="addMarkupStatus" class="mt-4 text-sm"></div>
                         </div>
-                        <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <div id="new-companies-panel" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200" style="display: none;">
                             <h3 class="text-lg font-semibold text-gray-800 mb-4">Ditte Nuove dall'Import</h3>
                             <p class="text-sm text-gray-500 mb-4">Ditte trovate nel file ma senza un markup. Clicca per aggiungerle alla lista a destra.</p>
                             <div id="loader-ditte-mancanti" class="text-center p-4"><p class="text-gray-600">Analisi in corso...</p></div>
@@ -453,7 +453,7 @@
                 });
             });
 
-            $('#markups-registrati-container').on('click', '.save-markup-btn', function() {
+            $('#markups-container').on('click', '.save-markup-btn', function() {
                 const btn = $(this);
                 const row = btn.closest('tr');
                 const id = row.data('id');
@@ -477,7 +477,7 @@
                 });
             });
 
-            $('#markups-registrati-container').on('click', '.delete-markup-btn', function() {
+            $('#markups-container').on('click', '.delete-markup-btn', function() {
                 if (!confirm("Sei sicuro di voler eliminare questo markup?")) return;
                 
                 const row = $(this).closest('tr');
