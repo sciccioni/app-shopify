@@ -1,9 +1,10 @@
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_KEY!
+);
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -14,56 +15,42 @@ export const handler: Handler = async (event) => {
     return { statusCode: 400, body: 'import_id mancante' };
   }
 
-  // Query raw staging data
-  const { data: rows, error: fetchError } = await supabase
-    .from('staging_inventory')
-    .select('minsan, raw_quantity, raw_expiry')
-    .eq('import_id', import_id);
-  if (fetchError) {
-    return { statusCode: 500, body: `Fetch Error: ${fetchError.message}` };
+  // 1) Chiama la RPC per ottenere i dati normalizzati
+  const { data: normalized, error: rpcErr } = await supabase
+    .rpc('normalize_inventory', { _import_id: import_id });
+
+  if (rpcErr) {
+    return { statusCode: 500, body: `RPC Error: ${rpcErr.message}` };
   }
 
-  // Raggruppa e calcola
-  const map = new Map<string, { qty: number; expiry: Date | null }>();
-  rows!.forEach(r => {
-    const key = r.minsan;
-    const prev = map.get(key) || { qty: 0, expiry: null };
-    // Somma quantità
-    let sumQty = prev.qty + r.raw_quantity;
-    if (sumQty < 0) sumQty = 0;
-    // Scadenza minima
-    const exp = r.raw_expiry ? new Date(r.raw_expiry) : null;
-    let earliest = prev.expiry;
-    if (exp && (!earliest || exp < earliest)) earliest = exp;
-    map.set(key, { qty: sumQty, expiry: earliest });
-  });
+  if (!normalized || normalized.length === 0) {
+    return { statusCode: 200, body: JSON.stringify({ normalized: 0 }) };
+  }
 
-  // Prepara insert batch
-  const normalized = Array.from(map.entries()).map(([minsan, { qty, expiry }]) => ({
-    import_id,
-    minsan,
-    total_qty: qty,
-    earliest_expiry: expiry,
-  }));
-
-  // Svuota vecchi normalized per import_id e inserisci i nuovi
-  const { error: delError } = await supabase
+  // 2) Svuota eventuali record precedenti per questo import_id
+  await supabase
     .from('normalized_inventory')
     .delete()
     .eq('import_id', import_id);
-  if (delError) {
-    return { statusCode: 500, body: `Delete Error: ${delError.message}` };
-  }
 
-  const { error: insertError } = await supabase
+  // 3) Inserisci i nuovi dati in bulk
+  const toInsert = normalized.map(r => ({
+    import_id: import_id,
+    minsan:    r.minsan,
+    total_qty: r.total_qty,
+    expiry:    r.expiry
+  }));
+
+  const { error: insertErr } = await supabase
     .from('normalized_inventory')
-    .insert(normalized);
-  if (insertError) {
-    return { statusCode: 500, body: `Insert Error: ${insertError.message}` };
+    .insert(toInsert);
+
+  if (insertErr) {
+    return { statusCode: 500, body: `Insert Error: ${insertErr.message}` };
   }
 
   return {
     statusCode: 200,
-    body: JSON.stringify({ import_id, normalized_count: normalized.length })
+    body: JSON.stringify({ normalized: toInsert.length })
   };
 };
