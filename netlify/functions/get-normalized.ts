@@ -1,3 +1,4 @@
+// netlify/functions/get-normalized.ts
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 
@@ -16,15 +17,12 @@ export const handler: Handler = async (event) => {
     };
   }
 
+  // Seleziono * per vedere tutti i campi così come li hai nel DB
   const { data, error } = await supabase
     .from('normalized_inventory')
-    .select(`
-      minsan,
-      total_qty,
-      expiry
-    `)
+    .select('*')
     .eq('import_id', import_id)
-    .order('minsan', { ascending: true });
+    .order('id', { ascending: true });
 
   if (error) {
     return {
