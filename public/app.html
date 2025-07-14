@@ -138,6 +138,19 @@
                         <div><p class="text-2xl font-bold text-green-600" id="stats-products-to-update">0</p><p class="text-sm text-gray-500">Prodotti da Aggiornare</p></div>
                         <div><p class="text-2xl font-bold text-yellow-600" id="stats-new-companies">0</p><p class="text-sm text-gray-500">Ditte Nuove</p></div>
                     </div>
+                <!-- Elenco Ditte mancanti -->
+                <div class="mt-6">
+                    <h3 class="text-lg font-medium text-gray-800">Ditte mancanti</h3>
+                
+                    <!-- loader -->
+                    <div id="loader-ditte-mancanti" class="text-center">
+                        <p class="text-gray-600">Caricamento…</p>
+                    </div>
+                
+                    <!-- pulsanti per ogni ditta nuova -->
+                    <div id="ditte-mancanti-container" class="space-y-2 mt-2"></div>
+                </div>
+                    
                 </div>
                 <!-- Tabella Modifiche -->
                 <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -254,6 +267,22 @@
                 }
             });
 
+            // gestisce la sezione “ditte mancanti”
+$('#loader-ditte-mancanti').hide();
+const container = $('#ditte-mancanti-container').empty();
+
+if (data.stats.newCompanies.length) {
+    data.stats.newCompanies.forEach(name => {
+        container.append(`
+            <button class="add-new-ditta-btn w-full text-left text-sm p-2
+                            bg-gray-100 hover:bg-gray-200 rounded-md">
+                ${name}
+            </button>
+        `);
+    });
+} else {
+    container.html('<p class="text-sm text-gray-500">Nessuna ditta nuova trovata.</p>');
+}
             // --- LOGICA UPLOAD FILE ---
             $('#uploadForm').on('submit', async (event) => {
                 event.preventDefault();
