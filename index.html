@@ -31,33 +31,11 @@
       </button>
       <div class="collapse navbar-collapse" id="navMenu">
         <ul class="navbar-nav ms-auto">
-          <li class="nav-item">
-            <a class="nav-link" :class="{ active: tab==='upload' }" @click.prevent="tab='upload'" href="#">
-              <i class="bi bi-upload"></i> Importa
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" :class="{ active: tab==='review' }" @click.prevent="tab='review'" href="#">
-              <i class="bi bi-journal-check"></i> Revisione
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" :class="{ active: tab==='markup' }" @click.prevent="tab='markup'" href="#">
-              <i class="bi bi-percent"></i> Markup
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" :class="{ active: tab==='logs' }" @click.prevent="tab='logs'" href="#">
-              <i class="bi bi-clock-history"></i> Log
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" :class="{ active: tab==='data' }"
-               @click.prevent="tab='data'; loadStaging(); loadNormalized()"
-               href="#">
-              <i class="bi bi-table"></i> Dati
-            </a>
-          </li>
+          <li class="nav-item"><a class="nav-link" :class="{ active: tab==='upload' }" @click.prevent="tab='upload'" href="#"><i class="bi bi-upload"></i> Importa</a></li>
+          <li class="nav-item"><a class="nav-link" :class="{ active: tab==='review' }" @click.prevent="tab='review'" href="#"><i class="bi bi-journal-check"></i> Revisione</a></li>
+          <li class="nav-item"><a class="nav-link" :class="{ active: tab==='markup' }" @click.prevent="tab='markup'" href="#"><i class="bi bi-percent"></i> Markup</a></li>
+          <li class="nav-item"><a class="nav-link" :class="{ active: tab==='logs' }" @click.prevent="tab='logs'" href="#"><i class="bi bi-clock-history"></i> Log</a></li>
+          <li class="nav-item"><a class="nav-link" :class="{ active: tab==='data' }" @click.prevent="tab='data'; loadStaging(); loadNormalized()" href="#"><i class="bi bi-table"></i> Dati</a></li>
         </ul>
       </div>
     </div>
@@ -74,9 +52,7 @@
         </div>
         <div class="card-body">
           <input type="file" class="form-control mb-3" @change="onFileChange" />
-          <button class="btn btn-success" @click="uploadFile()">
-            <i class="bi bi-play-circle"></i> Avvia Importazione
-          </button>
+          <button class="btn btn-success" @click="uploadFile()"><i class="bi bi-play-circle"></i> Avvia Importazione</button>
           <div class="progress mt-3" x-show="uploadProgress !== null">
             <div class="progress-bar progress-bar-striped progress-bar-animated"
                  role="progressbar"
@@ -93,9 +69,7 @@
       <div class="card shadow-sm">
         <div class="card-header d-flex justify-content-between align-items-center">
           <span><i class="bi bi-journal-check"></i> Revisione Modifiche</span>
-          <button class="btn btn-success" @click="approveSelected()">
-            <i class="bi bi-check2-circle"></i> Approv
-          </button>
+          <button class="btn btn-success" @click="approveSelected()"><i class="bi bi-check2-circle"></i> Approv</button>
         </div>
         <div class="card-body">
           <div class="table-responsive">
@@ -103,9 +77,7 @@
               <thead class="table-light">
                 <tr>
                   <th><input type="checkbox" @click="toggleAll($event)" /></th>
-                  <th>MINSAN</th>
-                  <th>Qty (Old → New)</th>
-                  <th>Prezzo (Old → New)</th>
+                  <th>MINSAN</th><th>Qty (Old → New)</th><th>Prezzo (Old → New)</th>
                 </tr>
               </thead>
               <tbody>
@@ -113,8 +85,8 @@
                   <tr>
                     <td><input type="checkbox" x-model="u.sel" /></td>
                     <td x-text="u.minsan"></td>
-                    <td x-text="u.old_qty + ' → ' + u.new_qty"></td>
-                    <td x-text="u.old_price.toFixed(2) + ' → ' + u.new_price.toFixed(2)"></td>
+                    <td x-text="u.old_qty+' → '+u.new_qty"></td>
+                    <td x-text="u.old_price.toFixed(2)+' → '+u.new_price.toFixed(2)"></td>
                   </tr>
                 </template>
               </tbody>
@@ -127,49 +99,33 @@
     <!-- MARKUP -->
     <section :class="{ 'active': tab==='markup' }" class="mb-5">
       <div class="card shadow-sm">
-        <div class="card-header bg-primary text-white">
-          <i class="bi bi-percent"></i> Gestione Markup
-        </div>
+        <div class="card-header bg-primary text-white"><i class="bi bi-percent"></i> Gestione Markup</div>
         <div class="card-body">
           <div class="table-responsive mb-4">
             <table class="table">
               <thead><tr><th>Nome</th><th>Markup (%)</th></tr></thead>
               <tbody>
                 <template x-for="c in companies" :key="c.id">
-                  <tr>
-                    <td x-text="c.name"></td>
-                    <td x-text="c.markup_pct.toFixed(2)"></td>
-                  </tr>
+                  <tr><td x-text="c.name"></td><td x-text="c.markup_pct.toFixed(2)"></td></tr>
                 </template>
               </tbody>
             </table>
           </div>
           <form @submit.prevent="saveCompany" class="row g-3 mb-4">
             <input type="hidden" x-model="form.id" />
-            <div class="col-md-5">
-              <input class="form-control" x-model="form.name" placeholder="Nome Ditta" required />
-            </div>
-            <div class="col-md-4">
-              <input class="form-control" type="number" x-model="form.markup_pct"
-                     placeholder="Markup %" step="0.01" required />
-            </div>
+            <div class="col-md-5"><input class="form-control" x-model="form.name" placeholder="Nome Ditta" required /></div>
+            <div class="col-md-4"><input class="form-control" type="number" x-model="form.markup_pct" placeholder="Markup %" step="0.01" required /></div>
             <div class="col-md-3 d-flex">
-              <button class="btn btn-success me-2">
-                <i class="bi bi-save"></i> Salva
-              </button>
-              <button class="btn btn-secondary" @click="formReset()">
-                <i class="bi bi-x-circle"></i> Annulla
-              </button>
+              <button class="btn btn-success me-2"><i class="bi bi-save"></i> Salva</button>
+              <button class="btn btn-secondary" @click="formReset()"><i class="bi bi-x-circle"></i> Annulla</button>
             </div>
           </form>
-          <button class="btn btn-info" @click="previewMarkup()">
-            <i class="bi bi-binoculars"></i> Anteprima
-          </button>
+          <button class="btn btn-info" @click="previewMarkup()"><i class="bi bi-binoculars"></i> Anteprima</button>
           <ul class="list-group mt-3">
             <template x-for="p in preview" :key="p.minsan">
               <li class="list-group-item d-flex justify-content-between">
                 <span x-text="p.minsan"></span>
-                <span x-text="p.old_price.toFixed(2) + ' → ' + p.new_price.toFixed(2)"></span>
+                <span x-text="p.old_price.toFixed(2)+' → '+p.new_price.toFixed(2)"></span>
               </li>
             </template>
           </ul>
@@ -180,26 +136,18 @@
     <!-- LOG -->
     <section :class="{ 'active': tab==='logs' }" class="mb-5">
       <div class="card shadow-sm">
-        <div class="card-header bg-primary text-white">
-          <i class="bi bi-clock-history"></i> Log Aggiornamenti
-        </div>
+        <div class="card-header bg-primary text-white"><i class="bi bi-clock-history"></i> Log Aggiornamenti</div>
         <div class="card-body">
           <div class="table-responsive">
             <table class="table table-sm">
-              <thead class="table-light">
-                <tr><th>Data</th><th>MINSAN</th><th>Azione</th><th>Esito</th></tr>
-              </thead>
+              <thead class="table-light"><tr><th>Data</th><th>MINSAN</th><th>Azione</th><th>Esito</th></tr></thead>
               <tbody>
                 <template x-for="l in logs" :key="l.id">
                   <tr>
                     <td x-text="new Date(l.executed_at).toLocaleString()"></td>
                     <td x-text="l.minsan"></td>
                     <td x-text="l.action"></td>
-                    <td>
-                      <span class="badge"
-                            :class="l.status==='success' ? 'bg-success' : 'bg-danger'"
-                            x-text="l.status"></span>
-                    </td>
+                    <td><span class="badge" :class="l.status==='success'?'bg-success':'bg-danger'" x-text="l.status"></span></td>
                   </tr>
                 </template>
               </tbody>
@@ -213,48 +161,39 @@
     <section :class="{ 'active': tab==='data' }" class="mb-5">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h3><i class="bi bi-database-fill"></i> Staging Inventory</h3>
-        <button class="btn btn-warning" @click="normalizeAndReload()">
-          <i class="bi bi-arrow-repeat"></i> Normalizza
-        </button>
+        <button class="btn btn-warning" @click="normalizeAndReload()"><i class="bi bi-arrow-repeat"></i> Normalizza</button>
       </div>
       <div class="card mb-4 shadow-sm">
         <div class="card-body table-responsive">
           <table class="table table-sm table-striped">
-            <thead>
-              <tr><th>MINSAN</th><th>Batch</th><th>Giacenza</th><th>Scadenza</th></tr>
-            </thead>
+            <thead><tr><th>MINSAN</th><th>Batch</th><th>Giacenza</th><th>Scadenza</th></tr></thead>
             <tbody>
               <template x-for="r in staging" :key="r.id">
                 <tr>
                   <td x-text="r.minsan"></td>
                   <td x-text="r.batch"></td>
                   <td x-text="r.raw_quantity"></td>
-                  <td x-text="r.raw_expiry ? new Date(r.raw_expiry).toLocaleDateString() : '-'"></td>
+                  <td x-text="r.raw_expiry? new Date(r.raw_expiry).toLocaleDateString() : '-'"></td>
                 </tr>
               </template>
             </tbody>
           </table>
         </div>
       </div>
-
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h3><i class="bi bi-bounding-box-circles"></i> Normalized Inventory</h3>
-        <button class="btn btn-secondary" @click="loadNormalized()">
-          <i class="bi bi-arrow-clockwise"></i> Ricarica
-        </button>
+        <button class="btn btn-secondary" @click="loadNormalized()"><i class="bi bi-arrow-clockwise"></i> Ricarica</button>
       </div>
       <div class="card shadow-sm">
         <div class="card-body table-responsive">
           <table class="table table-sm table-striped">
-            <thead>
-              <tr><th>MINSAN</th><th>Totale Qty</th><th>Expiry</th></tr>
-            </thead>
+            <thead><tr><th>MINSAN</th><th>Totale Qty</th><th>Expiry</th></tr></thead>
             <tbody>
               <template x-for="n in normalized" :key="n.minsan">
                 <tr>
                   <td x-text="n.minsan"></td>
                   <td x-text="n.total_qty"></td>
-                  <td x-text="n.expiry ? new Date(n.expiry).toLocaleDateString() : '-'"></td>
+                  <td x-text="n.expiry? new Date(n.expiry).toLocaleDateString() : '-'"></td>
                 </tr>
               </template>
             </tbody>
@@ -293,10 +232,11 @@
           this.uploadProgress = 0;
         },
 
-        uploadFile() {
+        async uploadFile() {
           if (!this.file) return alert('Seleziona un file Excel');
           this.uploadStatus = 'Importazione in corso…';
           this.uploadProgress = 0;
+
           const form = new FormData();
           form.append('file', this.file);
 
@@ -339,13 +279,9 @@
               });
               const raw = await cmpRes.text();
               let cmp = {};
-              if (raw.trim()) {
-                try {
-                  cmp = JSON.parse(raw);
-                } catch (e) {
+              if (raw.trim()) { try { cmp = JSON.parse(raw); } catch (e) {
                   this.uploadStatus = `Errore parsing JSON compare: ${e.message}`;
-                  console.error('Compare raw response:', raw);
-                  return;
+                  console.error('Compare raw response:', raw); return;
                 }
               }
               if (!cmpRes.ok) {
@@ -359,11 +295,12 @@
 
               // AGGIORNA LE VISTE
               this.loadUpdates();
-              await this.loadStagesAndNormalized();
+              await this.loadStaging();
+              await this.loadNormalized();
               this.loadCompanies();
               this.loadLogs();
 
-              // Passa al tab Dati
+              // PASSA AL TAB DATI
               this.tab = 'data';
               this.uploadStatus = `Completato: ${count} modifiche pronte.`;
             } else {
@@ -379,8 +316,63 @@
           xhr.send(form);
         },
 
-        /* …gli altri metodi… */
+        async loadUpdates() {
+          if (!this.importId) return;
+          const r = await fetch(`/.netlify/functions/list-updates?import_id=${this.importId}`);
+          this.updates = (await r.json()).map(u => ({ ...u, sel: false }));
+        },
 
+        toggleAll(e) { this.updates.forEach(u => u.sel = e.target.checked); },
+
+        async approveSelected() {
+          const ids = this.updates.filter(u => u.sel).map(u => u.id);
+          if (!ids.length) return alert('Seleziona almeno una modifica');
+          await fetch('/.netlify/functions/approve',{ method:'POST', body: JSON.stringify({ update_ids: ids }) });
+          this.loadUpdates(); this.loadLogs();
+        },
+
+        async loadCompanies() {
+          const r = await fetch('/.netlify/functions/companies');
+          this.companies = await r.json();
+        },
+
+        formReset() { this.form = { id:'', name:'', markup_pct:0 }; },
+
+        async saveCompany() {
+          const opts={ method:this.form.id?'PATCH':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(this.form) };
+          await fetch('/.netlify/functions/companies', opts);
+          this.formReset(); this.loadCompanies();
+        },
+
+        async previewMarkup() {
+          const r = await fetch('/.netlify/functions/preview-markup',{method:'POST'});
+          this.preview = await r.json();
+        },
+
+        async loadLogs() {
+          const r = await fetch('/.netlify/functions/logs');
+          this.logs = await r.json();
+        },
+
+        async loadStaging() {
+          if (!this.importId) return;
+          const r = await fetch(`/.netlify/functions/get-staging?import_id=${this.importId}`);
+          this.staging = await r.json();
+        },
+
+        async loadNormalized() {
+          if (!this.importId) return;
+          const r = await fetch(`/.netlify/functions/get-normalized?import_id=${this.importId}`);
+          this.normalized = await r.json();
+        },
+
+        async normalizeAndReload() {
+          if (!this.importId) return alert('Prima importa un file');
+          const res = await fetch('/.netlify/functions/normalize',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ import_id: this.importId }) });
+          const j = await res.json();
+          if (!res.ok) { alert(`Errore normalizzazione: ${j.error}`); return; }
+          await this.loadStaging(); await this.loadNormalized();
+        }
       }
     }
   </script>
