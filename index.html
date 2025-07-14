@@ -1,17 +1,17 @@
 <!DOCTYPE html>
 <html lang="it" x-cloak>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>🔄 Inventory Sync</title>
 
   <!-- Bootswatch Lux -->
-  <link href="https://cdn.jsdelivr.net/npm/bootswatch@5/dist/lux/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootswatch@5/dist/lux/bootstrap.min.css" rel="stylesheet" />
   <!-- Bootstrap Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet" />
   <!-- Alpine.js -->
   <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-
+  
   <style>
     [x-cloak] { display: none !important; }
     body { padding-top: 70px; background: #f8f9fa; }
@@ -21,82 +21,56 @@
 </head>
 <body>
 
-  <!-- NAVBAR -->
+  <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top shadow-sm">
     <div class="container">
       <a class="navbar-brand" href="#"><i class="bi bi-arrow-repeat"></i> Inventory Sync</a>
-      <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navMenu">
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse" id="navMenu">
         <ul class="navbar-nav ms-auto">
-          <li class="nav-item">
-            <a class="nav-link" :class="{ active: tab==='upload' }" @click.prevent="tab='upload'" href="#">
-              <i class="bi bi-upload"></i> Importa
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" :class="{ active: tab==='review' }" @click.prevent="tab='review'" href="#">
-              <i class="bi bi-journal-check"></i> Revisione
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" :class="{ active: tab==='markup' }" @click.prevent="tab='markup'" href="#">
-              <i class="bi bi-percent"></i> Markup
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" :class="{ active: tab==='logs' }" @click.prevent="tab='logs'" href="#">
-              <i class="bi bi-clock-history"></i> Log
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" :class="{ active: tab==='data' }"
-               @click.prevent="tab='data'; loadStaging(); loadNormalized()"
-               href="#">
-              <i class="bi bi-table"></i> Dati
-            </a>
-          </li>
+          <li class="nav-item"><a class="nav-link" :class="{active: tab==='upload'}" @click.prevent="tab='upload'" href="#"><i class="bi bi-upload"></i> Importa</a></li>
+          <li class="nav-item"><a class="nav-link" :class="{active: tab==='review'}" @click.prevent="tab='review'" href="#"><i class="bi bi-journal-check"></i> Revisione</a></li>
+          <li class="nav-item"><a class="nav-link" :class="{active: tab==='markup'}" @click.prevent="tab='markup'" href="#"><i class="bi bi-percent"></i> Markup</a></li>
+          <li class="nav-item"><a class="nav-link" :class="{active: tab==='logs'}" @click.prevent="tab='logs'" href="#"><i class="bi bi-clock-history"></i> Log</a></li>
+          <li class="nav-item"><a class="nav-link" :class="{active: tab==='data'}" @click.prevent="tab='data'; loadStaging(); loadNormalized()" href="#"><i class="bi bi-table"></i> Dati</a></li>
         </ul>
       </div>
     </div>
   </nav>
 
-  <!-- CONTAINER PRINCIPALE -->
+  <!-- Main container -->
   <div class="container mt-4" x-data="app()" x-init="init()">
 
-    <!-- BARRA DI STATO GLOBALE -->
+    <!-- Global status -->
     <div class="alert alert-info" x-show="uploadStatus" x-text="uploadStatus"></div>
 
-    <!-- UPLOAD -->
+    <!-- UPLOAD SECTION -->
     <section :class="{ 'active': tab==='upload' }" class="mb-5">
       <div class="card shadow-sm">
         <div class="card-header bg-primary text-white">
           <i class="bi bi-upload"></i> Importa Inventario
         </div>
         <div class="card-body">
-          <input type="file" class="form-control mb-3" @change="onFileChange">
-          <button class="btn btn-success" @click="uploadFile()">
-            <i class="bi bi-play-circle"></i> Avvia Importazione
-          </button>
+          <input type="file" class="form-control mb-3" @change="onFileChange" />
+          <button class="btn btn-success" @click="uploadFile()"><i class="bi bi-play-circle"></i> Avvia Importazione</button>
           <div class="progress mt-3" x-show="uploadProgress !== null">
             <div class="progress-bar progress-bar-striped progress-bar-animated"
                  role="progressbar"
-                 :style="'width:'+uploadProgress+'%'"
-                 x-text="uploadProgress+'%'"></div>
+                 :style="'width:' + uploadProgress + '%'"
+                 x-text="uploadProgress + '%'"></div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- REVISIONE -->
+    <!-- REVIEW SECTION -->
     <section :class="{ 'active': tab==='review' }" class="mb-5">
       <div class="card shadow-sm">
         <div class="card-header d-flex justify-content-between">
           <span><i class="bi bi-journal-check"></i> Revisione Modifiche</span>
-          <button class="btn btn-success" @click="approveSelected()">
-            <i class="bi bi-check2-circle"></i> Approva
-          </button>
+          <button class="btn btn-success" @click="approveSelected()"><i class="bi bi-check2-circle"></i> Approva Selezionati</button>
         </div>
         <div class="card-body table-responsive">
           <table class="table table-striped table-hover align-middle">
@@ -111,7 +85,7 @@
             <tbody>
               <template x-for="u in updates" :key="u.id">
                 <tr>
-                  <td><input type="checkbox" x-model="u.sel"></td>
+                  <td><input type="checkbox" x-model="u.sel"/></td>
                   <td x-text="u.minsan"></td>
                   <td x-text="u.old_qty + ' → ' + u.new_qty"></td>
                   <td x-text="u.old_price.toFixed(2) + ' → ' + u.new_price.toFixed(2)"></td>
@@ -123,7 +97,7 @@
       </div>
     </section>
 
-    <!-- MARKUP -->
+    <!-- MARKUP SECTION -->
     <section :class="{ 'active': tab==='markup' }" class="mb-5">
       <div class="card shadow-sm">
         <div class="card-header bg-primary text-white"><i class="bi bi-percent"></i> Gestione Markup</div>
@@ -133,18 +107,15 @@
               <thead><tr><th>Nome Ditta</th><th>Markup (%)</th></tr></thead>
               <tbody>
                 <template x-for="c in companies" :key="c.id">
-                  <tr>
-                    <td x-text="c.name"></td>
-                    <td x-text="c.markup_pct.toFixed(2)"></td>
-                  </tr>
+                  <tr><td x-text="c.name"></td><td x-text="c.markup_pct.toFixed(2)"></td></tr>
                 </template>
               </tbody>
             </table>
           </div>
           <form @submit.prevent="saveCompany" class="row g-3 mb-4">
-            <input type="hidden" x-model="form.id">
-            <div class="col-md-5"><input class="form-control" x-model="form.name" placeholder="Nome Ditta" required></div>
-            <div class="col-md-4"><input class="form-control" type="number" x-model="form.markup_pct" placeholder="Markup %" step="0.01" required></div>
+            <input type="hidden" x-model="form.id"/>
+            <div class="col-md-5"><input class="form-control" x-model="form.name" placeholder="Nome Ditta" required/></div>
+            <div class="col-md-4"><input class="form-control" type="number" x-model="form.markup_pct" placeholder="Markup %" step="0.01" required/></div>
             <div class="col-md-3 d-flex">
               <button class="btn btn-success me-2"><i class="bi bi-save"></i> Salva</button>
               <button class="btn btn-secondary" @click="formReset()"><i class="bi bi-x-circle"></i> Annulla</button>
@@ -163,7 +134,7 @@
       </div>
     </section>
 
-    <!-- LOG -->
+    <!-- LOG SECTION -->
     <section :class="{ 'active': tab==='logs' }" class="mb-5">
       <div class="card shadow-sm">
         <div class="card-header bg-primary text-white"><i class="bi bi-clock-history"></i> Log Aggiornamenti</div>
@@ -185,7 +156,7 @@
       </div>
     </section>
 
-    <!-- DATI -->
+    <!-- DATA SECTION -->
     <section :class="{ 'active': tab==='data' }" class="mb-5">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h3><i class="bi bi-database-fill"></i> Staging Inventory</h3>
@@ -232,7 +203,7 @@
 
   </div>
 
-  <!-- SCRIPT APP -->
+  <!-- Alpine App Logic -->
   <script>
     function app() {
       return {
@@ -265,7 +236,7 @@
           this.uploadStatus = 'Upload in corso…';
           this.uploadProgress = 0;
 
-          // 1) Upload con XHR per progress
+          // 1) Upload via XHR per progresso
           const form = new FormData();
           form.append('file', this.file);
           const xhr = new XMLHttpRequest();
@@ -289,10 +260,7 @@
                 body: JSON.stringify({ import_id })
               });
               const normJson = await normRes.json();
-              if (!normRes.ok) {
-                this.uploadStatus = `Errore normalize: ${normJson.error}`;
-                return;
-              }
+              if (!normRes.ok) { this.uploadStatus = `Errore normalize: ${normJson.error}`; return; }
 
               // 3) Compare
               this.uploadStatus = 'Compare in corso…';
@@ -302,10 +270,7 @@
                 body: JSON.stringify({ import_id })
               });
               const cmpJson = await cmpRes.json();
-              if (!cmpRes.ok) {
-                this.uploadStatus = `Errore compare: ${cmpJson.error}`;
-                return;
-              }
+              if (!cmpRes.ok) { this.uploadStatus = `Errore compare: ${cmpJson.error}`; return; }
               const count = cmpJson.updates_count || 0;
 
               // 4) Carica tutte le viste
@@ -318,7 +283,7 @@
                 this.loadLogs()
               ]);
 
-              // 5) Switch automatico
+              // 5) Switch automatico a Dati
               this.tab = 'data';
               this.uploadStatus = `Completato: ${count} modifiche pronte.`;
 
@@ -326,44 +291,45 @@
               this.uploadStatus = `Errore upload: ${xhr.responseText}`;
             }
           };
-          xhr.onerror = () => {
-            this.uploadStatus = 'Errore di rete durante upload';
-          };
+          xhr.onerror = () => this.uploadStatus = 'Errore rete durante upload';
           xhr.send(form);
         },
 
         async loadUpdates() {
           if (!this.importId) return;
           const r = await fetch(`/.netlify/functions/list-updates?import_id=${this.importId}`);
-          this.updates = (await r.json()).map(u => ({...u, sel:false}));
+          this.updates = (await r.json()).map(u => ({ ...u, sel: false }));
         },
-        toggleAll(e) { this.updates.forEach(u=>u.sel=e.target.checked); },
+        toggleAll(e) { this.updates.forEach(u => u.sel = e.target.checked); },
         async approveSelected() {
-          const ids = this.updates.filter(u=>u.sel).map(u=>u.id);
+          const ids = this.updates.filter(u => u.sel).map(u => u.id);
           if (!ids.length) return alert('Seleziona almeno una modifica');
           await fetch('/.netlify/functions/approve', {
-            method:'POST', body: JSON.stringify({ update_ids: ids })
+            method: 'POST',
+            body: JSON.stringify({ update_ids: ids })
           });
-          await this.loadUpdates(); this.loadLogs();
+          await this.loadUpdates();
+          this.loadLogs();
         },
 
         async loadCompanies() {
           const r = await fetch('/.netlify/functions/companies');
           this.companies = await r.json();
         },
-        formReset() { this.form = {id:'',name:'',markup_pct:0}; },
+        formReset() { this.form = { id:'', name:'', markup_pct:0 }; },
         async saveCompany() {
           const opts = {
-            method: this.form.id?'PATCH':'POST',
-            headers:{'Content-Type':'application/json'},
+            method: this.form.id ? 'PATCH' : 'POST',
+            headers: { 'Content-Type':'application/json' },
             body: JSON.stringify(this.form)
           };
           await fetch('/.netlify/functions/companies', opts);
-          this.formReset(); this.loadCompanies();
+          this.formReset();
+          this.loadCompanies();
         },
 
         async previewMarkup() {
-          const r = await fetch('/.netlify/functions/preview-markup',{method:'POST'});
+          const r = await fetch('/.netlify/functions/preview-markup',{ method:'POST' });
           this.preview = await r.json();
         },
 
@@ -387,18 +353,20 @@
         async normalizeAndReload() {
           if (!this.importId) return alert('Prima importa un file');
           const r = await fetch('/.netlify/functions/normalize', {
-            method:'POST', headers:{'Content-Type':'application/json'},
+            method: 'POST',
+            headers: { 'Content-Type':'application/json' },
             body: JSON.stringify({ import_id: this.importId })
           });
           const j = await r.json();
           if (!r.ok) { alert(`Errore normalize: ${j.error}`); return; }
-          await this.loadStaging(); await this.loadNormalized();
+          await this.loadStaging();
+          await this.loadNormalized();
         }
       }
     }
   </script>
 
-  <!-- Bootstrap Bundle -->
+  <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
