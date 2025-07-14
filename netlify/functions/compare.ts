@@ -1,5 +1,4 @@
 // netlify/functions/compare.ts
-
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 
@@ -30,31 +29,29 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  // 1) Verifica VAT
-  const { data: badProducts, error: fetchError } = await supabase
+  // 1) Verifica vat_rate
+  const { data: bad, error: vatErr } = await supabase
     .from('products')
-    .select('minsan, shopify_sku')
+    .select('minsan')
     .is('vat_rate', null);
-
-  if (fetchError) {
+  if (vatErr) {
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: fetchError.message })
+      body: JSON.stringify({ error: vatErr.message })
     };
   }
-
-  if (badProducts && badProducts.length > 0) {
-    const missing = badProducts.map(p => p.minsan).join(', ');
+  if (bad && bad.length) {
+    const list = bad.map(p => p.minsan).join(', ');
     return {
       statusCode: 400,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: `Prodotti senza VAT configurato: ${missing}` })
+      body: JSON.stringify({ error: `Prodotti senza VAT: ${list}` })
     };
   }
 
-  // 2) Carica normalized_inventory
-  const { data: normalized, error: normErr } = await supabase
+  // 2) Leggi normalized_inventory
+  const { data: norm, error: normErr } = await supabase
     .from('normalized_inventory')
     .select('*')
     .eq('import_id', import_id);
@@ -66,10 +63,10 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  // 3) Carica companies per markup
-  const { data: companies, error: compErr } = await supabase
+  // 3) Carica companies
+  const { data: comps, error: compErr } = await supabase
     .from('companies')
-    .select('name, markup_pct');
+    .select('name,markup_pct');
   if (compErr) {
     return {
       statusCode: 500,
@@ -77,48 +74,45 @@ export const handler: Handler = async (event) => {
       body: JSON.stringify({ error: compErr.message })
     };
   }
-  const companyMap = new Map(companies!.map(c => [c.name, Number(c.markup_pct)]));
+  const map = new Map(comps!.map(c => [c.name, Number(c.markup_pct)]));
 
-  // 4) Genera pending_updates
+  // 4) Costruisci pending_updates
   const updates: any[] = [];
-  for (const rec of normalized!) {
-    const { data: prod, error: prodErr } = await supabase
+  for (const r of norm || []) {
+    const { data: p, error: pErr } = await supabase
       .from('products')
       .select('*')
-      .eq('minsan', rec.minsan)
+      .eq('minsan', r.minsan)
       .single();
-    if (prodErr || !prod) continue;
-
-    const company = prod.shopify_sku.split('-')[0];
-    const markup = companyMap.get(company) ?? 0;
+    if (pErr || !p) continue;
+    const company = p.shopify_sku.split('-')[0];
+    const markup = map.get(company) || 0;
     const newPrice = parseFloat(
-      (prod.current_price * (1 + markup/100) * (1 + prod.vat_rate/100)).toFixed(2)
+      (p.current_price * (1 + markup/100) * (1 + p.vat_rate/100)).toFixed(2)
     );
-
-    const diffQty   = rec.total_qty - prod.current_qty;
-    const diffPrice = newPrice - prod.current_price;
-    if (Math.abs(diffQty) > 0 || Math.abs(diffPrice) >= 0.01) {
+    const diffQty = r.total_qty - p.current_qty;
+    if (diffQty !== 0 || Math.abs(newPrice - p.current_price) >= 0.01) {
       updates.push({
         import_id,
-        staging_id: rec.id,
-        product_id: prod.id,
-        old_qty: prod.current_qty,
-        new_qty: rec.total_qty,
-        old_price: prod.current_price,
+        staging_id: r.id,
+        product_id: p.id,
+        old_qty: p.current_qty,
+        new_qty: r.total_qty,
+        old_price: p.current_price,
         new_price: newPrice,
         significant: true
       });
     }
   }
 
-  const { error: insertErr } = await supabase
+  const { error: insErr } = await supabase
     .from('pending_updates')
     .insert(updates);
-  if (insertErr) {
+  if (insErr) {
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: insertErr.message })
+      body: JSON.stringify({ error: insErr.message })
     };
   }
 
