@@ -1,0 +1,11 @@
+{
+  "name": "inventory-sync-app",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {},
+  "dependencies": {
+    "parse-multipart": "^0.0.6",
+    "xlsx": "^0.18.5",
+    "@supabase/supabase-js": "^2.0.0"
+  }
+}
