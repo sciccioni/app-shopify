@@ -74,8 +74,6 @@
         /* Stili per le tab */
         .tab-active { border-color: #4f46e5; color: #4f46e5; }
         .tab-inactive { border-color: transparent; color: #6b7280; }
-        /* Stili per la gestione markup */
-        .markup-row.is-dirty { background-color: #fefce8 !important; }
     </style>
 </head>
 <body class="p-4 sm:p-8">
@@ -156,10 +154,10 @@
                 </div>
             </div>
 
-            <!-- Pannello Gestione Markup -->
+            <!-- Pannello Gestione Markup (NUOVO DESIGN) -->
             <div id="panel-markups" class="hidden">
                  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div class="lg:col-span-1 space-y-8">
+                    <div class="lg:col-span-1">
                         <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                             <h3 class="text-lg font-semibold text-gray-800">Aggiungi Nuova Ditta</h3>
                             <p class="mt-1 text-sm text-gray-500">Inserisci una ditta e il suo markup manualmente.</p>
@@ -172,7 +170,7 @@
                                     <label for="newMarkup" class="block text-sm font-medium text-gray-700">Markup (%)</label>
                                     <input type="number" step="0.01" id="newMarkup" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
-                                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm">Aggiungi Ditta</button>
+                                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Aggiungi</button>
                             </form>
                             <div id="addMarkupStatus" class="mt-4 text-sm"></div>
                         </div>
@@ -181,9 +179,9 @@
                         <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                             <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
                                 <h2 class="text-xl font-semibold text-gray-800">Markup Registrati</h2>
-                                <button id="saveAllMarkupsButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm disabled:bg-indigo-400 disabled:cursor-not-allowed" disabled>Salva Modifiche</button>
+                                <button id="populateMarkupsButton" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg shadow-sm">Importa da Ultimo File</button>
                             </div>
-                            <div id="loader-markups" class="text-center p-8"><p class="text-gray-600">Caricamento markup...</p></div>
+                            <div id="loader-markups" class="text-center p-8"><p class="text-gray-600">Caricamento...</p></div>
                             <div id="markups-container" class="overflow-x-auto"></div>
                         </div>
                     </div>
@@ -364,111 +362,29 @@
             }
 
             // --- LOGICA GESTIONE MARKUP ---
-            const saveAllBtn = $('#saveAllMarkupsButton');
-
-            function checkDirtyState() {
-                const dirtyRows = $('#markups-registrati-container .markup-row.is-dirty').length;
-                saveAllBtn.prop('disabled', dirtyRows === 0);
-            }
-
             function loadMarkups() {
-                const containerRegistrati = $('#markups-registrati-container');
-                const loaderRegistrati = $('#loader-markups-registrati');
-                const containerMancanti = $('#ditte-mancanti-container');
-                const loaderMancanti = $('#loader-ditte-mancanti');
-                
+                const container = $('#markups-container');
+                const loader = $('#loader-markups');
+                loader.show();
+                container.empty();
                 $('#panel-markups').data('loaded', true);
-                loaderRegistrati.show();
-                containerRegistrati.empty();
-                saveAllBtn.prop('disabled', true);
-
-                if (importId) {
-                    loaderMancanti.show();
-                    containerMancanti.empty();
-                } else {
-                    loaderMancanti.hide();
-                    containerMancanti.html('<p class="text-xs text-gray-400">Carica un file per vedere le ditte nuove.</p>');
-                }
 
                 $.ajax({
-                    url: `/api/get-ditte-status?import_id=${importId || ''}`,
+                    url: '/api/get-markups',
                     method: 'GET',
                     success: function(data) {
-                        loaderRegistrati.hide();
-                        const table = $('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ditta</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Markup (%)</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stato</th><th class="px-6 py-3"></th></tr></thead><tbody class="bg-white divide-y divide-gray-200"></tbody></table>');
+                        loader.hide();
+                        const table = $('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-4 py-2 text-left">Ditta</th><th class="px-4 py-2 text-left">Markup (%)</th><th class="px-4 py-2"></th></tr></thead><tbody></tbody></table>');
                         const tbody = table.find('tbody');
-                        data.markupsRegistrati.forEach(m => {
-                            tbody.append(`<tr class="markup-row" data-id="${m.id}" data-original-value="${m.markup_percentage}"><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${m.ditta}</td><td class="px-6 py-4"><input type="number" step="0.01" class="markup-input w-24 rounded-md" value="${m.markup_percentage}"></td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 status-cell"></td><td class="px-6 py-4 text-right"><button class="delete-markup-btn text-red-500 hover:text-red-700 text-sm">Elimina</button></td></tr>`);
+                        data.markups.forEach(m => {
+                            tbody.append(`<tr data-id="${m.id}"><td class="px-4 py-2 font-medium">${m.ditta}</td><td class="px-4 py-2"><input type="number" step="0.01" class="markup-input w-24 rounded-md" value="${m.markup_percentage}"></td><td class="px-4 py-2 text-right"><button class="save-markup-btn text-indigo-600 text-sm">Salva</button><button class="delete-markup-btn text-red-600 text-sm ml-2">Elimina</button></td></tr>`);
                         });
-                        containerRegistrati.append(table);
-
-                        if (importId) {
-                            loaderMancanti.hide();
-                            if (data.ditteMancanti.length > 0) {
-                                const list = $('<ul class="list-disc list-inside space-y-1 text-gray-700"></ul>');
-                                data.ditteMancanti.forEach(ditta => list.append(`<li>${ditta}</li>`));
-                                containerMancanti.html(list);
-                            } else {
-                                containerMancanti.html('<p class="text-sm text-gray-500">Tutte le ditte importate hanno un markup registrato.</p>');
-                            }
-                        }
+                        container.append(table);
                     },
-                    error: (xhr) => {
-                        loaderRegistrati.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`);
-                        loaderMancanti.hide();
-                    }
+                    error: (xhr) => loader.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
                 });
             }
-            
-            $('#markups-registrati-container').on('input', '.markup-input', function() {
-                const input = $(this);
-                const row = input.closest('tr');
-                const originalValue = row.data('original-value');
-                const currentValue = input.val();
 
-                if (String(currentValue) !== String(originalValue)) {
-                    row.addClass('is-dirty');
-                    row.find('.status-cell').html('<span class="text-yellow-600 font-medium">Modificato</span>');
-                } else {
-                    row.removeClass('is-dirty');
-                    row.find('.status-cell').empty();
-                }
-                checkDirtyState();
-            });
-
-            saveAllBtn.on('click', function() {
-                const btn = $(this);
-                const dirtyRows = $('#markups-registrati-container .markup-row.is-dirty');
-                const updates = dirtyRows.map(function() {
-                    const row = $(this);
-                    return {
-                        id: row.data('id'),
-                        markup_percentage: row.find('.markup-input').val()
-                    };
-                }).get();
-                
-                if (updates.length === 0) return;
-
-                btn.prop('disabled', true).text('Salvataggio...');
-
-                $.ajax({
-                    url: '/api/update-markups-bulk',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({ markups: updates }),
-                    success: function() {
-                        loadMarkups();
-                        if(importId) {
-                           $.ajax({ url: `/api/compute-diffs`, method: 'POST', contentType: 'application/json', data: JSON.stringify({ importId: importId }), success: () => loadPendingUpdates(importId) });
-                        }
-                    },
-                    error: function() {
-                        alert('Errore durante il salvataggio di massa.');
-                        btn.prop('disabled', false).text('Salva Modifiche');
-                    }
-                });
-            });
-            
             $('#addMarkupForm').on('submit', function(e) {
                 e.preventDefault();
                 const ditta = $('#newDitta').val();
@@ -490,7 +406,31 @@
                 });
             });
 
-            $('#markups-registrati-container').on('click', '.delete-markup-btn', function() {
+            $('#markups-container').on('click', '.save-markup-btn', function() {
+                const btn = $(this);
+                const row = btn.closest('tr');
+                const id = row.data('id');
+                const percentage = row.find('.markup-input').val();
+                
+                btn.text('Salvataggio...').prop('disabled', true);
+
+                $.ajax({
+                    url: '/api/update-markup',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ id: id, markup_percentage: percentage }),
+                    success: function() {
+                        alert('Markup salvato!');
+                        btn.text('Salva').prop('disabled', false);
+                    },
+                    error: (xhr) => {
+                        alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
+                        btn.text('Salva').prop('disabled', false);
+                    }
+                });
+            });
+
+            $('#markups-container').on('click', '.delete-markup-btn', function() {
                 if (!confirm("Sei sicuro di voler eliminare questo markup?")) return;
                 
                 const row = $(this).closest('tr');
@@ -507,77 +447,8 @@
                     error: (xhr) => alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`)
                 });
             });
-
-            $('#populateMarkupsButton').on('click', function() {
-                if (!importId) {
-                    alert("Per usare questa funzione, devi prima caricare un file.");
-                    return;
-                }
-                const btn = $(this);
-                btn.prop('disabled', true).text('Popolamento...');
-                $.ajax({
-                    url: '/api/populate-markups',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({ importId: importId }),
-                    success: function(data) {
-                        alert(`Successo! Ditte analizzate: ${data.ditteAnalizzate}. Nuovi markup aggiunti: ${data.ditteAggiunte}`);
-                        btn.prop('disabled', false).text('Aggiungi Mancanti');
-                        loadMarkups();
-                    },
-                    error: (xhr) => {
-                        alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
-                        btn.prop('disabled', false).text('Aggiungi Mancanti');
-                    }
-                });
-            });
-
-            // --- GESTIONE BOTTONI ---
-            function applyUpdates(updateIds, btnElement) {
-                if (updateIds.length === 0) {
-                    alert("Nessuna modifica selezionata.");
-                    return;
-                }
-
-                if (!confirm(`Sei sicuro di voler applicare ${updateIds.length} modifiche su Shopify? L'operazione non è reversibile.`)) {
-                    return;
-                }
-
-                const originalText = btnElement.text();
-                btnElement.prop('disabled', true).text('Applicazione...');
-
-                $.ajax({
-                    url: '/api/apply-updates',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({ import_id: importId, update_ids: updateIds }),
-                    success: function(data) {
-                        alert(`Processo completato!\nSuccessi: ${data.success}\nErrori: ${data.errors}`);
-                        if (btnElement.hasClass('sync-single-btn')) {
-                            const row = updatesTable.row(btnElement.closest('tr'));
-                            row.remove().draw(false);
-                        } else {
-                            btnElement.prop('disabled', false).text(originalText);
-                            loadPendingUpdates(importId); 
-                        }
-                    },
-                    error: function(xhr) {
-                        alert(`Errore critico: ${xhr.responseJSON?.error || "Sconosciuto"}`);
-                        btnElement.prop('disabled', false).text(originalText);
-                    }
-                });
-            }
-
-            $('#confirmButton').on('click', function() {
-                const selectedUpdates = updatesTable.rows({ search: 'applied' }).nodes().to$().find('.update-checkbox:checked').map(function() { return $(this).val(); }).get();
-                applyUpdates(selectedUpdates, $(this));
-            });
-
-            $('#updatesTable tbody').on('click', '.sync-single-btn', function () {
-                const updateId = $(this).data('id');
-                applyUpdates([updateId], $(this));
-            });
             
+            // --- LOGICA TAB LOGS ---
             function loadSyncLogs() {
                 const container = $('#logs-container');
                 const loader = $('#loader-logs');
@@ -630,6 +501,77 @@
                     error: (xhr) => loader.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
                 });
             }
+
+            // --- GESTIONE BOTTONI ---
+            $('#populateMarkupsButton').on('click', function() {
+                if (!importId) {
+                    alert("Per usare questa funzione, devi prima caricare un file.");
+                    return;
+                }
+                const btn = $(this);
+                btn.prop('disabled', true).text('Popolamento...');
+                $.ajax({
+                    url: '/api/populate-markups',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ importId: importId }),
+                    success: function(data) {
+                        alert(`Successo! Ditte analizzate: ${data.ditteAnalizzate}. Nuovi markup aggiunti: ${data.ditteAggiunte}`);
+                        btn.prop('disabled', false).text('Aggiungi Mancanti');
+                        loadMarkups();
+                    },
+                    error: (xhr) => {
+                        alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
+                        btn.prop('disabled', false).text('Aggiungi Mancanti');
+                    }
+                });
+            });
+            
+            function applyUpdates(updateIds, btnElement) {
+                if (updateIds.length === 0) {
+                    alert("Nessuna modifica selezionata.");
+                    return;
+                }
+
+                if (!confirm(`Sei sicuro di voler applicare ${updateIds.length} modifiche su Shopify? L'operazione non è reversibile.`)) {
+                    return;
+                }
+
+                const originalText = btnElement.text();
+                btnElement.prop('disabled', true).text('Applicazione...');
+
+                $.ajax({
+                    url: '/api/apply-updates',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ import_id: importId, update_ids: updateIds }),
+                    success: function(data) {
+                        alert(`Processo completato!\nSuccessi: ${data.success}\nErrori: ${data.errors}`);
+                        if (btnElement.hasClass('sync-single-btn')) {
+                            const row = updatesTable.row(btnElement.closest('tr'));
+                            row.remove().draw(false);
+                        } else {
+                            btnElement.prop('disabled', false).text(originalText);
+                            loadPendingUpdates(importId); 
+                        }
+                    },
+                    error: function(xhr) {
+                        alert(`Errore critico: ${xhr.responseJSON?.error || "Sconosciuto"}`);
+                        btnElement.prop('disabled', false).text(originalText);
+                    }
+                });
+            }
+
+            $('#confirmButton').on('click', function() {
+                const selectedUpdates = updatesTable.rows({ search: 'applied' }).nodes().to$().find('.update-checkbox:checked').map(function() { return $(this).val(); }).get();
+                applyUpdates(selectedUpdates, $(this));
+            });
+
+            $('#updatesTable tbody').on('click', '.sync-single-btn', function () {
+                const updateId = $(this).data('id');
+                applyUpdates([updateId], $(this));
+            });
+            
         });
     </script>
 </body>
