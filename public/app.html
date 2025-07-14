@@ -9,151 +9,585 @@
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.tailwindcss.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f9fafb; }
-        /* DataTables + Tailwind */
-        .dataTables_wrapper .dataTables_length,
-        .dataTables_wrapper .dataTables_filter,
-        .dataTables_wrapper .dataTables_info,
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f9fafb;
+        }
+        /* Stili per DataTables con Tailwind - FORZATURA TEMA CHIARO COMPLETA */
+        .dataTables_wrapper .dataTables_length, 
+        .dataTables_wrapper .dataTables_filter, 
+        .dataTables_wrapper .dataTables_info, 
         .dataTables_wrapper .dataTables_processing,
-        .dataTables_wrapper .dataTables_paginate { color: #374151 !important; padding: 1rem; }
+        .dataTables_wrapper .dataTables_paginate {
+            color: #374151 !important;
+            padding: 1rem;
+        }
         .dataTables_wrapper .dataTables_filter input,
-        .dataTables_wrapper .dataTables_length select { background-color: white !important; color: #374151 !important; border: 1px solid #d1d5db !important; border-radius: 0.375rem; padding: 0.5rem 0.75rem; }
-        .dataTables_wrapper .dataTables_paginate .paginate_button { background: white !important; color: #374151 !important; border: 1px solid #d1d5db !important; padding: 0.5rem 1rem; margin: 0 0.125rem; border-radius: 0.375rem; }
-        .dataTables_wrapper .dataTables_paginate .paginate_button.current,
-        .dataTables_wrapper .dataTables_paginate .paginate_button:not(.current):hover { background: #4f46e5 !important; color: white !important; border-color: #4f46e5 !important; }
-        table.dataTable { border-collapse: collapse !important; width: 100% !important; }
-        table.dataTable td, table.dataTable th { padding: 0.75rem 1rem; border-bottom: 1px solid #e5e7eb; background-color: transparent !important; color: #374151 !important; }
-        table.dataTable thead th { background-color: #f9fafb !important; color: #374151 !important; font-weight: 600; }
-        table.dataTable tbody tr { background-color: white !important; }
-        table.dataTable tbody tr:hover { background-color: #f3f4f6 !important; }
-        /* Celle diff */
+        .dataTables_wrapper .dataTables_length select {
+            background-color: white !important;
+            color: #374151 !important;
+            border: 1px solid #d1d5db !important;
+            border-radius: 0.375rem;
+            padding: 0.5rem 0.75rem;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button {
+            background: white !important;
+            color: #374151 !important;
+            border: 1px solid #d1d5db !important;
+            padding: 0.5rem 1rem;
+            margin: 0 0.125rem;
+            border-radius: 0.375rem;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current, 
+        .dataTables_wrapper .dataTables_paginate .paginate_button:not(.current):hover {
+            background: #4f46e5 !important;
+            color: white !important;
+            border-color: #4f46e5 !important;
+        }
+        table.dataTable {
+            border-collapse: collapse !important;
+            width: 100% !important;
+        }
+        table.dataTable td, table.dataTable th {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            background-color: transparent !important;
+            color: #374151 !important;
+        }
+        table.dataTable thead th {
+            background-color: #f9fafb !important;
+            color: #374151 !important;
+            font-weight: 600;
+        }
+        table.dataTable tbody tr {
+            background-color: white !important;
+        }
+        table.dataTable tbody tr:hover {
+            background-color: #f3f4f6 !important;
+        }
+        /* Stili per le celle di modifica */
         .change-cell { white-space: nowrap; }
         .change-cell .old { text-decoration: line-through; color: #ef4444; }
         .change-cell .arrow { color: #2563eb; margin: 0 0.25rem; }
         .change-cell .new { font-weight: 600; color: #16a34a; }
         .no-change { color: #6b7280; }
-        /* Tabs */
+        /* Stili per le tab */
         .tab-active { border-color: #4f46e5; color: #4f46e5; }
         .tab-inactive { border-color: transparent; color: #6b7280; }
-        /* Modal overlay */
-        .modal-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:50; }
+        /* Stili per la modale */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 50;
+        }
     </style>
 </head>
 <body class="p-4 sm:p-8">
     <div class="max-w-screen-xl mx-auto">
         <header class="mb-8">
             <h1 class="text-3xl font-bold text-gray-900">Pannello di Sincronizzazione</h1>
-            <p class="mt-1 text-gray-600">Carica file, revisiona modifiche e gestisci la configurazione da un unico posto.</p>
+            <p class="mt-1 text-gray-600">Carica file, revisiona le modifiche e gestisci la configurazione da un unico posto.</p>
         </header>
-        <!-- Tabs -->
+
+        <!-- Navigazione a Tab -->
         <div class="border-b border-gray-200">
             <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-                <a href="#" id="tab-upload" class="tab-inactive py-4 px-1 border-b-2 font-medium text-sm">Carica File</a>
-                <a href="#" id="tab-reviews" class="tab-inactive py-4 px-1 border-b-2 font-medium text-sm">Revisione Modifiche</a>
-                <a href="#" id="tab-markups" class="tab-inactive py-4 px-1 border-b-2 font-medium text-sm">Gestione Markup</a>
-                <a href="#" id="tab-logs" class="tab-inactive py-4 px-1 border-b-2 font-medium text-sm">Log Aggiornamenti</a>
+                <a href="#" id="tab-upload" class="tab-inactive hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Carica File</a>
+                <a href="#" id="tab-reviews" class="tab-inactive hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Revisione Modifiche</a>
+                <a href="#" id="tab-markups" class="tab-inactive hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Gestione Markup</a>
+                <a href="#" id="tab-logs" class="tab-inactive hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Log Aggiornamenti</a>
             </nav>
         </div>
+
         <div class="mt-8">
-            <!-- Upload Panel -->
+            <!-- Pannello Upload File -->
             <div id="panel-upload" class="hidden">
-                <div class="bg-white p-8 rounded-lg shadow-sm border border-gray-200 max-w-3xl mx-auto">
+                 <div class="bg-white p-8 rounded-lg shadow-sm border border-gray-200 max-w-3xl mx-auto">
                     <form id="uploadForm">
-                        <label for="excelFile" class="block text-sm font-medium text-gray-700 mb-2">File di inventario (.xlsx)</label>
-                        <input type="file" id="excelFile" name="excelFile" accept=".xlsx" required class="block w-full text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100">
-                        <button type="submit" id="submitButton" class="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg disabled:bg-indigo-400">Carica e Analizza</button>
+                        <div>
+                            <label for="excelFile" class="block text-sm font-medium text-gray-700 mb-2">Seleziona il file di inventario (.xlsx)</label>
+                            <input type="file" id="excelFile" name="excelFile" accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 cursor-pointer">
+                        </div>
+                        <div class="mt-6">
+                            <button type="submit" id="submitButton" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400">
+                                Carica e Analizza
+                            </button>
+                        </div>
                     </form>
                     <div id="progress-container" class="mt-8 hidden">
-                        <div class="flex justify-between mb-1"><span id="progress-text"></span><span id="progress-percent"></span></div>
-                        <div class="w-full bg-gray-200 rounded-full h-2.5"><div id="progress-bar" class="h-2.5 rounded-full bg-indigo-600" style="width:0%"></div></div>
+                        <div class="flex justify-between mb-1">
+                            <span id="progress-text" class="text-base font-medium text-indigo-700"></span>
+                            <span id="progress-percent" class="text-sm font-medium text-indigo-700"></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5"><div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div></div>
                     </div>
-                    <div id="uploadStatusMessage" class="mt-4 text-sm text-center"></div>
+                    <div id="uploadStatusMessage" class="mt-6 text-center text-sm"></div>
                 </div>
             </div>
-            <!-- Review Panel -->
+
+            <!-- Pannello Revisione Modifiche -->
             <div id="panel-reviews" class="hidden">
-                <!-- Stats -->
-                <div class="mb-6 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-                    <h2 class="text-xl font-semibold">Riepilogo Importazione</h2>
-                    <div id="stats-loader" class="text-center p-4">Caricamento statistiche...</div>
+                <!-- Sezione Statistiche -->
+                <div class="mb-8 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Riepilogo Importazione</h2>
+                    <div id="stats-loader" class="text-center"><p>Caricamento statistiche...</p></div>
                     <div id="stats-container" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                        <div><p id="stats-total-rows" class="text-2xl font-bold text-indigo-600">0</p><p class="text-sm text-gray-500">Righe</p></div>
-                        <div><p id="stats-unique-products" class="text-2xl font-bold text-indigo-600">0</p><p class="text-sm text-gray-500">Prodotti Unici</p></div>
-                        <div><p id="stats-products-to-update" class="text-2xl font-bold text-green-600">0</p><p class="text-sm text-gray-500">Da Aggiornare</p></div>
-                        <div><p id="stats-new-companies" class="text-2xl font-bold text-yellow-600">0</p><p class="text-sm text-gray-500">Ditte Nuove</p></div>
+                        <div><p class="text-2xl font-bold text-indigo-600" id="stats-total-rows">0</p><p class="text-sm text-gray-500">Righe nel File</p></div>
+                        <div><p class="text-2xl font-bold text-indigo-600" id="stats-unique-products">0</p><p class="text-sm text-gray-500">Prodotti Unici</p></div>
+                        <div><p class="text-2xl font-bold text-green-600" id="stats-products-to-update">0</p><p class="text-sm text-gray-500">Prodotti da Aggiornare</p></div>
+                        <div><p class="text-2xl font-bold text-yellow-600" id="stats-new-companies">0</p><p class="text-sm text-gray-500">Ditte Nuove</p></div>
                     </div>
                 </div>
-                <!-- Updates Table -->
+                <!-- Tabella Modifiche -->
                 <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-semibold">Proposte di Aggiornamento</h2>
-                        <button id="confirmButton" class="bg-indigo-600 text-white py-2 px-4 rounded-lg">Conferma Selezionati</button>
+                    <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+                        <h2 class="text-xl font-semibold text-gray-800">Proposte di Aggiornamento</h2>
+                        <div class="flex items-center space-x-2">
+                            <button id="confirmButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm flex items-center">Conferma Selezionati</button>
+                        </div>
                     </div>
-                    <div id="loader-reviews" class="text-center p-4">Caricamento modifiche...</div>
-                    <div class="overflow-auto">
-                        <table id="updatesTable" class="hidden w-full table-auto">
-                            <thead><tr><th><input type="checkbox" id="selectAll"></th><th>Prodotto</th><th>Minsan</th><th>Ditta</th><th>Giacenza</th><th>Prezzo</th><th>Prezzo Barrato</th><th>Costo</th><th>Scadenza</th><th>Azioni</th></tr></thead>
+                    <div id="loader-reviews" class="text-center p-8"><p class="text-gray-600">Caricamento delle modifiche...</p></div>
+                    <div class="overflow-x-auto">
+                        <table id="updatesTable" class="display w-full hidden">
+                            <thead><tr><th><input type="checkbox" id="selectAll"></th><th>Prodotto</th><th>Minsan</th><th>Ditta</th><th>Giacenza</th><th>Prezzo (€)</th><th>Prezzo Barrato (€)</th><th>Costo (€)</th><th>Scadenza</th><th>Azioni</th></tr></thead>
                             <tbody></tbody>
                         </table>
                     </div>
                 </div>
             </div>
-            <!-- Markup Panel -->
+
+            <!-- Pannello Gestione Markup -->
             <div id="panel-markups" class="hidden">
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="font-semibold mb-4">Aggiungi Ditta</h3>
-                        <form id="addMarkupForm" class="space-y-3">
-                            <input id="newDitta" type="text" placeholder="Nome Ditta" required class="w-full border p-2 rounded">
-                            <input id="newMarkup" type="number" step="0.01" placeholder="Markup (%)" required class="w-full border p-2 rounded">
-                            <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded">Aggiungi</button>
-                        </form>
-                        <div id="addMarkupStatus" class="mt-2 text-sm"></div>
+                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-1 space-y-8">
+                        <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-800">Aggiungi Nuova Ditta</h3>
+                            <form id="addMarkupForm" class="mt-4 space-y-4">
+                                <div>
+                                    <label for="newDitta" class="block text-sm font-medium text-gray-700">Nome Ditta</label>
+                                    <input type="text" id="newDitta" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                                <div>
+                                    <label for="newMarkup" class="block text-sm font-medium text-gray-700">Markup (%)</label>
+                                    <input type="number" step="0.01" id="newMarkup" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Aggiungi</button>
+                            </form>
+                            <div id="addMarkupStatus" class="mt-4 text-sm"></div>
+                        </div>
                     </div>
-                    <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h2 class="font-semibold mb-4">Markup Registrati</h2>
-                        <div id="loader-markups" class="text-center p-4">Caricamento...</div>
-                        <div id="markups-container"	class="overflow-auto"></div>
+                    <div class="lg:col-span-2">
+                        <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                            <h2 class="text-xl font-semibold text-gray-800 mb-6">Markup Registrati</h2>
+                            <div id="loader-markups" class="text-center p-8"><p class="text-gray-600">Caricamento...</p></div>
+                            <div id="markups-container" class="overflow-x-auto"></div>
+                        </div>
                     </div>
-                </div>
+                 </div>
             </div>
-            <!-- Logs Panel -->
+
+            <!-- Pannello Log Aggiornamenti -->
             <div id="panel-logs" class="hidden">
-                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <h2 class="font-semibold mb-2">Storico Operazioni</h2>
-                    <p class="text-sm text-gray-500 mb-4">Risultati aggiornamenti eseguiti</p>
-                    <div id="loader-logs" class="text-center p-4">Caricamento log...</div>
-                    <div id="logs-container" class="overflow-auto"></div>
-                </div>
+                 <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <h2 class="text-xl font-semibold text-gray-800">Storico Operazioni</h2>
+                    <p class="mt-1 text-sm text-gray-500">Visualizza il risultato di tutte le operazioni di aggiornamento eseguite.</p>
+                    <div id="loader-logs" class="text-center p-8"><p class="text-gray-600">Caricamento log...</p></div>
+                    <div id="logs-container" class="overflow-x-auto mt-4"></div>
+                 </div>
             </div>
         </div>
     </div>
-    <!-- JS -->
+
+    <!-- Librerie JavaScript -->
     <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.tailwindcss.min.js"></script>
+
     <script>
-    $(document).ready(function(){
-        if(!sessionStorage.getItem('app-password')){window.location.href='/';return;}
-        const params=new URLSearchParams(window.location.search),importId=params.get('import_id');
-        let updatesTable;
-        function switchTab(tab){$('nav a').removeClass('tab-active').addClass('tab-inactive');$(tab).removeClass('tab-inactive').addClass('tab-active');$('#panel-upload,#panel-reviews,#panel-markups,#panel-logs').hide();$('#panel-'+tab.replace('#tab-','').split('-')[0]).show();if(tab==='#tab-markups'&&!$('#panel-markups').data('loaded'))loadMarkups();if(tab==='#tab-logs'&&!$('#panel-logs').data('loaded'))loadSyncLogs();}
-        if(importId){switchTab('#tab-reviews');loadPendingUpdates(importId);loadImportStats(importId);$('nav a').removeClass('opacity-50 pointer-events-none');}else{switchTab('#tab-upload');$('#tab-reviews,#tab-markups,#tab-logs').addClass('opacity-50 pointer-events-none');}
-        $('nav a').click(function(e){e.preventDefault();if($(this).hasClass('opacity-50'))return;const id='#'+this.id;if(this.id==='tab-upload'){history.pushState({},'',location.pathname);switchTab(id);$('#tab-reviews,#tab-markups,#tab-logs').addClass('opacity-50 pointer-events-none');}else switchTab(id);});
-        // Upload
-        $('#uploadForm').submit(async function(e){e.preventDefault();const btn=$('#submitButton'),status=$('#uploadStatusMessage'),cont=$('#progress-container'),bar=$('#progress-bar'),text=$('#progress-text'),percent=$('#progress-percent');function prog(p,m){bar.css('width',p+'%');text.text(m);percent.text(p+'%');}btn.prop('disabled',true);status.html('');cont.show();prog(0,'Avvio');try{prog(10,'Importazione');const r1=await fetch('/api/import-excel',{method:'POST',body:new FormData(this)}),j1=await r1.json();if(!r1.ok)throw new Error(j1.error);prog(40,'Normalizzazione');await fetch('/api/normalize-products',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({importId:j1.importId})});prog(70,'Confronto Shopify');await fetch('/api/compute-diffs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({importId:j1.importId})});prog(100,'Completato');setTimeout(()=>location.href=`?import_id=${j1.importId}`,800);}catch(err){status.html(`<div class="p-4 bg-red-100 text-red-800 rounded"><strong>Errore:</strong> ${err.message}</div>`);cont.hide();btn.prop('disabled',false);} });
-        // Review
-        function renderChange(c){if(!c)return'<span class="no-change">-</span>';const{o='',n=''}=c;return o===n?`<span>${n}</span>`:`<div class="change-cell"><span class="old">${o}</span><span class="arrow">→</span><span class="new">${n}</span></div>`;}
-        function loadPendingUpdates(id){const ld=$('#loader-reviews'),tbl=$('#updatesTable');ld.show();if($.fn.DataTable.isDataTable(tbl)){tbl.DataTable().destroy();tbl.find('tbody').empty();}$.ajax({url:`/api/get-pending-updates?import_id=${id}`,method:'GET',success(d){ld.hide();updatesTable=tbl.show().DataTable({data:d.updates,responsive:true,columns:[{data:'id',render:v=>`<input type="checkbox" class="update-checkbox" value="${v}" checked>`},{data:'product_title'},{data:'minsan'},{data:'ditta'},{data:'changes.quantity',render:renderChange},{data:'changes.price',render:renderChange},{data:'changes.compare_at_price',render:renderChange},{data:'changes.cost',render:renderChange},{data:'changes.expiry_date',render:c=>c?`<span class="new">${c.new}</span>`:'<span class="no-change">-</span>'},{data:'id',orderable:false,render:v=>`<button class="sync-single-btn" data-id="${v}">Sincronizza</button>`}],language:{url:'//cdn.datatables.net/plug-ins/1.13.6/i18n/it-IT.json'}});$('#selectAll').off('click').click(function(){tbl.find('.update-checkbox').prop('checked',this.checked);});},error(xhr){ld.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error||'Sconosciuto'}</p>`);} });}
-        $('#confirmButton').click(function(){const ids=$('#updatesTable .update-checkbox:checked').map(function(){return this.value;}).get();applyUpdates(ids,$(this));});$('#updatesTable').on('click','.sync-single-btn',function(){applyUpdates([$(this).data('id')],$(this));});
-        // Stats
-        function loadImportStats(id){const ld=$('#stats-loader'),ct=$('#stats-container');ld.show();ct.hide();$.ajax({url:`/api/get-import-stats?import_id=${id}`,method:'GET',success(d){ld.hide();ct.show();$('#stats-total-rows').text(d.stats.totalRows);$('#stats-unique-products').text(d.stats.uniqueProductCount);$('#stats-products-to-update').text(d.stats.productsToUpdate);$('#stats-new-companies').text(d.stats.newCompanies.length);},error(){ld.html('<p class="text-red-500">Errore statistiche</p>');}});}
-        // Markup
-        function loadMarkups(){const ct=$('#markups-container'),ld=$('#loader-markups');ld.show();ct.empty();$('#panel-markups').data('loaded',true);$.ajax({url:'/api/get-markups',method:'GET',success(d){ld.hide();const tbl=$('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th>Ditta</th><th>Markup (%)</th><th></th></tr></thead><tbody></tbody></table>');d.markups.forEach(m=>{tbl.find('tbody').append(`<tr data-id="${m.id}"><td>${m.ditta}</td><td><input type="number" class="markup-input" step="0.01" value="${m.markup_percentage}"></td><td><button class="save-markup-btn">Salva</button> <button class="delete-markup-btn">Elimina</button></td></tr>`);});ct.append(tbl);},error(xhr){ld.hide();ct.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error||'Sconosciuto'}</p>`);}});}$('#addMarkupForm').submit(function(e){e.preventDefault();const d=$('#newDitta').val(),m=$('#newMarkup').val(),s=$('#addMarkupStatus');$.ajax({url:'/api/add-markup',method:'POST',contentType:'application/json',data:JSON.stringify({ditta:d,markup_percentage:m}),success(){s.text('Aggiunta');this.reset();loadMarkups();if(importId)loadImportStats(importId);setTimeout(()=>(s.text('')),3000);},error(xhr){s.text(xhr.responseJSON?.error||'Errore');}});} );$('#markups-container').on('click','.save-markup-btn',function(){const btn=$(this),row=btn.closest('tr'),id=row.data('id'),val=row.find('.markup-input').val();btn.prop('disabled',true).text('Salvo...');$.ajax({url:'/api/update-markup',method:'POST',contentType:'application/json',data:JSON.stringify({id,markup_percentage:val}),success(){alert('Salvato');btn.prop('disabled',false).text('Salva');},error(xhr){alert(xhr.responseJSON?.error||'Errore');btn.prop('disabled',false).text('Salva');}});} );$('#markups-container').on('click','.delete-markup-btn',function(){if(confirm('Elimina?')){const row=$(this).closest('tr'),id=row.data('id');$.ajax({url:'/api/delete-markup',method:'POST',contentType:'application/json',data:JSON.stringify({id}),success(){row.remove();},error(xhr){alert(xhr.responseJSON?.error||'Errore');}});} });
-        // Apply Updates
-        function applyUpdates(ids,btn){if(!ids.length){alert('Nessuna modifica selezionata');return;}if(!confirm(`Applicare ${ids.length}?`))return;const orig=btn.text();btn.prop('disabled',true).text('Applicazione...');$.ajax({url:'/api/apply-updates',method:'POST',contentType:'application/json',data:JSON.stringify({import_id:importId,update_ids:ids}),success(d){alert(`Successi:${d.success} Errori:${d.errors}`);if(btn.hasClass('sync-single-btn')){updatesTable.row(btn.closest('tr')).remove().draw();}else{btn.prop('disabled',false).text(orig);loadPendingUpdates(importId);}},error(xhr){alert(xhr.responseJSON?.error||'Errore');btn.prop('disabled',false).text(orig);}});}        
-        // Logs
-        function loadSyncLogs(){const ct=$('#logs-container'),ld=$('#loader-logs');ld.show();ct.empty();$.ajax({url:`/api/get-sync-logs?import_id=${importId}`,method:'GET',success(d){ld.hide();$('#panel-logs').data('loaded',true);if(!d.logs.length){ct.html('<p class="text-gray-500">Nessun log</p>');return;}const tbl=$('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th>Data</th><th>Minsan</th><th>Stato</th><th>Dettagli</th></tr></thead><tbody></tbody></table>');d.logs.forEach(l=>{const badge=l.status==='success'?'<span class="px-2 inline-flex text-xs font-semibold rounded-full bg-green-100 text-green-800">Successo</span>':'<span class="px-2 inline-flex text-xs font-semibold rounded-full bg-red-100 text-red-800">Errore</span>';let det='';if(l.status==='error') det=`<span class="text-red-600">${l.details.error}</span>`;else if(l.details.changes) det=Object.entries(l.details.changes).map(([k,v])=>`<strong>${k}:</strong>${v.old}→${v.new}`).join('<br>');tbl.find('tbody').append(`<tr><td>${new Date(l.created_at).toLocaleString('it-IT')}</td><td>${l.minsan||'N/A'}</td><td>${badge}</td><td>${det||'Nessun dettaglio'}</td></tr>`);});ct.append(tbl);},error(xhr){ld.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error||'Sconosciuto'}</p>`);}});}    });
+        $(document).ready(function() {
+            // Controllo di sicurezza
+            if (!sessionStorage.getItem('app-password')) {
+                window.location.href = '/';
+                return;
+            }
+
+            let urlParams = new URLSearchParams(window.location.search);
+            let importId = urlParams.get('import_id');
+            let updatesTable;
+
+            // --- GESTIONE TAB ---
+            function switchTab(activeTabId) {
+                $('nav a').removeClass('tab-active').addClass('tab-inactive');
+                $(activeTabId).removeClass('tab-inactive').addClass('tab-active');
+                
+                $('#panel-upload, #panel-reviews, #panel-markups, #panel-logs').hide();
+                const panelId = activeTabId.replace('tab-', 'panel-');
+                $(panelId).show();
+
+                if (panelId === '#panel-markups' && !$(panelId).data('loaded')) loadMarkups();
+                if (panelId === '#panel-logs' && !$(panelId).data('loaded')) loadSyncLogs();
+            }
+
+            // Inizializzazione
+            if (importId) {
+                switchTab('#tab-reviews');
+                loadPendingUpdates(importId);
+                loadImportStats(importId);
+                $('nav a').removeClass('opacity-50 pointer-events-none');
+            } else {
+                switchTab('#tab-upload');
+                $('#tab-reviews, #tab-markups, #tab-logs').addClass('opacity-50 pointer-events-none');
+            }
+            
+            // Eventi Tab
+            $('nav a').on('click', function(e) {
+                e.preventDefault();
+                if ($(this).hasClass('opacity-50')) return;
+                if (this.id === 'tab-upload') {
+                    window.history.pushState({}, '', '/app.html');
+                    importId = null;
+                    switchTab('#tab-upload');
+                    $('#tab-reviews, #tab-markups, #tab-logs').addClass('opacity-50 pointer-events-none');
+                } else {
+                    switchTab('#' + this.id);
+                }
+            });
+
+            // --- LOGICA UPLOAD FILE ---
+            $('#uploadForm').on('submit', async (event) => {
+                event.preventDefault();
+                
+                const submitButton = $('#submitButton');
+                const statusMessage = $('#uploadStatusMessage');
+                const progressContainer = $('#progress-container');
+                const progressBar = $('#progress-bar');
+                const progressText = $('#progress-text');
+                const progressPercent = $('#progress-percent');
+
+                function updateProgress(percent, text) {
+                    progressBar.css('width', `${percent}%`);
+                    progressPercent.text(`${percent}%`);
+                    progressText.text(text);
+                }
+
+                submitButton.prop('disabled', true);
+                statusMessage.html('');
+                progressContainer.removeClass('hidden');
+                updateProgress(0, 'Avvio del processo...');
+
+                const formData = new FormData();
+                formData.append('excelFile', $('#excelFile')[0].files[0]);
+                formData.append('password', sessionStorage.getItem('app-password'));
+
+                let newImportId;
+
+                try {
+                    updateProgress(10, 'Importazione del file...');
+                    const importResponse = await fetch('/api/import-excel', { method: 'POST', body: formData });
+                    const importResult = await importResponse.json();
+                    if (!importResponse.ok) throw new Error(importResult.error);
+                    newImportId = importResult.importId;
+
+                    updateProgress(40, 'Normalizzazione dei dati...');
+                    const normalizeResponse = await fetch('/api/normalize-products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ importId: newImportId }) });
+                    if (!normalizeResponse.ok) throw new Error((await normalizeResponse.json()).error);
+
+                    updateProgress(70, 'Confronto con Shopify...');
+                    const diffResponse = await fetch('/api/compute-diffs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ importId: newImportId }) });
+                    if (!diffResponse.ok) throw new Error((await diffResponse.json()).error);
+
+                    updateProgress(100, 'Analisi completata!');
+                    window.setTimeout(() => {
+                        window.location.href = `/app.html?import_id=${newImportId}`;
+                    }, 1000);
+
+                } catch (error) {
+                    statusMessage.html(`<div class="p-4 mt-4 bg-red-100 text-red-800 rounded-md"><p class="font-bold">Errore:</p><p>${error.message}</p></div>`);
+                    progressContainer.addClass('hidden');
+                    submitButton.prop('disabled', false);
+                }
+            });
+
+            // --- LOGICA REVISIONE MODIFICHE ---
+            function renderChange(changeData) {
+                if (changeData === undefined || changeData === null) return '<span class="no-change">-</span>';
+                const oldVal = changeData.old ?? '';
+                const newVal = changeData.new ?? '';
+                if (String(oldVal) === String(newVal)) {
+                    return `<span class="no-change">${newVal || oldVal}</span>`;
+                }
+                return `<div class="change-cell"><span class="old">${oldVal}</span><span class="arrow">→</span><span class="new">${newVal}</span></div>`;
+            }
+
+            function loadPendingUpdates(id) {
+                const loader = $('#loader-reviews');
+                const tableElem = $('#updatesTable');
+                loader.show();
+                
+                if ($.fn.DataTable.isDataTable(tableElem)) {
+                    tableElem.DataTable().destroy();
+                    tableElem.find('tbody').empty();
+                }
+
+                $.ajax({
+                    url: `/api/get-pending-updates?import_id=${id}`,
+                    method: 'GET',
+                    success: function(data) {
+                        loader.hide();
+                        updatesTable = tableElem.show().DataTable({
+                            data: data.updates,
+                            responsive: true,
+                            columns: [
+                                { data: 'id', orderable: false, className: 'text-center', render: (d) => `<input type="checkbox" class="update-checkbox rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" value="${d}" checked>` },
+                                { data: 'product_title' },
+                                { data: 'minsan' },
+                                { data: 'ditta' },
+                                { data: 'changes.quantity', render: renderChange },
+                                { data: 'changes.price', render: renderChange },
+                                { data: 'changes.compare_at_price', render: renderChange },
+                                { data: 'changes.cost', render: renderChange },
+                                { data: 'changes.expiry_date', render: (d) => d ? `<span class="new">${d.new}</span>` : '<span class="no-change">-</span>' },
+                                { data: 'id', orderable: false, className: 'text-center', render: (d) => `<button class="sync-single-btn text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-1 px-2 rounded-md" data-id="${d}">Sincronizza</button>`}
+                            ],
+                            language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/it-IT.json' }
+                        });
+
+                        $('#selectAll').off('click').on('click', function() {
+                            updatesTable.rows({ 'search': 'applied' }).nodes().to$().find('input[type="checkbox"]').prop('checked', this.checked);
+                        });
+                    },
+                    error: (xhr) => loader.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
+                });
+            }
+
+            // --- LOGICA STATISTICHE E GESTIONE MARKUP ---
+            function loadImportStats(id) {
+                const loader = $('#stats-loader');
+                const container = $('#stats-container');
+                loader.show();
+                container.hide();
+
+                $.ajax({
+                    url: `/api/get-import-stats?import_id=${id}`,
+                    method: 'GET',
+                    success: function(data) {
+                        loader.hide();
+                        container.show();
+                        $('#stats-total-rows').text(data.stats.totalRows);
+                        $('#stats-unique-products').text(data.stats.uniqueProductCount);
+                        $('#stats-products-to-update').text(data.stats.productsToUpdate);
+                        $('#stats-new-companies').text(data.stats.newCompanies.length);
+                        
+                        const ditteMancantiContainer = $('#ditte-mancanti-container');
+                        $('#loader-ditte-mancanti').hide();
+                        ditteMancantiContainer.empty();
+                        if (data.stats.newCompanies.length > 0) {
+                            const list = $('<div class="space-y-2"></div>');
+                            data.stats.newCompanies.forEach(ditta => {
+                                list.append(`<button class="add-new-ditta-btn w-full text-left text-sm p-2 bg-gray-100 hover:bg-gray-200 rounded-md">${ditta}</button>`);
+                            });
+                            ditteMancantiContainer.append(list);
+                        } else {
+                            ditteMancantiContainer.html('<p class="text-sm text-gray-500">Nessuna ditta nuova trovata in questo import.</p>');
+                        }
+                    },
+                    error: (xhr) => loader.html(`<p class="text-red-500">Errore caricamento statistiche.</p>`)
+                });
+            }
+            
+            function loadMarkups() {
+                const container = $('#markups-registrati-container');
+                const loader = $('#loader-markups-registrati');
+                loader.show();
+                container.empty();
+                $('#panel-markups').data('loaded', true);
+
+                $.ajax({
+                    url: '/api/get-markups',
+                    method: 'GET',
+                    success: function(data) {
+                        loader.hide();
+                        const table = $('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-4 py-2 text-left">Ditta</th><th class="px-4 py-2 text-left">Markup (%)</th><th class="px-4 py-2"></th></tr></thead><tbody></tbody></table>');
+                        const tbody = table.find('tbody');
+                        data.markups.forEach(m => {
+                            tbody.append(`<tr data-id="${m.id}"><td class="px-4 py-2 font-medium">${m.ditta}</td><td class="px-4 py-2"><input type="number" step="0.01" class="markup-input w-24 rounded-md" value="${m.markup_percentage}"></td><td class="px-4 py-2 text-right"><button class="save-markup-btn text-indigo-600 text-sm">Salva</button><button class="delete-markup-btn text-red-600 text-sm ml-2">Elimina</button></td></tr>`);
+                        });
+                        container.append(table);
+                    },
+                    error: (xhr) => loader.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
+                });
+            }
+
+            $('#ditte-mancanti-container').on('click', '.add-new-ditta-btn', function() {
+                const dittaName = $(this).text();
+                $('#newDitta').val(dittaName);
+                $('#newMarkup').focus();
+            });
+
+            $('#addMarkupForm').on('submit', function(e) {
+                e.preventDefault();
+                const ditta = $('#newDitta').val();
+                const markup = $('#newMarkup').val();
+                const statusDiv = $('#addMarkupStatus');
+
+                $.ajax({
+                    url: '/api/add-markup',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ ditta: ditta, markup_percentage: markup }),
+                    success: function() {
+                        statusDiv.html('<p class="text-green-600">Ditta aggiunta!</p>');
+                        $('#addMarkupForm')[0].reset();
+                        loadMarkups();
+                        if (importId) loadImportStats(importId);
+                        setTimeout(() => statusDiv.empty(), 3000);
+                    },
+                    error: (xhr) => statusDiv.html(`<p class="text-red-600">${xhr.responseJSON?.error || "Errore."}</p>`)
+                });
+            });
+
+            $('#markups-registrati-container').on('click', '.save-markup-btn', function() {
+                const btn = $(this);
+                const row = btn.closest('tr');
+                const id = row.data('id');
+                const percentage = row.find('.markup-input').val();
+                
+                btn.text('Salvataggio...').prop('disabled', true);
+
+                $.ajax({
+                    url: '/api/update-markup',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ id: id, markup_percentage: percentage }),
+                    success: function() {
+                        alert('Markup salvato!');
+                        btn.text('Salva').prop('disabled', false);
+                    },
+                    error: (xhr) => {
+                        alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`);
+                        btn.text('Salva').prop('disabled', false);
+                    }
+                });
+            });
+
+            $('#markups-registrati-container').on('click', '.delete-markup-btn', function() {
+                if (!confirm("Sei sicuro di voler eliminare questo markup?")) return;
+                
+                const row = $(this).closest('tr');
+                const id = row.data('id');
+
+                $.ajax({
+                    url: '/api/delete-markup',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ id: id }),
+                    success: function() {
+                        row.fadeOut(300, () => row.remove());
+                    },
+                    error: (xhr) => alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`)
+                });
+            });
+
+            // --- GESTIONE BOTTONI ---
+            function applyUpdates(updateIds, btnElement) {
+                if (updateIds.length === 0) {
+                    alert("Nessuna modifica selezionata.");
+                    return;
+                }
+
+                if (!confirm(`Sei sicuro di voler applicare ${updateIds.length} modifiche su Shopify? L'operazione non è reversibile.`)) {
+                    return;
+                }
+
+                const originalText = btnElement.text();
+                btnElement.prop('disabled', true).text('Applicazione...');
+
+                $.ajax({
+                    url: '/api/apply-updates',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ import_id: importId, update_ids: updateIds }),
+                    success: function(data) {
+                        alert(`Processo completato!\nSuccessi: ${data.success}\nErrori: ${data.errors}`);
+                        if (btnElement.hasClass('sync-single-btn')) {
+                            const row = updatesTable.row(btnElement.closest('tr'));
+                            row.remove().draw(false);
+                        } else {
+                            btnElement.prop('disabled', false).text(originalText);
+                            loadPendingUpdates(importId); 
+                        }
+                    },
+                    error: function(xhr) {
+                        alert(`Errore critico: ${xhr.responseJSON?.error || "Sconosciuto"}`);
+                        btnElement.prop('disabled', false).text(originalText);
+                    }
+                });
+            }
+
+            $('#confirmButton').on('click', function() {
+                const selectedUpdates = updatesTable.rows({ search: 'applied' }).nodes().to$().find('.update-checkbox:checked').map(function() { return $(this).val(); }).get();
+                applyUpdates(selectedUpdates, $(this));
+            });
+
+            $('#updatesTable tbody').on('click', '.sync-single-btn', function () {
+                const updateId = $(this).data('id');
+                applyUpdates([updateId], $(this));
+            });
+            
+            function loadSyncLogs() {
+                const container = $('#logs-container');
+                const loader = $('#loader-logs');
+                loader.show();
+                container.empty();
+
+                $.ajax({
+                    url: `/api/get-sync-logs?import_id=${importId}`,
+                    method: 'GET',
+                    success: function(data) {
+                        loader.hide();
+                        $('#panel-logs').data('loaded', true);
+                        if (!data.logs || data.logs.length === 0) {
+                            container.html('<p class="text-gray-500">Nessun log trovato per questa importazione.</p>');
+                            return;
+                        }
+                        const table = $('<table class="min-w-full divide-y divide-gray-200"><thead><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Minsan</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dettagli Modifica</th></tr></thead><tbody class="bg-white divide-y divide-gray-200"></tbody></table>');
+                        const tbody = table.find('tbody');
+                        
+                        data.logs.forEach(log => {
+                            const statusBadge = log.status === 'success' 
+                                ? '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Successo</span>'
+                                : '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Errore</span>';
+                            
+                            let detailsHtml = '';
+                            const details = log.details?.error ? log.details.attemptedChanges : log.details?.changes;
+                            if (log.status === 'error') {
+                                detailsHtml = `<span class="text-red-600">${log.details.error}</span>`;
+                            } else if (details) {
+                                const parts = Object.entries(details).map(([key, value]) => {
+                                    const change = value;
+                                    return `<strong>${key}:</strong> ${change.old ?? 'N/A'} → ${change.new}`;
+                                });
+                                detailsHtml = parts.join('<br>');
+                            }
+
+                            const date = new Date(log.created_at).toLocaleString('it-IT');
+                            
+                            tbody.append(`
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${date}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${log.minsan || 'N/A'}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">${statusBadge}</td>
+                                    <td class="px-6 py-4 text-sm text-gray-500">${detailsHtml || 'Nessun dettaglio'}</td>
+                                </tr>
+                            `);
+                        });
+                        container.append(table);
+                    },
+                    error: (xhr) => loader.html(`<p class="text-red-500">Errore: ${xhr.responseJSON?.error || "Sconosciuto"}</p>`)
+                });
+            }
+        });
     </script>
 </body>
 </html>
