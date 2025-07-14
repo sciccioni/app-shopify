@@ -74,13 +74,8 @@
         /* Stili per le tab */
         .tab-active { border-color: #4f46e5; color: #4f46e5; }
         .tab-inactive { border-color: transparent; color: #6b7280; }
-        /* Stili per la modale */
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex; align-items: center; justify-content: center;
-            z-index: 50;
-        }
+        /* Stili per la gestione markup */
+        .markup-row.is-dirty { background-color: #fefce8 !important; }
     </style>
 </head>
 <body class="p-4 sm:p-8">
@@ -128,31 +123,35 @@
 
             <!-- Pannello Revisione Modifiche -->
             <div id="panel-reviews" class="hidden">
-                <!-- Sezione Statistiche -->
-                <div class="mb-8 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
-                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Riepilogo Importazione</h2>
-                    <div id="stats-loader" class="text-center"><p>Caricamento statistiche...</p></div>
-                    <div id="stats-container" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                        <div><p class="text-2xl font-bold text-indigo-600" id="stats-total-rows">0</p><p class="text-sm text-gray-500">Righe nel File</p></div>
-                        <div><p class="text-2xl font-bold text-indigo-600" id="stats-unique-products">0</p><p class="text-sm text-gray-500">Prodotti Unici</p></div>
-                        <div><p class="text-2xl font-bold text-green-600" id="stats-products-to-update">0</p><p class="text-sm text-gray-500">Prodotti da Aggiornare</p></div>
-                        <div><p class="text-2xl font-bold text-yellow-600" id="stats-new-companies">0</p><p class="text-sm text-gray-500">Ditte Nuove</p></div>
-                    </div>
-                </div>
-                <!-- Tabella Modifiche -->
-                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
-                        <h2 class="text-xl font-semibold text-gray-800">Proposte di Aggiornamento</h2>
-                        <div class="flex items-center space-x-2">
-                            <button id="confirmButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm flex items-center">Conferma Selezionati</button>
+                 <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <div id="reviews-content">
+                        <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+                            <h2 class="text-xl font-semibold text-gray-800">Proposte di Aggiornamento</h2>
+                            <div class="flex items-center space-x-2">
+                                <button id="confirmButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm flex items-center">Conferma Selezionati</button>
+                            </div>
+                        </div>
+                        <div id="loader-reviews" class="text-center p-8"><p class="text-gray-600">Caricamento delle modifiche...</p></div>
+                        <div class="overflow-x-auto">
+                            <table id="updatesTable" class="display w-full hidden">
+                                <thead><tr><th><input type="checkbox" id="selectAll"></th><th>Prodotto</th><th>Minsan</th><th>Ditta</th><th>Giacenza</th><th>Prezzo (€)</th><th>Prezzo Barrato (€)</th><th>Costo (€)</th><th>Scadenza</th><th>Azioni</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
                         </div>
                     </div>
-                    <div id="loader-reviews" class="text-center p-8"><p class="text-gray-600">Caricamento delle modifiche...</p></div>
-                    <div class="overflow-x-auto">
-                        <table id="updatesTable" class="display w-full hidden">
-                            <thead><tr><th><input type="checkbox" id="selectAll"></th><th>Prodotto</th><th>Minsan</th><th>Ditta</th><th>Giacenza</th><th>Prezzo (€)</th><th>Prezzo Barrato (€)</th><th>Costo (€)</th><th>Scadenza</th><th>Azioni</th></tr></thead>
-                            <tbody></tbody>
-                        </table>
+                    <div id="bulk-update-progress" class="hidden text-center p-8">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4">Aggiornamento in Corso...</h2>
+                        <div class="w-full bg-gray-200 rounded-full h-4">
+                            <div id="bulk-progress-bar" class="bg-blue-600 h-4 rounded-full text-xs font-medium text-blue-100 text-center p-0.5 leading-none" style="width: 0%">0%</div>
+                        </div>
+                        <div class="mt-4 text-gray-600">
+                            <span id="progress-counter">0</span> di <span id="progress-total">0</span> prodotti processati.
+                        </div>
+                        <div class="mt-2 flex justify-center space-x-4">
+                            <span class="text-green-600">✅ Successi: <span id="progress-success">0</span></span>
+                            <span class="text-red-600">❌ Errori: <span id="progress-errors">0</span></span>
+                        </div>
+                        <div id="final-status" class="mt-6"></div>
                     </div>
                 </div>
             </div>
@@ -163,14 +162,15 @@
                     <div class="lg:col-span-1 space-y-8">
                         <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                             <h3 class="text-lg font-semibold text-gray-800">Aggiungi Nuova Ditta</h3>
+                            <p class="mt-1 text-sm text-gray-500">Inserisci una ditta e il suo markup manualmente.</p>
                             <form id="addMarkupForm" class="mt-4 space-y-4">
                                 <div>
                                     <label for="newDitta" class="block text-sm font-medium text-gray-700">Nome Ditta</label>
-                                    <input type="text" id="newDitta" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                    <input type="text" id="newDitta" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
                                     <label for="newMarkup" class="block text-sm font-medium text-gray-700">Markup (%)</label>
-                                    <input type="number" step="0.01" id="newMarkup" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                    <input type="number" step="0.01" id="newMarkup" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Aggiungi</button>
                             </form>
@@ -494,7 +494,7 @@
                     error: (xhr) => alert(`Errore: ${xhr.responseJSON?.error || "Sconosciuto"}`)
                 });
             });
-
+            
             // --- GESTIONE BOTTONI ---
             function applyUpdates(updateIds, btnElement) {
                 if (updateIds.length === 0) {
