@@ -279,56 +279,50 @@
       </div>
 
       <!-- STAGING TABLE -->
-      <div class="card mb-4 shadow-sm">
-        <div class="card-header bg-light">Staging Inventory</div>
-        <div class="card-body table-responsive">
-          <table class="table table-sm table-striped">
-            <thead>
-              <tr>
-                <th>Ditta</th>
-                <th>MINSAN</th>
-                <th>EAN</th>
-                <th>Descrizione</th>
-                <th>Lotto</th>
-                <th>Giacenza</th>
-                <th>CostoBase</th>
-                <th>CostoMedio</th>
-                <th>UltimoCostoDitta</th>
-                <th>DataUltimoCostoDitta</th>
-                <th>PrezzoBD</th>
-                <th>IVA</th>
-                <th>Scadenza</th>
-              </tr>
-            </thead>
-            <tbody>
-              <template x-for="r in pagedStaging" :key="r.id">
-                <tr>
-                  <td x-text="r.ditta"></td>
-                  <td x-text="r.minsan"></td>
-                  <td x-text="r.ean"></td>
-                  <td x-text="r.descrizione"></td>
-                  <td x-text="r.lotto"></td>
-                  <td x-text="r.raw_quantity"></td>
-                  <td x-text="r.costo_base"></td>
-                  <td x-text="r.costomedio"></td>
-                  <td x-text="r.ultimo_costo_ditta"></td>
-                  <td x-text="r.data_ultimo_costo_ditta"></td>
-                  <td x-text="r.prezzo_bd"></td>
-                  <td x-text="r.iva"></td>
-                  <td
-                    x-text="
-                      r.raw_expiry
-                        ? new Date(r.raw_expiry).toLocaleDateString()
-                        : '-'
-                    "
-                  ></td>
-                </tr>
-              </template>
-              <tr x-show="!filteredStaging.length">
-                <td colspan="13" class="text-center text-muted">Nessun record</td>
-              </tr>
-            </tbody>
-          </table>
+     <div class="card mb-4 shadow-sm">
+  <div class="card-header bg-light">Staging Inventory</div>
+  <div class="card-body table-responsive">
+    <table class="table table-sm table-striped">
+      <thead>
+        <tr>
+          <th>Ditta</th>
+          <th>MINSAN</th>
+          <th>EAN</th>
+          <th>Descrizione</th>
+          <th>Lotto</th>
+          <th>Qty</th>
+          <th>CostoBase</th>
+          <th>CostoMedio</th>
+          <th>UltimoCostoDitta</th>
+          <th>DataUltimoCostoDitta</th>
+          <th>PrezzoBD</th>
+          <th>IVA</th>
+          <th>Scadenza</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="r in pagedStaging" :key="r.id">
+          <tr>
+            <td x-text="r.ditta"></td>
+            <td x-text="r.minsan"></td>
+            <td x-text="r.ean"></td>
+            <td x-text="r.descrizione"></td>
+            <td x-text="r.lotto"></td>
+            <td x-text="r.raw_quantity"></td>
+            <td x-text="r.costo_base"></td>
+            <td x-text="r.costomedio"></td>
+            <td x-text="r.ultimo_costo_ditta"></td>
+            <td x-text="r.data_ultimo_costo_ditta"></td>
+            <td x-text="r.prezzo_bd"></td>
+            <td x-text="r.iva"></td>
+            <td x-text="r.raw_expiry ? new Date(r.raw_expiry).toLocaleDateString() : '-'"></td>
+          </tr>
+        </template>
+        <tr x-show="!filteredStaging.length">
+          <td colspan="13" class="text-center text-muted">Nessun record</td>
+        </tr>
+      </tbody>
+    </table>
 
           <!-- paginazione -->
           <nav aria-label="Staging pagination">
@@ -363,7 +357,7 @@
       </div>
 
       <!-- NORMALIZED TABLE -->
-   <div class="card shadow-sm">
+  <div class="card shadow-sm">
   <div class="card-header bg-light">Normalized Inventory</div>
   <div class="card-body table-responsive">
     <table class="table table-sm table-striped">
