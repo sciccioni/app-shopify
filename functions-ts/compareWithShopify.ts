@@ -18,10 +18,10 @@ const API_VER = process.env.SHOPIFY_API_VERSION || '2025-07';
 async function fetchVariantsBatch(skus: string[]) {
   const url = `https://${STORE}.myshopify.com/admin/api/${API_VER}/graphql.json`;
 
-  const alias = skus.map((sku, i) => `
+        const alias = skus.map((sku, i) => `
       v${i}: productVariants(first: 1, query: "sku:${sku}") {
         edges { node {
-          id sku price inventoryQuantity
+          id sku price inventoryQuantity compareAtPrice
           product { id title }
           inventoryItem { id unitCost { amount } }
         }}
@@ -59,7 +59,7 @@ export const handler: Handler = async (event) => {
 
     const { data: rows, error } = await supabase
       .from('products')
-      .select('minsan,ditta,giacenza,prezzo_calcolato,costo_medio,descrizione')
+      .select('minsan,ditta,giacenza,prezzo_calcolato,costo_medio,descrizione,prezzo_bd')
       .eq('import_id', import_id);
     if (error) throw error;
 
@@ -95,9 +95,17 @@ export const handler: Handler = async (event) => {
         const newInv = r.giacenza;
         changes.inventory = { old: oldInv, new: newInv };   // <— sempre
 
-        if (r.prezzo_calcolato && Number(r.prezzo_calcolato) !== Number(v.price)) {
+        /* prezzo di listino */
+        if (r.prezzo_calcolato &&
+            Number(r.prezzo_calcolato) !== Number(v.price)) {
           changes.price = { old: v.price, new: r.prezzo_calcolato };
         }
+        /* prezzo di riferimento (prezzo BD ↔ compareAtPrice) */
+        if (r.prezzo_bd &&
+            Number(r.prezzo_bd) !== Number(v.compareAtPrice ?? 0)) {
+          changes.compare_price = { old: v.compareAtPrice ?? 0, new: r.prezzo_bd };
+        }
+        /* costo medio */
         const oldCost = Number(v.inventoryItem.unitCost?.amount ?? 0);
         if (r.costo_medio && Number(r.costo_medio) !== oldCost) {
           changes.cost = { old: oldCost, new: r.costo_medio };
