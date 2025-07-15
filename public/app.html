@@ -4,12 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Inventory Sync Dashboard</title>
-
   <!-- jQuery & Tailwind -->
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
-
 <body class="bg-gray-100 min-h-screen flex flex-col">
   <!-- Navbar -->
   <header class="bg-white shadow">
@@ -20,7 +18,7 @@
       </button>
     </div>
   </header>
-
+  
   <!-- Tabs -->
   <main class="container mx-auto px-4 py-6 flex-grow space-y-6">
     <nav class="flex space-x-4">
@@ -30,61 +28,63 @@
       <button data-tab="products" class="tab-btn px-4 py-2 bg-gray-300 rounded">Prodotti Shopify</button>
       <button data-tab="log"      class="tab-btn px-4 py-2 bg-gray-300 rounded">Log Aggiornamenti</button>
     </nav>
-
+    
     <!-- Tab 1: Carica File -->
     <section id="tab-upload" class="tab-content bg-white p-6 rounded-lg shadow">
       <form id="upload-form" class="space-y-4">
         <input type="file" id="excel-file" accept=".xlsx,.xls" class="border px-3 py-2 rounded w-full" />
         <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Upload</button>
       </form>
-
       <!-- Progress bar -->
       <div id="progress" class="w-full bg-gray-200 rounded h-4 mt-4 hidden">
-        <div id="progress-bar" class="bg-blue-600 h-4 rounded w-0"></div>
+        <div id="progress-bar" class="bg-blue-600 h-4 rounded transition-all duration-500" style="width: 0%"></div>
       </div>
-
       <!-- Status -->
-      <div id="upload-status" class="mt-4 hidden"></div>
+      <div id="upload-status" class="mt-4 hidden p-4 rounded"></div>
     </section>
-
+    
     <!-- Tab 2: Revisione Modifiche -->
     <section id="tab-review" class="tab-content hidden bg-white p-6 rounded-lg shadow">
+      <div id="stats" class="grid grid-cols-2 gap-4 mb-6">
+        <div><strong>Righe totali:</strong> <span id="stat-rows">0</span></div>
+        <div><strong>Prodotti unici:</strong> <span id="stat-unique">0</span></div>
+        <div><strong>Modifiche trovate:</strong> <span id="stat-changes">0</span></div>
+        <div><strong>Nuove ditte:</strong> <span id="stat-new-companies">0</span></div>
+      </div>
       <table id="comparison-table" class="min-w-full divide-y divide-gray-200">
         <thead>
           <tr>
-            <th>Prodotto</th>
-            <th>Minsan</th>
-            <th>Ditta</th>
-            <th>Giacenza<br>(vecchio → nuovo)</th>
-            <th>Prezzo<br>(vecchio → nuovo)</th>
-            <th>Costo<br>(vecchio → nuovo)</th>
-            <th>Seleziona</th>
+            <th class="px-4 py-2">Prodotto</th>
+            <th class="px-4 py-2">Minsan</th>
+            <th class="px-4 py-2">Ditta</th>
+            <th class="px-4 py-2">Giacenza<br>(vecchio → nuovo)</th>
+            <th class="px-4 py-2">Prezzo<br>(vecchio → nuovo)</th>
+            <th class="px-4 py-2">Costo<br>(vecchio → nuovo)</th>
+            <th class="px-4 py-2">Seleziona</th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
-
       <div class="mt-4 flex justify-end">
         <button id="bulk-update-btn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
           Aggiorna Selezionati
         </button>
       </div>
     </section>
-
+    
     <!-- Tab 3: Gestione Markup -->
     <section id="tab-markup" class="tab-content hidden bg-white p-6 rounded-lg shadow">
       <form id="new-company-form" class="flex space-x-4 mb-6">
         <input type="text"   id="new-company-name"   placeholder="Nuova ditta"  class="border px-3 py-2 rounded w-1/3" />
-        <input type="number" id="new-company-markup" placeholder="Markup %"     class="border px-3 py-2 rounded w-1/3" />
+        <input type="number" id="new-company-markup" placeholder="Markup %" step="0.01" class="border px-3 py-2 rounded w-1/3" />
         <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Aggiungi</button>
       </form>
-
       <table id="markup-table" class="min-w-full divide-y divide-gray-200">
         <thead><tr><th>Ditta</th><th>Markup %</th><th>Azione</th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
-
+    
     <!-- Tab 4: Prodotti Shopify -->
     <section id="tab-products" class="tab-content hidden bg-white p-6 rounded-lg shadow">
       <table id="products-table" class="min-w-full divide-y divide-gray-200">
@@ -92,7 +92,7 @@
         <tbody></tbody>
       </table>
     </section>
-
+    
     <!-- Tab 5: Log Aggiornamenti -->
     <section id="tab-log" class="tab-content hidden bg-white p-6 rounded-lg shadow">
       <table id="log-table" class="min-w-full divide-y divide-gray-200">
@@ -104,15 +104,24 @@
 
   <!-- Script -->
   <script>
+    // Check auth
+    if (!localStorage.getItem('token')) {
+      window.location.href = '/index.html';
+    }
+
     /* ------------ Helpers UI ------------ */
     function showStatus(msg, type = 'info') {
       const el = $('#upload-status');
-      el.removeClass('hidden text-red-600 text-green-600 text-blue-600');
-
-      if (type === 'error')   el.addClass('text-red-600');
-      if (type === 'success') el.addClass('text-green-600');
-      if (type === 'info')    el.addClass('text-blue-600');
-
+      el.removeClass('hidden bg-red-100 text-red-600 bg-green-100 text-green-600 bg-blue-100 text-blue-600');
+      
+      if (type === 'error') {
+        el.addClass('bg-red-100 text-red-600');
+      } else if (type === 'success') {
+        el.addClass('bg-green-100 text-green-600');
+      } else {
+        el.addClass('bg-blue-100 text-blue-600');
+      }
+      
       el.text(msg);
     }
 
@@ -120,8 +129,7 @@
     $('.tab-btn').on('click', function () {
       const tab = $(this).data('tab');
       $('.tab-btn').removeClass('bg-blue-600 text-white').addClass('bg-gray-300 text-black');
-      $(this).addClass('bg-blue-600 text-white');
-
+      $(this).addClass('bg-blue-600 text-white').removeClass('bg-gray-300 text-black');
       $('.tab-content').addClass('hidden');
       $('#tab-' + tab).removeClass('hidden');
     });
@@ -133,53 +141,172 @@
     });
 
     /* ------------ Upload workflow ------------ */
-  <!-- Upload form -->
-<script>
-  $('#upload-form').submit(async (e) => {
-    e.preventDefault();
-    const file = $('#excel-file')[0].files[0];
-    if (!file) { showStatus('Seleziona un file Excel', 'error'); return; }
+    $('#upload-form').submit(async (e) => {
+      e.preventDefault();
+      
+      const file = $('#excel-file')[0].files[0];
+      if (!file) {
+        showStatus('Seleziona un file Excel', 'error');
+        return;
+      }
+      
+      // Reset UI
+      $('#progress').removeClass('hidden');
+      $('#progress-bar').css('width', '0%');
+      $('#upload-status').addClass('hidden');
+      
+      // Disable form during upload
+      $('#excel-file').prop('disabled', true);
+      $('#upload-form button').prop('disabled', true).text('Caricamento...');
+      
+      try {
+        // 1️⃣ Convert file to base64
+        showStatus('Preparazione file...', 'info');
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result.split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        
+        // 2️⃣ Upload Excel
+        $('#progress-bar').css('width', '25%');
+        showStatus('Upload del file in corso...', 'info');
+        
+        console.log('Chiamata uploadExcel...');
+        const uploadResponse = await fetch('/.netlify/functions/uploadExcel', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ 
+            file: base64,
+            filename: file.name 
+          })
+        });
+        
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text();
+          console.error('Errore upload:', errorText);
+          throw new Error(`Errore upload: ${errorText}`);
+        }
+        
+        const { import_id } = await uploadResponse.json();
+        console.log('Upload completato, import_id:', import_id);
+        
+        // 3️⃣ Normalize Import
+        $('#progress-bar').css('width', '50%');
+        showStatus('Normalizzazione dati...', 'info');
+        
+        console.log('Chiamata normalizeImport...');
+        const normalizeResponse = await fetch('/.netlify/functions/normalizeImport', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ import_id })
+        });
+        
+        if (!normalizeResponse.ok) {
+          const errorText = await normalizeResponse.text();
+          console.error('Errore normalizzazione:', errorText);
+          throw new Error(`Errore normalizzazione: ${errorText}`);
+        }
+        
+        const normalizeData = await normalizeResponse.json();
+        console.log('Normalizzazione completata:', normalizeData);
+        
+        // 4️⃣ Compare with Shopify
+        $('#progress-bar').css('width', '75%');
+        showStatus('Confronto con Shopify...', 'info');
+        
+        console.log('Chiamata compareWithShopify...');
+        const compareResponse = await fetch('/.netlify/functions/compareWithShopify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ import_id })
+        });
+        
+        if (!compareResponse.ok) {
+          const errorText = await compareResponse.text();
+          console.error('Errore confronto:', errorText);
+          throw new Error(`Errore confronto: ${errorText}`);
+        }
+        
+        const compareData = await compareResponse.json();
+        console.log('Confronto completato:', compareData);
+        
+        // 5️⃣ Complete
+        $('#progress-bar').css('width', '100%');
+        showStatus('Completato! Vai a "Revisione Modifiche" per vedere i risultati.', 'success');
+        
+        // Load comparison data
+        loadComparisonData(import_id);
+        
+      } catch (error) {
+        console.error('Errore nel workflow:', error);
+        showStatus(error.message || 'Errore durante il processo', 'error');
+      } finally {
+        // Re-enable form
+        $('#excel-file').prop('disabled', false).val('');
+        $('#upload-form button').prop('disabled', false).text('Upload');
+        
+        // Hide progress after delay
+        setTimeout(() => {
+          $('#progress').addClass('hidden');
+          $('#progress-bar').css('width', '0%');
+        }, 2000);
+      }
+    });
 
-    /* reset UI */
-    $('#progress').removeClass('hidden'); $('#progress-bar').css('width', 0);
-    $('#upload-status').addClass('hidden');
-
-    try {
-      /* 1️⃣ uploadExcel */
-      const base64 = await new Promise((ok,ko)=>{const fr=new FileReader();fr.onload=()=>ok(fr.result.split(',')[1]);fr.onerror=ko;fr.readAsDataURL(file);});
-      $('#progress-bar').css('width','25%'); showStatus('Upload in corso…','info');
-
-      const up = await fetch('/.netlify/functions/uploadExcel',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('token')}`},
-        body:JSON.stringify({file:base64,filename:file.name})
-      });
-      if(!up.ok) throw new Error(await up.text());
-      const {import_id}=await up.json();
-      $('#progress-bar').css('width','50%'); showStatus('Normalizzazione…','info');
-
-      /* 2️⃣ normalizeImport */
-      const norm=await fetch('/.netlify/functions/normalizeImport',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('token')}`},
-        body:JSON.stringify({import_id})
-      });
-      if(!norm.ok) throw new Error(await norm.text());
-      $('#progress-bar').css('width','75%'); showStatus('Confronto Shopify…','info');
-
-      /* 3️⃣ compareWithShopify */
-      const cmp=await fetch('/.netlify/functions/compareWithShopify',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('token')}`},
-        body:JSON.stringify({import_id})
-      });
-      if(!cmp.ok) throw new Error(await cmp.text());
-
-      $('#progress-bar').css('width','100%');
-      showStatus('Completato! Apri “Revisione Modifiche”','success');
-    } catch(err){ console.error(err); showStatus(err.message||'Errore','error'); }
-    finally{ setTimeout(()=>{$('#progress').addClass('hidden');$('#progress-bar').css('width',0);},1800); $('#excel-file').val(''); }
-  });
-</script>
+    // Function to load comparison data
+    async function loadComparisonData(import_id) {
+      try {
+        const response = await fetch(`/.netlify/functions/getComparisonData?import_id=${import_id}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          // Update stats
+          $('#stat-rows').text(data.stats?.total_rows || 0);
+          $('#stat-unique').text(data.stats?.unique_products || 0);
+          $('#stat-changes').text(data.stats?.changes_found || 0);
+          $('#stat-new-companies').text(data.stats?.new_companies || 0);
+          
+          // Update table
+          const tbody = $('#comparison-table tbody');
+          tbody.empty();
+          
+          if (data.changes && data.changes.length > 0) {
+            data.changes.forEach(change => {
+              tbody.append(`
+                <tr>
+                  <td class="px-4 py-2">${change.description || ''}</td>
+                  <td class="px-4 py-2">${change.minsan}</td>
+                  <td class="px-4 py-2">${change.ditta || ''}</td>
+                  <td class="px-4 py-2">${change.old_inventory || 0} → ${change.new_inventory || 0}</td>
+                  <td class="px-4 py-2">€${change.old_price || 0} → €${change.new_price || 0}</td>
+                  <td class="px-4 py-2">€${change.old_cost || 0} → €${change.new_cost || 0}</td>
+                  <td class="px-4 py-2 text-center">
+                    <input type="checkbox" class="change-checkbox" data-minsan="${change.minsan}">
+                  </td>
+                </tr>
+              `);
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Errore caricamento dati confronto:', error);
+      }
+    }
+  </script>
 </body>
 </html>
