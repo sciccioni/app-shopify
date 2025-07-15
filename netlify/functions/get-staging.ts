@@ -1,4 +1,3 @@
-// netlify/functions/get-staging.ts
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 
@@ -12,29 +11,36 @@ export const handler: Handler = async (event) => {
   if (!import_id) {
     return {
       statusCode: 400,
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: 'import_id mancante' })
     };
   }
 
-  // Seleziono * per vedere tutti i campi così come li hai nel DB
   const { data, error } = await supabase
     .from('staging_inventory')
-    .select('*')
+    .select(`
+      id,
+      ditta,
+      minsan,
+      ean,
+      descrizione,
+      lotto,
+      raw_quantity,
+      costo_base,
+      costomedio,
+      prezzo_bd,
+      iva,
+      data_ultimo_costo_ditta,
+      raw_expiry
+    `)
     .eq('import_id', import_id)
     .order('id', { ascending: true });
 
   if (error) {
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: error.message })
-    };
+    return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
   }
 
   return {
     statusCode: 200,
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
   };
 };
