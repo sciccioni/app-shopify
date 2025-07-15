@@ -3,9 +3,6 @@
   functions = "functions"
   publish = "public"
 
-[[plugins]]
-  package = "@netlify/plugin-env"
-
 [context.production.environment]
   # Variabili d'ambiente da configurare su Netlify
   APP_PASSWORD = "$APP_PASSWORD"
