@@ -4,12 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>🔄 Inventory Sync</title>
-  <!-- Bootswatch Lux -->
+
+  <!-- Bootswatch Lux Theme -->
   <link href="https://cdn.jsdelivr.net/npm/bootswatch@5/dist/lux/bootstrap.min.css" rel="stylesheet" />
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet" />
   <!-- Alpine.js -->
   <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
   <style>
     [x-cloak] { display: none !important; }
     body { padding-top: 70px; background-color: #f8f9fa; }
@@ -28,11 +30,21 @@
       </button>
       <div class="collapse navbar-collapse" id="navMenu">
         <ul class="navbar-nav ms-auto">
-          <li class="nav-item"><a class="nav-link" :class="{active: tab==='upload'}" @click.prevent="tab='upload'" href="#">Importa</a></li>
-          <li class="nav-item"><a class="nav-link" :class="{active: tab==='review'}" @click.prevent="tab='review'" href="#">Revisione</a></li>
-          <li class="nav-item"><a class="nav-link" :class="{active: tab==='markup'}" @click.prevent="tab='markup'" href="#">Markup</a></li>
-          <li class="nav-item"><a class="nav-link" :class="{active: tab==='logs'}" @click.prevent="tab='logs'" href="#">Log</a></li>
-          <li class="nav-item"><a class="nav-link" :class="{active: tab==='data'}" @click.prevent="tab='data'; loadStaging(); loadNormalized()" href="#">Dati</a></li>
+          <li class="nav-item">
+            <a class="nav-link" :class="{active: tab==='upload'}" @click.prevent="tab='upload'" href="#">Importa</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" :class="{active: tab==='review'}" @click.prevent="tab='review'" href="#">Revisione</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" :class="{active: tab==='markup'}" @click.prevent="tab='markup'" href="#">Markup</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" :class="{active: tab==='logs'}" @click.prevent="tab='logs'" href="#">Log</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" :class="{active: tab==='data'}" @click.prevent="tab='data'; loadStaging(); loadNormalized()" href="#">Dati</a>
+          </li>
         </ul>
       </div>
     </div>
@@ -40,56 +52,62 @@
 
   <div class="container mt-4">
 
-    <!-- Status -->
+    <!-- Global status -->
     <div class="alert alert-info" x-show="uploadStatus" x-text="uploadStatus"></div>
 
-    <!-- UPLOAD -->
+    <!-- UPLOAD SECTION -->
     <section :class="{ 'active': tab==='upload' }" class="mb-5">
       <div class="card shadow-sm">
         <div class="card-header bg-primary text-white">Importa Inventario</div>
         <div class="card-body">
           <input type="file" class="form-control mb-3" @change="onFileChange" />
           <button class="btn btn-success" @click="uploadFile()">Avvia Importazione</button>
-          <div class="progress mt-3" x-show="uploadProgress!==null">
+          <div class="progress mt-3" x-show="uploadProgress !== null">
             <div class="progress-bar progress-bar-striped progress-bar-animated"
                  role="progressbar"
-                 :style="'width:'+uploadProgress+'%'"
-                 x-text="uploadProgress+'%'"></div>
+                 :style="'width:' + uploadProgress + '%'"
+                 x-text="uploadProgress + '%'"></div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- REVIEW -->
+    <!-- REVIEW SECTION -->
     <section :class="{ 'active': tab==='review' }" class="mb-5">
       <div class="card shadow-sm">
-        <div class="card-header d-flex justify-content-between">
-          <span>Revisione Modifiche</span>
+        <div class="card-header d-flex justify-content-between align-items-center">
+          Revisione Modifiche
           <button class="btn btn-success" @click="approveSelected()">Approva Selezionati</button>
         </div>
         <div class="card-body table-responsive">
           <table class="table table-striped table-hover">
-            <thead><tr>
-              <th><input type="checkbox" @click="toggleAll($event)"></th>
-              <th>MINSAN</th><th>Qty (old→new)</th><th>Prezzo (old→new)</th>
-            </tr></thead>
+            <thead class="table-light">
+              <tr>
+                <th><input type="checkbox" @click="toggleAll($event)" /></th>
+                <th>MINSAN</th>
+                <th>Qty (old → new)</th>
+                <th>Prezzo (old → new)</th>
+              </tr>
+            </thead>
             <tbody>
               <template x-for="u in updates" :key="u.id">
                 <tr>
-                  <td><input type="checkbox" x-model="u.sel"></td>
+                  <td><input type="checkbox" x-model="u.sel" /></td>
                   <td x-text="u.minsan"></td>
-                  <td x-text="u.old_qty+' → '+u.new_qty"></td>
-                  <td x-text="u.old_price.toFixed(2)+' → '+u.new_price.toFixed(2)"></td>
+                  <td x-text="u.old_qty + ' → ' + u.new_qty"></td>
+                  <td x-text="u.old_price.toFixed(2) + ' → ' + u.new_price.toFixed(2)"></td>
                 </tr>
               </template>
-              <tr x-show="!updates.length"><td colspan="4" class="text-center text-muted">Nessuna modifica</td></tr>
+              <tr x-show="!updates.length">
+                <td colspan="4" class="text-center text-muted">Nessuna modifica</td>
+              </tr>
             </tbody>
           </table>
         </div>
       </div>
     </section>
 
-    <!-- MARKUP -->
+    <!-- MARKUP SECTION -->
     <section :class="{ 'active': tab==='markup' }" class="mb-5">
       <div class="card shadow-sm">
         <div class="card-header bg-primary text-white">Gestione Markup</div>
@@ -99,14 +117,21 @@
               <thead><tr><th>Nome Ditta</th><th>Markup (%)</th></tr></thead>
               <tbody>
                 <template x-for="c in companies" :key="c.id">
-                  <tr><td x-text="c.name"></td><td x-text="c.markup_pct.toFixed(2)"></td></tr>
+                  <tr>
+                    <td x-text="c.name"></td>
+                    <td x-text="c.markup_pct.toFixed(2)"></td>
+                  </tr>
                 </template>
               </tbody>
             </table>
           </div>
           <form @submit.prevent="saveCompany()" class="row g-3 mb-3">
-            <div class="col-md-5"><input class="form-control" x-model="form.name" placeholder="Nome Ditta" required></div>
-            <div class="col-md-4"><input class="form-control" type="number" x-model="form.markup_pct" placeholder="Markup %" step="0.01" required></div>
+            <div class="col-md-5">
+              <input class="form-control" x-model="form.name" placeholder="Nome Ditta" required />
+            </div>
+            <div class="col-md-4">
+              <input class="form-control" type="number" x-model="form.markup_pct" placeholder="Markup %" step="0.01" required />
+            </div>
             <div class="col-md-3 d-flex">
               <button class="btn btn-success me-2">Salva</button>
               <button class="btn btn-secondary" @click="formReset()">Annulla</button>
@@ -117,7 +142,7 @@
             <template x-for="p in preview" :key="p.minsan">
               <li class="list-group-item d-flex justify-content-between">
                 <span x-text="p.minsan"></span>
-                <span x-text="p.old_price.toFixed(2)+' → '+p.new_price.toFixed(2)"></span>
+                <span x-text="p.old_price.toFixed(2) + ' → ' + p.new_price.toFixed(2)"></span>
               </li>
             </template>
             <li x-show="!preview.length" class="list-group-item text-center text-muted">Nessuna anteprima</li>
@@ -126,109 +151,160 @@
       </div>
     </section>
 
-    <!-- LOG -->
+    <!-- LOG SECTION -->
     <section :class="{ 'active': tab==='logs' }" class="mb-5">
       <div class="card shadow-sm">
         <div class="card-header bg-primary text-white">Log Aggiornamenti</div>
         <div class="card-body table-responsive">
           <table class="table table-sm">
-            <thead><tr><th>Data</th><th>MINSAN</th><th>Azione</th><th>Esito</th></tr></thead>
+            <thead class="table-light">
+              <tr><th>Data</th><th>MINSAN</th><th>Azione</th><th>Esito</th></tr>
+            </thead>
             <tbody>
               <template x-for="l in logs" :key="l.id">
                 <tr>
                   <td x-text="new Date(l.executed_at).toLocaleString()"></td>
                   <td x-text="l.minsan"></td>
                   <td x-text="l.action"></td>
-                  <td><span class="badge" :class="l.status==='success'?'bg-success':'bg-danger'" x-text="l.status"></span></td>
+                  <td>
+                    <span class="badge" :class="l.status==='success'?'bg-success':'bg-danger'" x-text="l.status"></span>
+                  </td>
                 </tr>
               </template>
-              <tr x-show="!logs.length"><td colspan="4" class="text-center text-muted">Nessun log</td></tr>
+              <tr x-show="!logs.length">
+                <td colspan="4" class="text-center text-muted">Nessun log</td>
+              </tr>
             </tbody>
           </table>
         </div>
       </div>
     </section>
 
-    <!-- DATA -->
+    <!-- DATA SECTION -->
     <section :class="{ 'active': tab==='data' }" class="mb-5">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h3>Dati Inventario</h3>
         <button class="btn btn-secondary" @click="pageStaging=1; pageNormalized=1; loadStaging(); loadNormalized()">Ricarica</button>
       </div>
+
+      <!-- Ricerca e conteggi -->
       <div class="row mb-3">
         <div class="col-md-4">
-          <input type="text" class="form-control" placeholder="🔍 Cerca MINSAN" x-model="searchMin">
+          <input type="text" class="form-control" placeholder="🔍 Cerca MINSAN" x-model="searchMin" />
         </div>
         <div class="col-md-8 text-end">
-          <span class="me-3">Staging: <strong x-text="filteredStaging.length"></strong> / <em x-text="staging.length"></em></span>
-          <span>Normalized: <strong x-text="filteredNormalized.length"></strong> / <em x-text="normalized.length"></em></span>
+          <span class="me-3">
+            Staging: <strong x-text="filteredStaging.length"></strong> / <em x-text="staging.length"></em>
+          </span>
+          <span>
+            Normalized: <strong x-text="filteredNormalized.length"></strong> / <em x-text="normalized.length"></em>
+          </span>
         </div>
       </div>
 
-      <!-- Staging -->
+      <!-- STAGING TABLE -->
       <div class="card mb-4 shadow-sm">
         <div class="card-header bg-light">Staging Inventory</div>
         <div class="card-body table-responsive">
           <table class="table table-sm table-striped">
-            <thead><tr><th>MINSAN</th><th>Lotto</th><th>Qty</th><th>Expiry</th></tr></thead>
+            <thead>
+              <tr>
+                <th>MINSAN</th>
+                <th>Ditta</th>
+                <th>Lotto</th>
+                <th>Qty</th>
+                <th>CostoMedio</th>
+                <th>PrezzoBD</th>
+                <th>IVA</th>
+                <th>Scadenza</th>
+              </tr>
+            </thead>
             <tbody>
               <template x-for="r in pagedStaging" :key="r.id">
                 <tr>
                   <td x-text="r.minsan"></td>
-                  <td x-text="r.lotto || r.batch"></td>
-                  <td x-text="r.giacenza || r.raw_quantity"></td>
-                  <td x-text="(r.scadenza||r.raw_expiry)? new Date(r.scadenza||r.raw_expiry).toLocaleDateString() : '-'"></td>
+                  <td x-text="r.ditta"></td>
+                  <td x-text="r.lotto"></td>
+                  <td x-text="r.giacenza"></td>
+                  <td x-text="r.costomedio"></td>
+                  <td x-text="r.prezzo_bd"></td>
+                  <td x-text="r.iva"></td>
+                  <td x-text="r.scadenza ? new Date(r.scadenza).toLocaleDateString() : '-'"></td>
                 </tr>
               </template>
-              <tr x-show="!filteredStaging.length"><td colspan="4" class="text-center text-muted">Nessun record</td></tr>
+              <tr x-show="!filteredStaging.length">
+                <td colspan="8" class="text-center text-muted">Nessun record</td>
+              </tr>
             </tbody>
           </table>
-          <nav><ul class="pagination justify-content-center mb-0">
-            <li class="page-item" :class="{disabled: pageStaging===1}">
-              <button class="page-link" @click="pageStaging=Math.max(1,pageStaging-1)">Prev</button>
-            </li>
-            <template x-for="p in totalPagesStaging" :key="p">
-              <li class="page-item" :class="{active: pageStaging===p}">
-                <button class="page-link" @click="pageStaging=p" x-text="p"></button>
+          <!-- Paginazione -->
+          <nav aria-label="Staging pagination">
+            <ul class="pagination justify-content-center mb-0">
+              <li class="page-item" :class="{disabled: pageStaging===1}">
+                <button class="page-link" @click="pageStaging = Math.max(1, pageStaging-1)">Prev</button>
               </li>
-            </template>
-            <li class="page-item" :class="{disabled: pageStaging===totalPagesStaging}">
-              <button class="page-link" @click="pageStaging=Math.min(totalPagesStaging,pageStaging+1)">Next</button>
-            </li>
-          </ul></nav>
+              <template x-for="p in totalPagesStaging" :key="p">
+                <li class="page-item" :class="{active: pageStaging===p}">
+                  <button class="page-link" @click="pageStaging = p" x-text="p"></button>
+                </li>
+              </template>
+              <li class="page-item" :class="{disabled: pageStaging===totalPagesStaging}">
+                <button class="page-link" @click="pageStaging = Math.min(totalPagesStaging, pageStaging+1)">Next</button>
+              </li>
+            </ul>
+          </nav>
         </div>
       </div>
 
-      <!-- Normalized -->
+      <!-- NORMALIZED TABLE -->
       <div class="card shadow-sm">
         <div class="card-header bg-light">Normalized Inventory</div>
         <div class="card-body table-responsive">
           <table class="table table-sm table-striped">
-            <thead><tr><th>MINSAN</th><th>Qty Totale</th><th>Expiry</th></tr></thead>
+            <thead>
+              <tr>
+                <th>MINSAN</th>
+                <th>Ditta</th>
+                <th>Qty Totale</th>
+                <th>CostoMedio</th>
+                <th>PrezzoBD</th>
+                <th>IVA</th>
+                <th>Scadenza</th>
+              </tr>
+            </thead>
             <tbody>
               <template x-for="n in pagedNormalized" :key="n.minsan">
                 <tr>
                   <td x-text="n.minsan"></td>
+                  <td x-text="n.ditta"></td>
                   <td x-text="n.total_qty"></td>
-                  <td x-text="n.expiry?new Date(n.expiry).toLocaleDateString():'-'"></td>
+                  <td x-text="n.costomedio"></td>
+                  <td x-text="n.prezzo_bd"></td>
+                  <td x-text="n.iva"></td>
+                  <td x-text="n.expiry ? new Date(n.expiry).toLocaleDateString() : '-'"></td>
                 </tr>
               </template>
-              <tr x-show="!filteredNormalized.length"><td colspan="3" class="text-center text-muted">Nessun record</td></tr>
+              <tr x-show="!filteredNormalized.length">
+                <td colspan="7" class="text-center text-muted">Nessun record</td>
+              </tr>
             </tbody>
           </table>
-          <nav><ul class="pagination justify-content-center mb-0">
-            <li class="page-item" :class="{disabled: pageNormalized===1}">
-              <button class="page-link" @click="pageNormalized=Math.max(1,pageNormalized-1)">Prev</button>
-            </li>
-            <template x-for="p in totalPagesNormalized" :key="p">
-              <li class="page-item" :class="{active: pageNormalized===p}">
-                <button class="page-link" @click="pageNormalized=p" x-text="p"></button>
+          <!-- Paginazione -->
+          <nav aria-label="Normalized pagination">
+            <ul class="pagination justify-content-center mb-0">
+              <li class="page-item" :class="{disabled: pageNormalized===1}">
+                <button class="page-link" @click="pageNormalized = Math.max(1, pageNormalized-1)">Prev</button>
               </li>
-            </template>
-            <li class="page-item" :class="{disabled: pageNormalized===totalPagesNormalized}">
-              <button class="page-link" @click="pageNormalized=Math.min(totalPagesNormalized,pageNormalized+1)">Next</button>
-            </li>
-          </ul></nav>
+              <template x-for="p in totalPagesNormalized" :key="p">
+                <li class="page-item" :class="{active: pageNormalized===p}">
+                  <button class="page-link" @click="pageNormalized = p" x-text="p"></button>
+                </li>
+              </template>
+              <li class="page-item" :class="{disabled: pageNormalized===totalPagesNormalized}">
+                <button class="page-link" @click="pageNormalized = Math.min(totalPagesNormalized, pageNormalized+1)">Next</button>
+              </li>
+            </ul>
+          </nav>
         </div>
       </div>
     </section>
@@ -252,7 +328,6 @@
           this.loadCompanies();
           this.loadLogs();
         },
-
         onFileChange(e) {
           this.file = e.target.files[0];
           this.uploadStatus = '';
@@ -263,10 +338,17 @@
           if (!this.file) return alert('Seleziona un file Excel');
           this.uploadStatus = 'Upload in corso…';
           this.uploadProgress = 0;
-          const form = new FormData(); form.append('file', this.file);
+
+          // Upload via XHR for progress
+          const form = new FormData();
+          form.append('file', this.file);
           const xhr = new XMLHttpRequest();
           xhr.open('POST', '/.netlify/functions/upload');
-          xhr.upload.onprogress = e => { if (e.lengthComputable) this.uploadProgress = Math.round(e.loaded/e.total*100); };
+          xhr.upload.onprogress = e => {
+            if (e.lengthComputable) {
+              this.uploadProgress = Math.round(e.loaded / e.total * 100);
+            }
+          };
           xhr.onload = async () => {
             if (xhr.status < 300) {
               const { import_id, rows_imported } = JSON.parse(xhr.responseText);
@@ -274,27 +356,43 @@
               this.uploadStatus = `${rows_imported} righe importate. Normalizzazione…`;
               this.uploadProgress = 100;
 
+              // Normalize
               const normRes = await fetch('/.netlify/functions/normalize', {
                 method: 'POST',
                 headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({ import_id })
               });
-              const normJ = await normRes.json(); if (!normRes.ok) { this.uploadStatus = `Errore normalize: ${normJ.error}`; return; }
+              const normJ = await normRes.json();
+              if (!normRes.ok) {
+                this.uploadStatus = `Errore normalize: ${normJ.error}`;
+                return;
+              }
 
+              // Compare
               this.uploadStatus = 'Compare in corso…';
               const cmpRes = await fetch('/.netlify/functions/compare', {
                 method: 'POST',
                 headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({ import_id })
               });
-              const cmpJ = await cmpRes.json(); if (!cmpRes.ok) { this.uploadStatus = `Errore compare: ${cmpJ.error}`; return; }
-              const count = cmpJ.updates_count||0;
+              const cmpJ = await cmpRes.json();
+              if (!cmpRes.ok) {
+                this.uploadStatus = `Errore compare: ${cmpJ.error}`;
+                return;
+              }
+              const count = cmpJ.updates_count || 0;
 
-              this.$nextTick(()=>{ this.tab = 'data'; });
+              // Switch to Dati before loading
+              this.$nextTick(() => { this.tab = 'data'; });
+
+              // Load all views
               this.uploadStatus = 'Caricamento dati…';
               await Promise.all([
-                this.loadUpdates(), this.loadStaging(), this.loadNormalized(),
-                this.loadCompanies(), this.loadLogs()
+                this.loadUpdates(),
+                this.loadStaging(),
+                this.loadNormalized(),
+                this.loadCompanies(),
+                this.loadLogs()
               ]);
 
               this.uploadStatus = `Completato: ${count} modifiche pronte.`;
@@ -302,53 +400,80 @@
               this.uploadStatus = `Errore upload: ${xhr.responseText}`;
             }
           };
-          xhr.onerror = () => { this.uploadStatus = 'Errore di rete durante upload'; };
+          xhr.onerror = () => {
+            this.uploadStatus = 'Errore di rete durante upload';
+          };
           xhr.send(form);
         },
 
         // computed
         get filteredStaging() {
-          return this.searchMin
-            ? this.staging.filter(r => String(r.minsan).includes(this.searchMin.trim()))
-            : this.staging;
+          if (!this.searchMin) return this.staging;
+          return this.staging.filter(r =>
+            String(r.minsan).includes(this.searchMin.trim())
+          );
         },
         get filteredNormalized() {
-          return this.searchMin
-            ? this.normalized.filter(n => String(n.minsan).includes(this.searchMin.trim()))
-            : this.normalized;
+          if (!this.searchMin) return this.normalized;
+          return this.normalized.filter(n =>
+            String(n.minsan).includes(this.searchMin.trim())
+          );
         },
-        get totalPagesStaging() { return Math.max(1, Math.ceil(this.filteredStaging.length/this.perPage)); },
-        get totalPagesNormalized() { return Math.max(1, Math.ceil(this.filteredNormalized.length/this.perPage)); },
-        get pagedStaging() { const s=(this.pageStaging-1)*this.perPage; return this.filteredStaging.slice(s,s+this.perPage); },
-        get pagedNormalized() { const s=(this.pageNormalized-1)*this.perPage; return this.filteredNormalized.slice(s,s+this.perPage); },
+        get totalPagesStaging() {
+          return Math.max(1, Math.ceil(this.filteredStaging.length / this.perPage));
+        },
+        get totalPagesNormalized() {
+          return Math.max(1, Math.ceil(this.filteredNormalized.length / this.perPage));
+        },
+        get pagedStaging() {
+          const start = (this.pageStaging - 1) * this.perPage;
+          return this.filteredStaging.slice(start, start + this.perPage);
+        },
+        get pagedNormalized() {
+          const start = (this.pageNormalized - 1) * this.perPage;
+          return this.filteredNormalized.slice(start, start + this.perPage);
+        },
 
         // methods
         async loadUpdates() {
           if (!this.importId) return;
           const r = await fetch(`/.netlify/functions/list-updates?import_id=${this.importId}`);
-          this.updates = (await r.json()).map(u => ({...u,sel:false}));
+          this.updates = (await r.json()).map(u => ({ ...u, sel: false }));
         },
-        toggleAll(e) { this.updates.forEach(u=>u.sel=e.target.checked); },
+        toggleAll(e) {
+          this.updates.forEach(u => u.sel = e.target.checked);
+        },
         async approveSelected() {
-          const ids = this.updates.filter(u=>u.sel).map(u=>u.id);
+          const ids = this.updates.filter(u => u.sel).map(u => u.id);
           if (!ids.length) return alert('Seleziona almeno una modifica');
-          await fetch('/.netlify/functions/approve',{method:'POST',body:JSON.stringify({update_ids:ids})});
-          await this.loadUpdates(); this.loadLogs();
+          await fetch('/.netlify/functions/approve', {
+            method: 'POST',
+            body: JSON.stringify({ update_ids: ids })
+          });
+          await this.loadUpdates();
+          this.loadLogs();
         },
 
         async loadCompanies() {
           const r = await fetch('/.netlify/functions/companies');
           this.companies = await r.json();
         },
-        formReset() { this.form={id:'',name:'',markup_pct:0}; },
+        formReset() {
+          this.form = { id: '', name: '', markup_pct: 0 };
+        },
         async saveCompany() {
-          const opts={method:this.form.id?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(this.form)};
-          await fetch('/.netlify/functions/companies',opts);
-          this.formReset(); this.loadCompanies();
+          const opts = {
+            method: this.form.id ? 'PATCH' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(this.form)
+          };
+          await fetch('/.netlify/functions/companies', opts);
+          this.formReset();
+          this.loadCompanies();
         },
 
         async previewMarkup() {
-          const r = await fetch('/.netlify/functions/preview-markup',{method:'POST'});
+          const r = await fetch('/.netlify/functions/preview-markup', { method: 'POST' });
           this.preview = await r.json();
         },
 
@@ -373,14 +498,25 @@
 
         async normalizeAndReload() {
           if (!this.importId) return alert('Prima importa un file');
-          const r = await fetch('/.netlify/functions/normalize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({import_id:this.importId})});
-          const j = await r.json(); if (!r.ok) { alert(`Errore normalize: ${j.error}`); return; }
-          await this.loadStaging(); await this.loadNormalized();
+          const r = await fetch('/.netlify/functions/normalize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ import_id: this.importId })
+          });
+          const j = await r.json();
+          if (!r.ok) {
+            alert(`Errore normalize: ${j.error}`);
+            return;
+          }
+          await this.loadStaging();
+          await this.loadNormalized();
+
         }
       }
     }
   </script>
 
+  <!-- Bootstrap Bundle JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
