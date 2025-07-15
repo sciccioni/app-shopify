@@ -6,37 +6,33 @@ import { meanBy } from 'lodash';
 /* ---------- Supabase ---------------------------------------------------- */
 const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!,
+  process.env.SUPABASE_SERVICE_KEY!,          // service-role key (bypasses RLS)
   { auth: { persistSession: false } }
 );
 
 /* ---------- Helpers ----------------------------------------------------- */
+/** restituisce il primo campo definito tra gli alias passati */
 const col = (row: any, ...keys: string[]) =>
   keys.reduce<any>((val, k) => (val ?? row[k]), undefined);
 
-/** Converte "7,04" → 7.04, "1.234,56" → 1234.56, "" → 0 */
-const toNum = (value: any): number => {
-  if (value === null || value === undefined || value === '') return 0;
-  const n = Number(
-    String(value)
-      .trim()
-      .replace(/\./g, '')   // rimuove separatore migliaia
-      .replace(',', '.')    // converte virgola in punto
-  );
+/** converte "1.234,56" → 1234.56, "7,04" → 7.04, valori vuoti → 0 */
+const toNum = (v: any): number => {
+  if (v === null || v === undefined || v === '') return 0;
+  const n = Number(String(v).trim().replace(/\./g, '').replace(',', '.'));
   return isNaN(n) ? 0 : n;
 };
 
 export const handler: Handler = async (event) => {
-  const start = Date.now();
-
+  const t0 = Date.now();
   if (event.httpMethod !== 'POST')
     return { statusCode: 405, body: 'Only POST allowed' };
 
   try {
     const { import_id } = JSON.parse(event.body || '{}');
-    if (!import_id) return { statusCode: 400, body: 'import_id mancante' };
+    if (!import_id)
+      return { statusCode: 400, body: 'import_id mancante' };
 
-    /* 1️⃣  Righe grezze */
+    /* 1️⃣  rows grezzi ---------------------------------------------------- */
     const { data: raw, error: errRaw } = await supabase
       .from('imports_raw')
       .select('row_data')
@@ -44,36 +40,42 @@ export const handler: Handler = async (event) => {
 
     if (errRaw) throw errRaw;
     if (!raw?.length) {
-      console.warn(`normalizeImport → no rows for import ${import_id}`);
+      console.warn(`normalizeImport → no rows for ${import_id}`);
       return { statusCode: 200, body: JSON.stringify({ success: false, rows: 0 }) };
     }
     console.log(`normalizeImport → ${raw.length} rows raw`);
 
-    /* 2️⃣  Aggregazione per codice (Minsan/SKU) */
+    /* 2️⃣  aggrega per codice (Minsan/SKU) ------------------------------- */
     const grouped: Record<string, any[]> = {};
     raw.forEach(({ row_data }) => {
-      const r = row_data as any;
-      const code = String(
+      const r   = row_data as any;
+      const sku = String(
         col(r, 'minsan', 'Minsan', 'MINSAN', 'sku', 'SKU', 'codice', 'Codice', 'CODICE') || ''
       )
         .trim()
-        .replace(/^0+/, '');        // opz.: rimuove zeri iniziali
-      if (!code) {
-        console.warn('Row without code:', r);
+        .replace(/^0+/, '');           // opz.: rimuovo zeri iniziali
+      if (!sku) {
+        console.warn('normalizeImport → row without code', r);
         return;
       }
-      grouped[code] = grouped[code] ? [...grouped[code], r] : [r];
+      grouped[sku] = grouped[sku] ? [...grouped[sku], r] : [r];
     });
 
     const now = new Date().toISOString();
     const normalized = Object.entries(grouped).map(([sku, rows]) => {
-      const giacenza    = rows.reduce(
+      const giacenza   = rows.reduce(
         (s, r) => s + toNum(col(r, 'giacenza', 'Giacenza', 'GIACENZA')), 0);
-      const costoMedio  = meanBy(rows, (r) =>
+      const costoMedio = meanBy(rows, (r) =>
         toNum(col(r,
           'costo_medio', 'CostoMedio', 'COSTO_MEDIO',
-          'prezzo_bd', 'PrezzoBD', 'PREZZO_BD')));
+          'prezzo_bd',   'PrezzoBD',   'PREZZO_BD')));
       const first = rows[0];
+
+      /* scadenza più vicina */
+      const scadCell = rows
+        .map(r => col(r, 'scadenza', 'Scadenza'))
+        .filter(Boolean)
+        .sort((a, b) => dayjs(a).valueOf() - dayjs(b).valueOf())[0] ?? null;
 
       return {
         import_id,
@@ -81,25 +83,30 @@ export const handler: Handler = async (event) => {
         ditta          : col(first, 'ditta', 'Ditta') ?? null,
         ean            : col(first, 'ean', 'EAN') ?? null,
         descrizione    : col(first, 'descrizione', 'Descrizione') ?? null,
-        scadenza       : rows
-          .filter(r => col(r, 'scadenza', 'Scadenza'))
-          .sort((a, b) =>
-            dayjs(col(a, 'scadenza', 'Scadenza')).valueOf() -
-            dayjs(col(b, 'scadenza', 'Scadenza')).valueOf())[0]?.Scadenza ?? null,
+        scadenza       : scadCell,
         giacenza       : Math.max(Math.round(giacenza), 0),
         costo_medio    : Number(costoMedio.toFixed(4)),
         prezzo_bd      : toNum(col(first, 'prezzo_bd', 'PrezzoBD', 'PREZZO_BD')) || null,
         iva            : toNum(col(first, 'iva', 'IVA')) || null,
-        prezzo_calcolato: null,    // calcolabile più avanti
+        prezzo_calcolato: null,
         created_at     : now
       };
     });
 
-    /* 3️⃣  Inserimento */
+    /* 3️⃣  INSERT --------------------------------------------------------- */
     await supabase.from('products').delete().eq('import_id', import_id);
+
+    let inserted = 0;
     if (normalized.length) {
-      const { error: insErr } = await supabase.from('products').insert(normalized);
-      if (insErr) throw insErr;
+      const { data: insData, error: insErr } =
+        await supabase.from('products')
+          .insert(normalized)
+          .select('id');            // restituisce righe realmente salvate
+      if (insErr) {
+        console.error('INSERT error', insErr);
+        throw insErr;
+      }
+      inserted = insData?.length || 0;
     }
 
     await supabase
@@ -107,10 +114,10 @@ export const handler: Handler = async (event) => {
       .update({ status: 'normalized' })
       .eq('id', import_id);
 
-    console.log(`normalizeImport → inserted ${normalized.length} rows – ${Date.now() - start} ms`);
+    console.log(`normalizeImport → saved ${inserted} / ${normalized.length} rows – ${Date.now() - t0} ms`);
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true, rows: normalized.length })
+      body: JSON.stringify({ success: true, rows: inserted })
     };
   } catch (e: any) {
     console.error('Normalize error', e);
