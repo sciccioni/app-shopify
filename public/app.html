@@ -126,12 +126,17 @@
     }
 
     /* Tabs */
-    $('.tab-btn').on('click', function () {
+    $('.tab-btn').on('click', async function () {
       const tab = $(this).data('tab');
       $('.tab-btn').removeClass('bg-blue-600 text-white').addClass('bg-gray-300 text-black');
       $(this).addClass('bg-blue-600 text-white').removeClass('bg-gray-300 text-black');
       $('.tab-content').addClass('hidden');
       $('#tab-' + tab).removeClass('hidden');
+
+      /* Quando apro "Revisione Modifiche" ricarico i dati */
+      if (tab === 'review' && localStorage.lastImportId) {
+        await loadComparisonData(localStorage.lastImportId);
+      }
     });
 
     /* Logout */
@@ -194,6 +199,7 @@
         
         const { import_id } = await uploadResponse.json();
         console.log('Upload completato, import_id:', import_id);
+        localStorage.lastImportId = import_id; // Salva per ricarichi futuri
         
         // 3️⃣ Normalize Import
         $('#progress-bar').css('width', '50%');
@@ -245,8 +251,8 @@
         $('#progress-bar').css('width', '100%');
         showStatus('Completato! Vai a "Revisione Modifiche" per vedere i risultati.', 'success');
         
-        // Load comparison data
-        loadComparisonData(import_id);
+        // Carica subito i dati di confronto
+        await loadComparisonData(import_id);
         
       } catch (error) {
         console.error('Errore nel workflow:', error);
@@ -264,49 +270,79 @@
       }
     });
 
-    // Function to load comparison data
+    /* ------------ Carica diff & stats ------------ */
     async function loadComparisonData(import_id) {
       try {
+        console.log('Caricamento dati confronto per import_id:', import_id);
         const response = await fetch(`/.netlify/functions/getComparisonData?import_id=${import_id}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
         });
         
-        if (response.ok) {
-          const data = await response.json();
-          // Update stats
-          $('#stat-rows').text(data.stats?.total_rows || 0);
-          $('#stat-unique').text(data.stats?.unique_products || 0);
-          $('#stat-changes').text(data.stats?.changes_found || 0);
-          $('#stat-new-companies').text(data.stats?.new_companies || 0);
-          
-          // Update table
-          const tbody = $('#comparison-table tbody');
-          tbody.empty();
-          
-          if (data.changes && data.changes.length > 0) {
-            data.changes.forEach(change => {
-              tbody.append(`
-                <tr>
-                  <td class="px-4 py-2">${change.description || ''}</td>
-                  <td class="px-4 py-2">${change.minsan}</td>
-                  <td class="px-4 py-2">${change.ditta || ''}</td>
-                  <td class="px-4 py-2">${change.old_inventory || 0} → ${change.new_inventory || 0}</td>
-                  <td class="px-4 py-2">€${change.old_price || 0} → €${change.new_price || 0}</td>
-                  <td class="px-4 py-2">€${change.old_cost || 0} → €${change.new_cost || 0}</td>
-                  <td class="px-4 py-2 text-center">
-                    <input type="checkbox" class="change-checkbox" data-minsan="${change.minsan}">
-                  </td>
-                </tr>
-              `);
-            });
-          }
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Errore caricamento dati:', errorText);
+          throw new Error(`Errore caricamento dati: ${errorText}`);
         }
+        
+        const data = await response.json();
+        console.log('Dati caricati:', data);
+        
+        // Aggiorna statistiche
+        $('#stat-rows').text(data.stats?.total_rows || 0);
+        $('#stat-unique').text(data.stats?.unique_products || 0);
+        $('#stat-changes').text(data.stats?.changes_found || 0);
+        $('#stat-new-companies').text(data.stats?.new_companies || 0);
+        
+        // Aggiorna tabella
+        const tbody = $('#comparison-table tbody');
+        tbody.empty();
+        
+        if (!data.changes || data.changes.length === 0) {
+          tbody.append('<tr><td colspan="7" class="text-center py-4">Nessuna differenza da mostrare.</td></tr>');
+          return;
+        }
+        
+        data.changes.forEach(change => {
+          const missingClass = change.note ? 'bg-red-50' : '';
+          tbody.append(`
+            <tr class="${missingClass}">
+              <td class="px-4 py-2">${change.description || ''}</td>
+              <td class="px-4 py-2">${change.minsan}</td>
+              <td class="px-4 py-2">${change.ditta || ''}</td>
+              <td class="px-4 py-2">${change.old_inventory ?? '-'} → ${change.new_inventory ?? '-'}</td>
+              <td class="px-4 py-2">€${change.old_price ?? '-'} → €${change.new_price ?? '-'}</td>
+              <td class="px-4 py-2">€${change.old_cost ?? '-'} → €${change.new_cost ?? '-'}</td>
+              <td class="px-4 py-2 text-center">
+                <input type="checkbox" class="change-checkbox" data-minsan="${change.minsan}">
+              </td>
+            </tr>
+          `);
+        });
+        
       } catch (error) {
-        console.error('Errore caricamento dati confronto:', error);
+        console.error('Errore nel caricamento dati confronto:', error);
+        showStatus(error.message || 'Errore nel caricamento dati', 'error');
       }
     }
+
+    /* ------------ Bulk Update ------------ */
+    $('#bulk-update-btn').on('click', async function() {
+      const selectedMinsans = [];
+      $('.change-checkbox:checked').each(function() {
+        selectedMinsans.push($(this).data('minsan'));
+      });
+      
+      if (selectedMinsans.length === 0) {
+        showStatus('Seleziona almeno un prodotto da aggiornare', 'error');
+        return;
+      }
+      
+      // Implementa qui la logica per l'aggiornamento bulk
+      console.log('Prodotti selezionati per aggiornamento:', selectedMinsans);
+      showStatus(`${selectedMinsans.length} prodotti selezionati per aggiornamento`, 'info');
+    });
   </script>
 </body>
 </html>
