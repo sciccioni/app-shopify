@@ -1,45 +1,22 @@
-import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
+import { Handler } from '@netlify/functions';
+import jwt from 'jsonwebtoken';
 
-const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
-  // Accetta solo richieste di tipo POST
-  if (event.httpMethod !== "POST") {
-    return {
-      statusCode: 405, // Metodo non consentito
-      body: JSON.stringify({ error: "Metodo non consentito." }),
-    };
+const APP_PASSWORD = process.env.APP_PASSWORD as string;
+const JWT_SECRET = process.env.JWT_SECRET as string;
+
+export const handler: Handler = async (event) => {
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
   try {
-    const { password } = JSON.parse(event.body || "{}");
-    const appPassword = process.env.APP_PASSWORD;
-
-    // Controlla se la password di sistema è configurata su Netlify
-    if (!appPassword) {
-      console.error("La variabile d'ambiente APP_PASSWORD non è impostata.");
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: "La password dell'applicazione non è configurata sul server." }),
-      };
+    const { password } = JSON.parse(event.body || '{}');
+    if (password !== APP_PASSWORD) {
+      return { statusCode: 401, body: JSON.stringify({ error: 'Password errata' }) };
     }
-
-    // Confronta la password inviata con quella di sistema
-    if (password === appPassword) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ success: true, message: "Login effettuato con successo." }),
-      };
-    } else {
-      return {
-        statusCode: 401, // Non autorizzato
-        body: JSON.stringify({ error: "Password non valida." }),
-      };
-    }
+    const token = jwt.sign({ authenticated: true }, JWT_SECRET, { expiresIn: '2h' });
+    return { statusCode: 200, body: JSON.stringify({ token }) };
   } catch (error) {
-    return {
-      statusCode: 400, // Richiesta non valida
-      body: JSON.stringify({ error: "Richiesta non valida o malformata." }),
-    };
+    return { statusCode: 500, body: JSON.stringify({ error: 'Server error' }) };
   }
 };
-
-export { handler };
