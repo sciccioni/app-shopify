@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!,   // service role → bypassa RLS
+  process.env.SUPABASE_SERVICE_KEY!,
   { auth: { persistSession: false } }
 );
 
@@ -12,29 +12,35 @@ export const handler: Handler = async (event) => {
   if (!import_id) return { statusCode: 400, body: 'import_id mancante' };
 
   try {
-    /* 1️⃣  products → per contatori */
+    /* stats unique products */
     const { count: unique } = await supabase
       .from('products')
       .select('minsan', { count: 'exact', head: true })
       .eq('import_id', import_id);
 
-    /* 2️⃣  pending_updates → diff & SKU mancanti */
-    const { data: rows, error } = await supabase
+    /* diff rows */
+    const { data: rows } = await supabase
       .from('pending_updates')
       .select('minsan,ditta,product_title,changes')
       .eq('import_id', import_id);
-
-    if (error) throw error;
 
     const changes = rows!.map((r) => {
       const c: any = {
         description : r.product_title ?? '',
         minsan      : r.minsan,
-        ditta       : r.ditta ?? ''
+        ditta       : r.ditta ?? '',
+        old_inventory : '—',
+        new_inventory : '—',
+        old_price     : '—',
+        new_price     : '—',
+        old_cost      : '—',
+        new_cost      : '—',
+        note          : ''
       };
 
       if (r.changes?.missing) {
         c.note = 'Prodotto assente in Shopify';
+        return c;
       }
       if (r.changes?.inventory) {
         c.old_inventory = r.changes.inventory.old;
