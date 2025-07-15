@@ -1,24 +1,13 @@
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import dayjs from 'dayjs';
+import { meanBy } from 'lodash';
 
-interface RawRow {
-  minsan: string | number;
-  ditta?: string;
-  giacenza?: number;
-  costo_medio?: number;
-  prezzo_bd?: number;
-  iva?: number;
-  scadenza?: string | null;
-  ean?: string | number;
-  descrizione?: string;
-}
-
-const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-  auth: { persistSession: false }
-});
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_KEY!,
+  { auth: { persistSession: false } }
+);
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -27,94 +16,65 @@ export const handler: Handler = async (event) => {
 
   try {
     const { import_id } = JSON.parse(event.body || '{}');
-    if (!import_id) {
-      return { statusCode: 400, body: 'import_id mancante' };
-    }
+    if (!import_id) return { statusCode: 400, body: 'import_id mancante' };
 
-    /* 1️⃣ Legge le righe grezze */
-    const { data: rawRows, error: rawError } = await supabase
+    /* 1. righe grezze */
+    const { data: raw, error: errRaw } = await supabase
       .from('imports_raw')
       .select('row_data')
       .eq('import_id', import_id);
+    if (errRaw) throw errRaw;
 
-    if (rawError) {
-      console.error(rawError);
-      return { statusCode: 500, body: 'Errore lettura imports_raw' };
-    }
-
-    /* 2️⃣ Aggrega per MINSAN */
-    const aggregated: Record<string, RawRow & { giacenza: number; costo_medio: number }> = {};
-
-    rawRows!.forEach(({ row_data }) => {
-      const r: RawRow = row_data as RawRow;
-      const key = String(r.minsan).trim();
-      const qty = Number(r.giacenza ?? 0);
-      const cost = Number(r.costo_medio ?? r.prezzo_bd ?? 0);
-
-      if (!aggregated[key]) {
-        aggregated[key] = { ...r, minsan: key, giacenza: 0, costo_medio: 0 };
-      }
-
-      const prevQty = aggregated[key].giacenza;
-      aggregated[key].giacenza += qty;
-      aggregated[key].costo_medio =
-        prevQty + qty > 0
-          ? (aggregated[key].costo_medio * prevQty + cost * qty) / (prevQty + qty)
-          : cost;
-
-      /* scadenza più vicina */
-      if (r.scadenza) {
-        const current = aggregated[key].scadenza;
-        if (!current || dayjs(r.scadenza).isBefore(dayjs(current))) {
-          aggregated[key].scadenza = r.scadenza;
-        }
-      }
+    /* 2. aggregazione per MINSAN */
+    const group: Record<string, any[]> = {};
+    raw!.forEach(({ row_data }) => {
+      const r = row_data as any;
+      const k = String(r.minsan).trim();
+      group[k] = group[k] ? [...group[k], r] : [r];
     });
 
-    /* 3️⃣ Recupera i markup */
+    /* 3. markup */
     const { data: markups } = await supabase
       .from('company_markups')
-      .select('company_name, markup_percentage');
+      .select('ditta, markup_percentage');
 
     const now = new Date().toISOString();
+    const normalized = Object.entries(group).map(([minsan, rows]) => {
+      const giacenza = rows.reduce((s, r) => s + Number(r.giacenza || 0), 0);
+      const costo_medio = meanBy(rows, (r) => Number(r.costo_medio || r.prezzo_bd || 0));
 
-    /* 4️⃣ Scrive in imports_normalized */
-    const normalizedRows = Object.values(aggregated).map((row) => {
-      const markupRow = markups?.find((m) => m.company_name === row.ditta);
-      const markupPct = markupRow ? Number(markupRow.markup_percentage) : 0;
-      const ivaPct = Number(row.iva ?? 0);
-
-      const prezzo_calcolato =
-        row.costo_medio * (1 + markupPct / 100) * (1 + ivaPct / 100);
+      const first = rows[0];
+      const ivaPct = Number(first.iva || 0);
+      const markupPct =
+        markups?.find((m) => m.ditta === first.ditta)?.markup_percentage || 0;
 
       return {
         import_id,
-        minsan: row.minsan,
-        ditta: row.ditta ?? null,
-        giacenza: Math.max(row.giacenza, 0),
-        costo_medio: Number(row.costo_medio.toFixed(4)),
-        prezzo_bd: row.prezzo_bd ?? null,
-        iva: row.iva ?? null,
-        scadenza: row.scadenza ?? null,
-        ean: row.ean ?? null,
-        descrizione: row.descrizione ?? null,
-        prezzo_calcolato,
+        minsan,
+        ean: first.ean ?? null,
+        ditta: first.ditta ?? null,
+        descrizione: first.descrizione ?? null,
+        scadenza: rows
+          .filter((r) => r.scadenza)
+          .sort((a, b) => dayjs(a.scadenza).valueOf() - dayjs(b.scadenza).valueOf())[0]?.scadenza ?? null,
+        giacenza: Math.max(giacenza, 0),
+        costo_medio: Number(costo_medio.toFixed(4)),
+        prezzo_bd: first.prezzo_bd ?? null,
+        prezzo_calcolato:
+          costo_medio * (1 + markupPct / 100) * (1 + ivaPct / 100),
+        iva: ivaPct,
         created_at: now
       };
     });
 
-    /* Pulisce eventuali normalizzazioni pregresse */
-    await supabase.from('imports_normalized').delete().eq('import_id', import_id);
-    const { error: insertError } = await supabase.from('imports_normalized').insert(normalizedRows);
-    if (insertError) {
-      console.error(insertError);
-      return { statusCode: 500, body: 'Errore inserimento imports_normalized' };
-    }
+    await supabase.from('products').delete().eq('import_id', import_id);
+    const { error: insErr } = await supabase.from('products').insert(normalized);
+    if (insErr) throw insErr;
 
     await supabase.from('imports').update({ status: 'normalized' }).eq('id', import_id);
     return { statusCode: 200, body: JSON.stringify({ success: true }) };
-  } catch (e) {
+  } catch (e: any) {
     console.error('Normalize error', e);
-    return { statusCode: 500, body: 'Errore interno normalizzazione' };
+    return { statusCode: 500, body: e.message || 'Errore normalizzazione' };
   }
 };
