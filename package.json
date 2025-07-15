@@ -6,10 +6,11 @@
   },
   "dependencies": {
     "@netlify/functions": "^1.2.0",
-    "jsonwebtoken": "^9.0.0",
-    "@supabase/supabase-js": "^2.0.0",
-    "xlsx": "^0.18.5",
     "@shopify/shopify-api": "^7.0.0",
-    "lodash": "^4.17.21"
+    "@supabase/supabase-js": "^2.0.0",
+    "dayjs": "^1.11.10",
+    "jsonwebtoken": "^9.0.0",
+    "lodash": "^4.17.21",
+    "xlsx": "^0.18.5"
   }
 }
