@@ -363,44 +363,42 @@
       </div>
 
       <!-- NORMALIZED TABLE -->
-      <div class="card shadow-sm">
-        <div class="card-header bg-light">Normalized Inventory</div>
-        <div class="card-body table-responsive">
-          <table class="table table-sm table-striped">
-            <thead>
-              <tr>
-                <th>Ditta</th>
-                <th>MINSAN</th>
-                <th>Qty Totale</th>
-                <th>CostoMedio</th>
-                <th>PrezzoBD</th>
-                <th>IVA</th>
-                <th>Scadenza</th>
-              </tr>
-            </thead>
-            <tbody>
-              <template x-for="n in pagedNormalized" :key="n.minsan">
-                <tr>
-                  <td x-text="n.ditta"></td>
-                  <td x-text="n.minsan"></td>
-                  <td x-text="n.total_qty"></td>
-                  <td x-text="n.costomedio"></td>
-                  <td x-text="n.prezzo_bd"></td>
-                  <td x-text="n.iva"></td>
-                  <td
-                    x-text="
-                      n.expiry
-                        ? new Date(n.expiry).toLocaleDateString()
-                        : '-'
-                    "
-                  ></td>
-                </tr>
-              </template>
-              <tr x-show="!filteredNormalized.length">
-                <td colspan="7" class="text-center text-muted">Nessun record</td>
-              </tr>
-            </tbody>
-          </table>
+     <div class="card shadow-sm">
+  <div class="card-header bg-light">Normalized Inventory</div>
+  <div class="card-body table-responsive">
+    <table class="table table-sm table-striped">
+      <thead>
+        <tr>
+          <th>Ditta</th>
+          <th>MINSAN</th>
+          <th>EAN</th>
+          <th>Descrizione</th>
+          <th>Qty Totale</th>
+          <th>CostoMedio</th>
+          <th>PrezzoBD</th>
+          <th>IVA</th>
+          <th>Scadenza</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="n in pagedNormalized" :key="n.id">
+          <tr>
+            <td x-text="n.ditta"></td>
+            <td x-text="n.minsan"></td>
+            <td x-text="n.ean"></td>
+            <td x-text="n.descrizione"></td>
+            <td x-text="n.total_qty"></td>
+            <td x-text="n.costomedio"></td>
+            <td x-text="n.prezzo_bd"></td>
+            <td x-text="n.iva"></td>
+            <td x-text="n.expiry ? new Date(n.expiry).toLocaleDateString() : '-'"></td>
+          </tr>
+        </template>
+        <tr x-show="!filteredNormalized.length">
+          <td colspan="9" class="text-center text-muted">Nessun record</td>
+        </tr>
+      </tbody>
+    </table>
 
           <!-- paginazione -->
           <nav aria-label="Normalized pagination">
