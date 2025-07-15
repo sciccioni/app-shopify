@@ -48,7 +48,7 @@ export const handler: Handler = async (event) => {
     /* 2️⃣  carica markups ------------------------------------------------ */
     const { data: markups, error: errMarkups } = await supabase
       .from('company_markups')
-      .select('company_name,markup_percentage');
+      .select('ditta,markup_percentage');
     
     if (errMarkups) {
       console.error('Error loading markups:', errMarkups);
@@ -56,7 +56,7 @@ export const handler: Handler = async (event) => {
     }
 
     const markupMap = Object.fromEntries(
-      (markups || []).map(m => [m.company_name, m.markup_percentage])
+      (markups || []).map(m => [m.ditta, m.markup_percentage])
     );
     console.log(`normalizeImport → loaded ${Object.keys(markupMap).length} markups`);
 
