@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inventory Sync Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+  <div class="container mx-auto p-4">
+    <!-- Navbar/Logout -->
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-3xl font-bold">Inventory Sync</h1>
+      <button id="logout-btn" class="px-4 py-2 bg-red-500 text-white rounded">Logout</button>
+    </div>
+
+    <!-- Tabs -->
+    <ul id="tabs" class="flex border-b">
+      <li class="mr-1">
+        <a href="#tab-upload" class="bg-white inline-block py-2 px-4 font-semibold">Carica File</a>
+      </li>
+      <li class="mr-1">
+        <a href="#tab-review" class="bg-white inline-block py-2 px-4 text-blue-500 hover:text-blue-800 font-semibold">Revisione Modifiche</a>
+      </li>
+      <li class="mr-1">
+        <a href="#tab-markup" class="bg-white inline-block py-2 px-4 font-semibold">Gestione Markup</a>
+      </li>
+      <li class="mr-1">
+        <a href="#tab-products" class="bg-white inline-block py-2 px-4 font-semibold">Prodotti Shopify</a>
+      </li>
+      <li>
+        <a href="#tab-logs" class="bg-white inline-block py-2 px-4 font-semibold">Log Aggiornamenti</a>
+      </li>
+    </ul>
+
+    <!-- Tab Contents -->
+    <div id="tab-contents" class="mt-4">
+      <!-- Tab 1: Carica File -->
+      <div id="tab-upload" class="tab-content">
+        <form id="upload-form" class="space-y-4">
+          <input type="file" id="excel-file" accept=".xlsx" class="block" />
+          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded">Upload</button>
+        </form>
+        <div id="progress" class="w-full bg-gray-200 rounded h-4 mt-4 hidden">
+          <div id="progress-bar" class="bg-blue-600 h-4 rounded" style="width: 0%"></div>
+        </div>
+      </div>
+      <!-- Gli altri tab vengono creati dinamicamente -->
+    </div>
+  </div>
+
+  <script>
+    // Logout
+    $('#logout-btn').click(() => {
+      localStorage.removeItem('token');
+      window.location.href = 'index.html';
+    });
+
+    // Simple tab switching
+    $('#tabs a').click(function(e) {
+      e.preventDefault();
+      $('.tab-content').hide();
+      $($(this).attr('href')).show();
+      $('#tabs a').removeClass('border-l border-t border-r rounded-t text-blue-700');
+      $(this).addClass('border-l border-t border-r rounded-t text-blue-700');
+    });
+    // Show first tab by default
+    $('#tabs a:first').click();
+  </script>
+</body>
+</html>
