@@ -45,7 +45,22 @@ export const handler: Handler = async (event) => {
     }
     console.log(`normalizeImport → ${raw.length} rows raw`);
 
-    /* 2️⃣  aggrega per codice (Minsan/SKU) ------------------------------- */
+    /* 2️⃣  carica markups ------------------------------------------------ */
+    const { data: markups, error: errMarkups } = await supabase
+      .from('company_markups')
+      .select('company_name,markup_percentage');
+    
+    if (errMarkups) {
+      console.error('Error loading markups:', errMarkups);
+      throw errMarkups;
+    }
+
+    const markupMap = Object.fromEntries(
+      (markups || []).map(m => [m.company_name, m.markup_percentage])
+    );
+    console.log(`normalizeImport → loaded ${Object.keys(markupMap).length} markups`);
+
+    /* 3️⃣  aggrega per codice (Minsan/SKU) ------------------------------- */
     const grouped: Record<string, any[]> = {};
     raw.forEach(({ row_data }) => {
       const r   = row_data as any;
@@ -77,23 +92,31 @@ export const handler: Handler = async (event) => {
         .filter(Boolean)
         .sort((a, b) => dayjs(a).valueOf() - dayjs(b).valueOf())[0] ?? null;
 
+      /* calcolo prezzo con markup */
+      const ditta = col(first, 'ditta', 'Ditta') || '';
+      const ivaPct = toNum(col(first, 'iva', 'IVA'));
+      const markupPct = markupMap[ditta] ?? 0;
+      const prezzoCalcolato = costoMedio > 0 
+        ? Number((costoMedio * (1 + markupPct / 100) * (1 + ivaPct / 100)).toFixed(2))
+        : null;
+
       return {
         import_id,
         minsan         : sku,
-        ditta          : col(first, 'ditta', 'Ditta') ?? null,
-        ean            : col(first, 'ean', 'EAN') ?? null,
-        descrizione    : col(first, 'descrizione', 'Descrizione') ?? null,
+        ditta          : ditta || null,
+        ean            : col(first, 'ean', 'EAN') || null,
+        descrizione    : col(first, 'descrizione', 'Descrizione') || null,
         scadenza       : scadCell,
         giacenza       : Math.max(Math.round(giacenza), 0),
         costo_medio    : Number(costoMedio.toFixed(4)),
         prezzo_bd      : toNum(col(first, 'prezzo_bd', 'PrezzoBD', 'PREZZO_BD')) || null,
-        iva            : toNum(col(first, 'iva', 'IVA')) || null,
-        prezzo_calcolato: null,
+        iva            : ivaPct || null,
+        prezzo_calcolato: prezzoCalcolato,
         created_at     : now
       };
     });
 
-    /* 3️⃣  INSERT --------------------------------------------------------- */
+    /* 4️⃣  INSERT --------------------------------------------------------- */
     await supabase.from('products').delete().eq('import_id', import_id);
 
     let inserted = 0;
