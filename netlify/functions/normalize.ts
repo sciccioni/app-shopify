@@ -13,10 +13,23 @@ export const handler: Handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'import_id mancante' }) };
   }
 
-  // 1) Legge tutte le righe di staging
+  // 1) Legge le righe grezze da staging, usando i nomi esatti delle colonne
   const { data: rows, error: fetchErr } = await supabase
     .from('staging_inventory')
-    .select('minsan, giacenza, scadenza, costomedio, prezzo_bd, iva, ditta')
+    .select(`
+      ditta,
+      minsan,
+      ean,
+      descrizione,
+      lotto,
+      raw_quantity,
+      costo_base,
+      costomedio,
+      prezzo_bd,
+      iva,
+      data_ultimo_costo_ditta,
+      raw_expiry AS scadenza
+    `)
     .eq('import_id', import_id);
 
   if (fetchErr) {
@@ -27,41 +40,46 @@ export const handler: Handler = async (event) => {
   const map = new Map<string, any>();
   rows!.forEach(r => {
     const key = r.minsan;
-    const qty = Number(r.giacenza) || 0;
+    const qty = Number(r.raw_quantity) || 0;
     const expDate = r.scadenza ? new Date(r.scadenza) : null;
+
     if (!map.has(key)) {
       map.set(key, {
         import_id,
-        minsans: key,
+        ditta: r.ditta,
+        minsan: key,
+        ean: r.ean,
+        descrizione: r.descrizione,
         total_qty: qty,
-        expiry: r.scadenza,
         costomedio: r.costomedio,
         prezzo_bd: r.prezzo_bd,
         iva: r.iva,
-        ditta: r.ditta
+        expiry: r.scadenza
       });
     } else {
       const e = map.get(key);
-      // somma algebrica delle giacenze
+      // somma algebrica
       e.total_qty += qty;
-      // sceglie la data di scadenza più recente
+      // se questo lotto ha scadenza più recente, aggiorna expiry + campi
       if (expDate && new Date(e.expiry) < expDate) {
         e.expiry      = r.scadenza;
         e.costomedio  = r.costomedio;
         e.prezzo_bd   = r.prezzo_bd;
         e.iva         = r.iva;
         e.ditta       = r.ditta;
+        e.ean         = r.ean;
+        e.descrizione = r.descrizione;
       }
     }
   });
 
-  // 3) Normalizza le quantità negative a zero
+  // 3) Quantità negative → zero
   const aggregated = Array.from(map.values()).map((e: any) => ({
     ...e,
     total_qty: Math.max(0, e.total_qty)
   }));
 
-  // 4) Pulisce i vecchi record e inserisce i nuovi
+  // 4) Sostituisci i normalized precedenti e inserisci i nuovi
   await supabase.from('normalized_inventory').delete().eq('import_id', import_id);
   const { error: insertErr } = await supabase
     .from('normalized_inventory')
