@@ -3,6 +3,12 @@
   functions = "functions-ts"
   publish = "public"
 
+[functions]
+  # Usa esbuild per bundle TypeScript
+  node_bundler = "esbuild"
+
+[[plugins]]
+  package = "@netlify/plugin-functions-core"
 
 [context.production.environment]
   # Variabili d'ambiente da configurare su Netlify
