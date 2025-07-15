@@ -10,27 +10,60 @@ export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Only POST allowed' };
   }
+
   try {
     const { file } = JSON.parse(event.body || '{}');
-    // Decode base64 Excel file sent from frontend
+    if (!file) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Nessun file ricevuto' }),
+      };
+    }
+
+    // Decode base64 Excel file
     const binary = Buffer.from(file, 'base64');
     const workbook = XLSX.read(binary, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null });
 
-    // Inserisci import e raw rows in Supabase
-    const { data: importRec } = await supabase
+    // 1) Inserimento record import
+    const { data: importRec, error: importError } = await supabase
       .from('imports')
       .insert([{ file_name: 'upload.xlsx' }])
       .single();
+
+    if (importError || !importRec) {
+      console.error('Import insert error:', importError);
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'Errore creazione import record' }),
+      };
+    }
     const import_id = importRec.id;
 
+    // 2) Inserimento righe raw
     const rows = jsonData.map((row: any) => ({ import_id, row_data: row }));
-    await supabase.from('imports_raw').insert(rows);
+    const { error: rawError } = await supabase.from('imports_raw').insert(rows);
 
-    return { statusCode: 200, body: JSON.stringify({ import_id }) };
+    if (rawError) {
+      console.error('Raw rows insert error:', rawError);
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: 'Errore inserimento righe raw' }),
+      };
+    }
+
+    // Success
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ import_id }),
+    };
+
   } catch (error) {
-    console.error(error);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Upload failed' }) };
+    console.error('Upload handler error:', error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Upload failed' }),
+    };
   }
 };
