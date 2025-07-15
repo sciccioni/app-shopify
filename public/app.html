@@ -45,8 +45,15 @@
           <input type="file" id="excel-file" accept=".xlsx" class="block w-full text-gray-700" />
           <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Upload</button>
         </form>
+        
+        <!-- Progress bar con colori migliori -->
         <div id="progress" class="w-full bg-gray-200 rounded h-4 mt-4 hidden">
-          <div id="progress-bar" class="h-4 rounded" style="width: 0%"></div>
+          <div id="progress-bar" class="h-4 bg-blue-600 rounded transition-all duration-500" style="width: 0%"></div>
+        </div>
+        
+        <!-- Status messages -->
+        <div id="upload-status" class="mt-4 hidden">
+          <div id="status-message" class="p-4 rounded"></div>
         </div>
       </section>
 
@@ -155,30 +162,115 @@
     });
     $('#tabs a:first').click();
 
+    // Helper function per mostrare status
+    function showStatus(message, type = 'info') {
+      const $status = $('#upload-status');
+      const $message = $('#status-message');
+      
+      $status.removeClass('hidden');
+      $message.removeClass('bg-green-100 text-green-800 bg-red-100 text-red-800 bg-blue-100 text-blue-800');
+      
+      switch(type) {
+        case 'success':
+          $message.addClass('bg-green-100 text-green-800');
+          break;
+        case 'error':
+          $message.addClass('bg-red-100 text-red-800');
+          break;
+        default:
+          $message.addClass('bg-blue-100 text-blue-800');
+      }
+      
+      $message.text(message);
+    }
+
     // Upload form
     $('#upload-form').submit(async (e) => {
       e.preventDefault();
+      
       const file = $('#excel-file')[0].files[0];
-      if (!file) return alert('Seleziona un file');
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64 = reader.result.split(',')[1];
-        $('#progress').show();
-        $('#progress-bar').css('width', '25%');
-        const res = await fetch('/.netlify/functions/uploadExcel', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ file: base64 })
-        });
-        if (res.ok) {
-          $('#progress-bar').css('width', '50%');
-          const { import_id } = await res.json();
-          // TODO: chiamare normalize e compare
-        } else {
-          alert('Errore upload');
-        }
-      };
-      reader.readAsDataURL(file);
+      if (!file) {
+        showStatus('Seleziona un file Excel', 'error');
+        return;
+      }
+      
+      // Reset status e mostra progress
+      $('#upload-status').addClass('hidden');
+      $('#progress').removeClass('hidden');
+      $('#progress-bar').css('width', '0%');
+      
+      // Disabilita il form durante l'upload
+      $('#excel-file').prop('disabled', true);
+      $('#upload-form button').prop('disabled', true).text('Caricamento...');
+      
+      try {
+        // Leggi il file
+        const reader = new FileReader();
+        
+        reader.onload = async () => {
+          try {
+            const base64 = reader.result.split(',')[1];
+            
+            // Update progress
+            $('#progress-bar').css('width', '25%');
+            showStatus('Caricamento file in corso...', 'info');
+            
+            // Upload
+            const uploadRes = await fetch('/.netlify/functions/uploadExcel', {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+              },
+              body: JSON.stringify({ file: base64 })
+            });
+            
+            if (!uploadRes.ok) {
+              const error = await uploadRes.json();
+              throw new Error(error.error || 'Errore durante l\'upload');
+            }
+            
+            $('#progress-bar').css('width', '50%');
+            const { import_id } = await uploadRes.json();
+            
+            showStatus(`File caricato con successo! Import ID: ${import_id}`, 'success');
+            
+            // TODO: Chiamare le funzioni normalize e compare
+            // Per ora mostriamo solo il completamento
+            $('#progress-bar').css('width', '100%');
+            
+            // Dopo 2 secondi, nascondi la progress bar
+            setTimeout(() => {
+              $('#progress').addClass('hidden');
+              $('#progress-bar').css('width', '0%');
+            }, 2000);
+            
+            // Reset form
+            $('#excel-file').val('');
+            
+          } catch (error) {
+            console.error('Errore upload:', error);
+            showStatus(`Errore: ${error.message}`, 'error');
+            $('#progress').addClass('hidden');
+          }
+        };
+        
+        reader.onerror = () => {
+          showStatus('Errore nella lettura del file', 'error');
+          $('#progress').addClass('hidden');
+        };
+        
+        reader.readAsDataURL(file);
+        
+      } catch (error) {
+        console.error('Errore:', error);
+        showStatus('Errore generico durante l\'upload', 'error');
+        $('#progress').addClass('hidden');
+      } finally {
+        // Riabilita il form
+        $('#excel-file').prop('disabled', false);
+        $('#upload-form button').prop('disabled', false).text('Upload');
+      }
     });
   </script>
 </body>
