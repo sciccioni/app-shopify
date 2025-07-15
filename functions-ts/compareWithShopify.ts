@@ -114,8 +114,19 @@ export const handler: Handler = async (event) => {
       }
     }
 
+    // Pulisci i dati precedenti
     await supabase.from('pending_updates').delete().eq('import_id', import_id);
-    if (pending.length) await supabase.from('pending_updates').insert(pending);
+    
+    // Inserisci i nuovi dati con gestione errori migliorata
+    if (pending.length) {
+      const { data: insData, error: insErr } =
+        await supabase.from('pending_updates').insert(pending).select('id');
+      if (insErr) {
+        console.error('INSERT pending_updates', insErr);
+        throw insErr;                  // fa tornare 500 se qualcosa va storto
+      }
+      console.log(`compareWithShopify → inserted ${insData?.length || 0} rows`);
+    }
 
     await supabase.from('imports').update({ status: 'compared' }).eq('id', import_id);
 
