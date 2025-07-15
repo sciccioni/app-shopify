@@ -13,9 +13,9 @@ const STORE   = process.env.SHOPIFY_STORE_NAME!;
 const TOKEN   = process.env.SHOPIFY_ADMIN_API_TOKEN!;
 const API_VER = process.env.SHOPIFY_API_VERSION || '2025-07';
 
-/* ----- helper: cerca la variante per SKU ----- */
+/* --- helper ---------------------------------------------------------------- */
 async function fetchVariantBySKU(sku: string) {
-  const url = `https://${STORE}/admin/api/${API_VER}/graphql.json`;
+  const url = `https://${STORE}.myshopify.com/admin/api/${API_VER}/graphql.json`;
 
   const query = /* GraphQL */ `
     query getVariantBySku($search: String!) {
@@ -26,15 +26,18 @@ async function fetchVariantBySKU(sku: string) {
             sku
             price
             compareAtPrice
-            quantityAvailable
+            inventoryQuantity           # totale vendibile ✔︎ 2025-07
             product { id title }
-            inventoryItem { id cost }
+            inventoryItem {
+              id
+              unitCost { amount }       # costo unitario ✔︎ 2025-07
+            }
           }
         }
       }
     }`;
 
-  const res = await fetch(url, {
+  const res  = await fetch(url, {
     method : 'POST',
     headers: {
       'Content-Type'           : 'application/json',
@@ -42,19 +45,19 @@ async function fetchVariantBySKU(sku: string) {
     },
     body: JSON.stringify({ query, variables: { search: `sku:${sku}` } })
   });
-
   const json = await res.json();
+
   if (!res.ok || json.errors) {
     console.error('Shopify error', res.status, JSON.stringify(json.errors || json));
     throw new Error(`Shopify API error ${res.status}`);
   }
-
-  return json.data?.productVariants?.edges?.[0]?.node ?? null;
+  return json.data.productVariants.edges[0]?.node ?? null;
 }
 
-/* ---------- Netlify handler ---------- */
+/* ---------- Netlify handler ----------------------------------------------- */
 export const handler: Handler = async (event) => {
-  if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'POST only' };
+  if (event.httpMethod !== 'POST')
+    return { statusCode: 405, body: 'POST only' };
 
   try {
     const { import_id } = JSON.parse(event.body || '{}');
@@ -65,33 +68,31 @@ export const handler: Handler = async (event) => {
       .from('products')
       .select('minsan,ditta,giacenza,prezzo_calcolato,costo_medio')
       .eq('import_id', import_id);
-
     if (error) throw error;
 
-    /* 2. calcola diff */
+    /* 2. calcola le diff */
     const pending = [];
     for (const r of rows!) {
-      if (!r.minsan) continue;                       // sicurezza extra
+      if (!r.minsan) continue;
       try {
         const v = await fetchVariantBySKU(r.minsan);
-        if (!v) continue;                           // prodotto ancora da creare
+        if (!v) continue; // SKU non presente in Shopify
 
         const changes: Record<string, any> = {};
 
-        // Quantità
-        const oldQty = v.quantityAvailable ?? v.inventoryQuantity;
-        if (r.giacenza !== oldQty) {
-          changes.inventory = { old: oldQty, new: r.giacenza };
+        /* giacenza */
+        if (r.giacenza !== v.inventoryQuantity) {
+          changes.inventory = { old: v.inventoryQuantity, new: r.giacenza };
         }
 
-        // Prezzo di vendita
+        /* prezzo */
         if (r.prezzo_calcolato &&
             Number(r.prezzo_calcolato) !== Number(v.price)) {
           changes.price = { old: v.price, new: r.prezzo_calcolato };
         }
 
-        // Costo
-        const oldCost = Number(v.inventoryItem?.cost ?? 0);
+        /* costo */
+        const oldCost = Number(v.inventoryItem?.unitCost?.amount ?? 0);
         if (r.costo_medio && Number(r.costo_medio) !== oldCost) {
           changes.cost = { old: oldCost, new: r.costo_medio };
         }
@@ -113,12 +114,20 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    /* 3. scrive pending_updates */
+    /* 3. scrivi pending_updates */
     await supabase.from('pending_updates').delete().eq('import_id', import_id);
-    if (pending.length) await supabase.from('pending_updates').insert(pending);
+    if (pending.length)
+      await supabase.from('pending_updates').insert(pending);
 
-    await supabase.from('imports').update({ status: 'compared' }).eq('id', import_id);
-    return { statusCode: 200, body: JSON.stringify({ success: true, rows: pending.length }) };
+    await supabase
+      .from('imports')
+      .update({ status: 'compared' })
+      .eq('id', import_id);
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ success: true, rows: pending.length })
+    };
   } catch (e: any) {
     console.error('Compare error', e);
     return { statusCode: 500, body: e.message || 'Errore confronto' };
