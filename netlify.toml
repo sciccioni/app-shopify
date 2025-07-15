@@ -1,9 +1,21 @@
 [build]
-  command = "npm install && npm run build"
-  functions = "netlify/functions/"
-  publish = "public/"
+  command = "npm run build"
+  functions = "functions"
+  publish = "public"
 
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
+[[plugins]]
+  package = "@netlify/plugin-env"
+
+[context.production.environment]
+  # Variabili d'ambiente da configurare su Netlify
+  APP_PASSWORD = "$APP_PASSWORD"
+  JWT_SECRET = "$JWT_SECRET"
+  SHOPIFY_ADMIN_API_TOKEN = "$SHOPIFY_ADMIN_API_TOKEN"
+  SHOPIFY_LOCATION_ID = "$SHOPIFY_LOCATION_ID"
+  SHOPIFY_STORE_NAME = "$SHOPIFY_STORE_NAME"
+  SUPABASE_URL = "$SUPABASE_URL"
+  SUPABASE_ANON_KEY = "$SUPABASE_ANON_KEY"
+  SUPABASE_SERVICE_KEY = "$SUPABASE_SERVICE_KEY"
+
+[dev]
+  port = 8888
