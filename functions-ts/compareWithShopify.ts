@@ -1,15 +1,17 @@
 import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL!;
+/* ---------- Supabase ---------- */
+const SUPABASE_URL         = process.env.SUPABASE_URL!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { persistSession: false }
 });
 
+/* ---------- Shopify ---------- */
 const SHOPIFY_TOKEN       = process.env.SHOPIFY_ADMIN_API_TOKEN!;
 const SHOPIFY_STORE       = process.env.SHOPIFY_STORE_NAME!;
-const SHOPIFY_API_VERSION = '2024-07';
+const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-07'; // <— DEFAULT “latest”
 
 interface NormalizedRow {
   minsan: string;
@@ -19,7 +21,7 @@ interface NormalizedRow {
 }
 
 async function fetchVariantBySKU(sku: string) {
-  const url   = `https://${SHOPIFY_STORE}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
+  const url   = `https://${SHOPIFY_STORE}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
   const query = `
     query getVariantBySku($sku: String!) {
       productVariants(first: 1, query: $sku) {
@@ -37,17 +39,23 @@ async function fetchVariantBySKU(sku: string) {
     }`;
 
   const res = await fetch(url, {
-    method: 'POST',
+    method : 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'X-Shopify-Access-Token': SHOPIFY_TOKEN
+      'Content-Type'           : 'application/json',
+      'X-Shopify-Access-Token' : SHOPIFY_TOKEN
     },
     body: JSON.stringify({ query, variables: { sku } })
   });
-  if (!res.ok) throw new Error(`Shopify API error: ${res.statusText}`);
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error('Shopify response', res.status, text);
+    throw new Error(`Shopify API error ${res.status}`);
+  }
   return res.json().then((j) => j.data?.productVariants?.edges?.[0]?.node ?? null);
 }
 
+/* ---------- Netlify handler ---------- */
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Only POST allowed' };
@@ -70,22 +78,21 @@ export const handler: Handler = async (event) => {
       return { statusCode: 500, body: 'Errore lettura imports_normalized' };
     }
 
-    /* 2️⃣ Diff per ciascun SKU */
+    /* 2️⃣ Diff per SKU */
     const comparison = [];
     for (const row of rows as NormalizedRow[]) {
       try {
         const variant = await fetchVariantBySKU(row.minsan);
 
         if (!variant) {
-          /* Prodotto non esiste ancora su Shopify */
           comparison.push({
             import_id,
             minsan: row.minsan,
-            inventory_diff: null,
-            price_diff: null,
+            inventory_diff       : null,
+            price_diff           : null,
             compare_at_price_diff: null,
-            cost_diff: null,
-            requires_update: true
+            cost_diff            : null,
+            requires_update      : true
           });
           continue;
         }
@@ -127,4 +134,3 @@ export const handler: Handler = async (event) => {
     return { statusCode: 500, body: 'Errore interno confronto' };
   }
 };
-
