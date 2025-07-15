@@ -7,8 +7,5 @@
   "dependencies": {
     "@netlify/functions": "^1.2.0",
     "jsonwebtoken": "^9.0.0"
-  },
-  "devDependencies": {
-    "@netlify/plugin-env": "^2.0.0"
   }
 }
