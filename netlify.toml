@@ -1,11 +1,7 @@
 [build]
-  command   = "npm run build"
-  functions = "functions-dist"
-  publish   = "public"
-
-[functions]
-  # Usa esbuild per bundle TypeScript con esbuild integrato
-  node_bundler = "esbuild"
+  command = "npm run build"
+  functions = "functions-ts"
+  publish = "public"
 
 
 [context.production.environment]
