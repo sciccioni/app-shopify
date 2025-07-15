@@ -9,8 +9,9 @@ const supabase = createClient(
 
 export const handler: Handler = async (event) => {
   const import_id = event.queryStringParameters?.import_id;
-  if (!import_id)
+  if (!import_id) {
     return { statusCode: 400, body: JSON.stringify({ error: 'import_id mancante' }) };
+  }
 
   const { data, error } = await supabase
     .from('normalized_inventory')
@@ -29,8 +30,8 @@ export const handler: Handler = async (event) => {
     .eq('import_id', import_id)
     .order('minsan', { ascending: true });
 
-  if (error)
+  if (error) {
     return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
-
+  }
   return { statusCode: 200, body: JSON.stringify(data) };
 };
