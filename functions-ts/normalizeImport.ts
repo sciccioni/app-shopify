@@ -3,14 +3,19 @@ import { createClient } from '@supabase/supabase-js';
 import dayjs from 'dayjs';
 import { meanBy } from 'lodash';
 
+/* ---------- Supabase ---------------------------------------------------- */
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_KEY!,
   { auth: { persistSession: false } }
 );
 
+/* ---------- Helper alias ------------------------------------------------ */
+const col = (row: any, ...keys: string[]) =>
+  keys.reduce<any>((val, k) => (val ?? row[k]), undefined);
+
 export const handler: Handler = async (event) => {
-  const start = Date.now();
+  const t0 = Date.now();
 
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Only POST allowed' };
@@ -20,65 +25,84 @@ export const handler: Handler = async (event) => {
     const { import_id } = JSON.parse(event.body || '{}');
     if (!import_id) return { statusCode: 400, body: 'import_id mancante' };
 
-    /* 1️⃣ Legge le righe grezze */
-    const { data: raw, error: errRaw, count } = await supabase
+    /* 1️⃣  Righe grezze */
+    const { data: raw, error: errRaw } = await supabase
       .from('imports_raw')
-      .select('row_data', { count: 'exact' })
+      .select('row_data')
       .eq('import_id', import_id);
 
     if (errRaw) throw errRaw;
-    if (!raw || raw.length === 0) {
-      console.warn(`normalizeImport → import_id ${import_id} senza righe grezze`);
+    if (!raw || !raw.length) {
+      console.warn(`normalizeImport → nessuna riga raw per import_id ${import_id}`);
       return { statusCode: 200, body: JSON.stringify({ success: false, rows: 0 }) };
     }
-    console.log(`normalizeImport → ${count} righe raw lette`);
+    console.log(`normalizeImport → ${raw.length} righe raw lette`);
 
-    /* 2️⃣ Aggrega per MINSAN */
-    const group: Record<string, any[]> = {};
+    /* 2️⃣  Aggregazione per MINSAN / SKU --------------------------------- */
+    const grouped: Record<string, any[]> = {};
+
     raw.forEach(({ row_data }) => {
-      const r = row_data as any;
-      const key = String(r.minsan ?? r.MINSAN ?? '').trim();
-      if (!key) return;
-      group[key] = group[key] ? [...group[key], r] : [r];
+      const r   = row_data as any;
+      const sku = String(
+        col(r, 'minsan', 'Minsan', 'MINSAN', 'sku', 'SKU', 'codice', 'Codice', 'CODICE') || ''
+      )
+        .trim()
+        .replace(/^0+/, '');          // opz.: rimuove zeri iniziali
+
+      if (!sku) {
+        console.warn('Riga senza codice:', r);
+        return;
+      }
+      grouped[sku] = grouped[sku] ? [...grouped[sku], r] : [r];
     });
 
     const now = new Date().toISOString();
-    const normalized = Object.entries(group).map(([minsan, rows]) => {
-      const giacenza    = rows.reduce((s, r) => s + Number(r.giacenza ?? r.GIACENZA ?? 0), 0);
-      const costo_medio = meanBy(rows, (r) => Number(r.costo_medio ?? r.COSTO_MEDIO ?? r.prezzo_bd ?? r.PREZZO_BD ?? 0));
-      const first       = rows[0];
+    const normalized = Object.entries(grouped).map(([sku, rows]) => {
+      const giacenza    = rows.reduce((s: number, r: any) =>
+        s + Number(col(r, 'giacenza', 'Giacenza', 'GIACENZA') || 0), 0);
+
+      const costoMedio  = meanBy(rows, (r: any) =>
+        Number(col(r, 'costo_medio', 'CostoMedio', 'COSTO_MEDIO', 'prezzo_bd', 'PrezzoBD', 'PREZZO_BD') || 0));
+
+      const first = rows[0];
 
       return {
         import_id,
-        minsan,
-        ditta       : first.ditta       ?? first.DITTA      ?? null,
-        ean         : first.ean         ?? first.EAN        ?? null,
-        descrizione : first.descrizione ?? first.DESCRIZIONE?? null,
-        scadenza    : rows
-          .filter((r) => r.scadenza || r.SCADENZA)
-          .sort((a, b) => dayjs(a.scadenza ?? a.SCADENZA).valueOf() - dayjs(b.scadenza ?? b.SCADENZA).valueOf())[0]?.scadenza ?? null,
-        giacenza    : Math.max(giacenza, 0),
-        costo_medio : Number(costo_medio.toFixed(4)),
-        prezzo_bd   : first.prezzo_bd   ?? first.PREZZO_BD  ?? null,
-        iva         : first.iva         ?? first.IVA        ?? null,
-        prezzo_calcolato: null,               // calcolato in un secondo step se serve
-        created_at  : now
+        minsan         : sku,
+        ditta          : col(first, 'ditta', 'Ditta')        ?? null,
+        ean            : col(first, 'ean', 'EAN')            ?? null,
+        descrizione    : col(first, 'descrizione', 'Descrizione') ?? null,
+        scadenza       : rows
+          .filter((r: any) => col(r, 'scadenza', 'Scadenza'))
+          .sort((a: any, b: any) =>
+            dayjs(col(a, 'scadenza', 'Scadenza')).valueOf() -
+            dayjs(col(b, 'scadenza', 'Scadenza')).valueOf())[0]?.Scadenza ?? null,
+        giacenza       : Math.max(giacenza, 0),
+        costo_medio    : Number(costoMedio.toFixed(4)),
+        prezzo_bd      : col(first, 'prezzo_bd', 'PrezzoBD', 'PREZZO_BD') ?? null,
+        iva            : col(first, 'iva', 'IVA') ?? null,
+        prezzo_calcolato: null,         // verrà calcolato in step successivo se serve
+        created_at     : now
       };
     });
 
-    /* 3️⃣ Inserisce in products */
+    /* 3️⃣  Inserisce in products ---------------------------------------- */
     await supabase.from('products').delete().eq('import_id', import_id);
     if (normalized.length) {
       const { error: insErr } = await supabase.from('products').insert(normalized);
       if (insErr) throw insErr;
     }
 
-    await supabase.from('imports')
+    await supabase
+      .from('imports')
       .update({ status: 'normalized' })
       .eq('id', import_id);
 
-    console.log(`normalizeImport → ${normalized.length} righe inserite in products, tempo ${Date.now() - start} ms`);
-    return { statusCode: 200, body: JSON.stringify({ success: true, rows: normalized.length }) };
+    console.log(`normalizeImport → inserite ${normalized.length} righe in products – ${Date.now() - t0} ms`);
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ success: true, rows: normalized.length })
+    };
   } catch (e: any) {
     console.error('Normalize error', e);
     return { statusCode: 500, body: e.message || 'Errore normalizzazione' };
