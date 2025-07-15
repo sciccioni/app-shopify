@@ -133,80 +133,52 @@
     });
 
     /* ------------ Upload workflow ------------ */
- <!-- Upload workflow completo -->
+  <!-- Upload form -->
 <script>
-  /* … helpers invariati (showStatus, tab, logout) … */
-
   $('#upload-form').submit(async (e) => {
     e.preventDefault();
     const file = $('#excel-file')[0].files[0];
-    if (!file) return showStatus('Seleziona un file Excel', 'error');
+    if (!file) { showStatus('Seleziona un file Excel', 'error'); return; }
 
-    $('#progress').removeClass('hidden');
-    $('#progress-bar').css('width', 0);
+    /* reset UI */
+    $('#progress').removeClass('hidden'); $('#progress-bar').css('width', 0);
     $('#upload-status').addClass('hidden');
 
     try {
       /* 1️⃣ uploadExcel */
-      const base64 = await new Promise((ok, ko) => {
-        const fr = new FileReader();
-        fr.onload  = () => ok(fr.result.split(',')[1]);
-        fr.onerror = ko;
-        fr.readAsDataURL(file);
-      });
+      const base64 = await new Promise((ok,ko)=>{const fr=new FileReader();fr.onload=()=>ok(fr.result.split(',')[1]);fr.onerror=ko;fr.readAsDataURL(file);});
+      $('#progress-bar').css('width','25%'); showStatus('Upload in corso…','info');
 
-      $('#progress-bar').css('width', '25%');
-      showStatus('Caricamento file…', 'info');
-
-      const up = await fetch('/.netlify/functions/uploadExcel', {
-        method : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ file: base64, filename: file.name })
+      const up = await fetch('/.netlify/functions/uploadExcel',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('token')}`},
+        body:JSON.stringify({file:base64,filename:file.name})
       });
-      if (!up.ok) throw new Error(await up.text());
-      const { import_id } = await up.json();
+      if(!up.ok) throw new Error(await up.text());
+      const {import_id}=await up.json();
+      $('#progress-bar').css('width','50%'); showStatus('Normalizzazione…','info');
 
       /* 2️⃣ normalizeImport */
-      $('#progress-bar').css('width', '50%');
-      showStatus('Normalizzazione dati…', 'info');
-      const norm = await fetch('/.netlify/functions/normalizeImport', {
-        method : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ import_id })
+      const norm=await fetch('/.netlify/functions/normalizeImport',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('token')}`},
+        body:JSON.stringify({import_id})
       });
-      if (!norm.ok) throw new Error(await norm.text());
+      if(!norm.ok) throw new Error(await norm.text());
+      $('#progress-bar').css('width','75%'); showStatus('Confronto Shopify…','info');
 
       /* 3️⃣ compareWithShopify */
-      $('#progress-bar').css('width', '75%');
-      showStatus('Confronto con Shopify…', 'info');
-      const cmp = await fetch('/.netlify/functions/compareWithShopify', {
-        method : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ import_id })
+      const cmp=await fetch('/.netlify/functions/compareWithShopify',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('token')}`},
+        body:JSON.stringify({import_id})
       });
-      if (!cmp.ok) throw new Error(await cmp.text());
+      if(!cmp.ok) throw new Error(await cmp.text());
 
-      $('#progress-bar').css('width', '100%');
-      showStatus('Confronto completato! Apri “Revisione Modifiche”', 'success');
-    } catch (err) {
-      console.error(err);
-      showStatus(err.message || 'Errore', 'error');
-    } finally {
-      setTimeout(() => {
-        $('#progress').addClass('hidden');
-        $('#progress-bar').css('width', 0);
-      }, 1800);
-      $('#excel-file').val('');
-    }
+      $('#progress-bar').css('width','100%');
+      showStatus('Completato! Apri “Revisione Modifiche”','success');
+    } catch(err){ console.error(err); showStatus(err.message||'Errore','error'); }
+    finally{ setTimeout(()=>{$('#progress').addClass('hidden');$('#progress-bar').css('width',0);},1800); $('#excel-file').val(''); }
   });
 </script>
 </body>
