@@ -13,6 +13,7 @@ export const handler: Handler = async (event) => {
 
   try {
     const { file } = JSON.parse(event.body || '{}');
+    
     if (!file) {
       return {
         statusCode: 400,
@@ -26,10 +27,11 @@ export const handler: Handler = async (event) => {
     const sheetName = workbook.SheetNames[0];
     const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null });
 
-    // 1) Inserimento record import
+    // 1) Inserimento record import - AGGIUNGI .select() per ottenere il record inserito
     const { data: importRec, error: importError } = await supabase
       .from('imports')
       .insert([{ file_name: 'upload.xlsx' }])
+      .select()  // <-- Aggiunta questa riga
       .single();
 
     if (importError || !importRec) {
@@ -39,6 +41,7 @@ export const handler: Handler = async (event) => {
         body: JSON.stringify({ error: 'Errore creazione import record' }),
       };
     }
+
     const import_id = importRec.id;
 
     // 2) Inserimento righe raw
@@ -58,7 +61,6 @@ export const handler: Handler = async (event) => {
       statusCode: 200,
       body: JSON.stringify({ import_id }),
     };
-
   } catch (error) {
     console.error('Upload handler error:', error);
     return {
