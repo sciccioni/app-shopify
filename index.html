@@ -6,9 +6,15 @@
   <title>🔄 Inventory Sync</title>
 
   <!-- Bootswatch Lux Theme -->
-  <link href="https://cdn.jsdelivr.net/npm/bootswatch@5/dist/lux/bootstrap.min.css" rel="stylesheet" />
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootswatch@5/dist/lux/bootstrap.min.css"
+    rel="stylesheet"
+  />
   <!-- Bootstrap Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet" />
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
+    rel="stylesheet"
+  />
   <!-- Alpine.js -->
   <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 
@@ -21,29 +27,59 @@
 </head>
 <body x-data="app()" x-init="init()" x-cloak>
 
-  <!-- Navbar -->
+  <!-- NAVBAR -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top shadow-sm">
     <div class="container">
       <a class="navbar-brand" href="#"><i class="bi bi-arrow-repeat"></i> Inventory Sync</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navMenu"
+      >
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse" id="navMenu">
         <ul class="navbar-nav ms-auto">
           <li class="nav-item">
-            <a class="nav-link" :class="{active: tab==='upload'}" @click.prevent="tab='upload'" href="#">Importa</a>
+            <a
+              class="nav-link"
+              :class="{active: tab==='upload'}"
+              @click.prevent="tab='upload'"
+              href="#"
+            >Importa</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" :class="{active: tab==='review'}" @click.prevent="tab='review'" href="#">Revisione</a>
+            <a
+              class="nav-link"
+              :class="{active: tab==='review'}"
+              @click.prevent="tab='review'"
+              href="#"
+            >Revisione</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" :class="{active: tab==='markup'}" @click.prevent="tab='markup'" href="#">Markup</a>
+            <a
+              class="nav-link"
+              :class="{active: tab==='markup'}"
+              @click.prevent="tab='markup'"
+              href="#"
+            >Markup</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" :class="{active: tab==='logs'}" @click.prevent="tab='logs'" href="#">Log</a>
+            <a
+              class="nav-link"
+              :class="{active: tab==='logs'}"
+              @click.prevent="tab='logs'"
+              href="#"
+            >Log</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" :class="{active: tab==='data'}" @click.prevent="tab='data'; loadStaging(); loadNormalized()" href="#">Dati</a>
+            <a
+              class="nav-link"
+              :class="{active: tab==='data'}"
+              @click.prevent="tab='data'; loadStaging(); loadNormalized()"
+              href="#"
+            >Dati</a>
           </li>
         </ul>
       </div>
@@ -52,10 +88,10 @@
 
   <div class="container mt-4">
 
-    <!-- Global status -->
+    <!-- GLOBAL STATUS -->
     <div class="alert alert-info" x-show="uploadStatus" x-text="uploadStatus"></div>
 
-    <!-- UPLOAD SECTION -->
+    <!-- UPLOAD -->
     <section :class="{ 'active': tab==='upload' }" class="mb-5">
       <div class="card shadow-sm">
         <div class="card-header bg-primary text-white">Importa Inventario</div>
@@ -63,19 +99,21 @@
           <input type="file" class="form-control mb-3" @change="onFileChange" />
           <button class="btn btn-success" @click="uploadFile()">Avvia Importazione</button>
           <div class="progress mt-3" x-show="uploadProgress !== null">
-            <div class="progress-bar progress-bar-striped progress-bar-animated"
-                 role="progressbar"
-                 :style="'width:' + uploadProgress + '%'"
-                 x-text="uploadProgress + '%'"></div>
+            <div
+              class="progress-bar progress-bar-striped progress-bar-animated"
+              role="progressbar"
+              :style="'width:' + uploadProgress + '%'"
+              x-text="uploadProgress + '%'"
+            ></div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- REVIEW SECTION -->
+    <!-- REVIEW -->
     <section :class="{ 'active': tab==='review' }" class="mb-5">
       <div class="card shadow-sm">
-        <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="card-header d-flex justify-content-between">
           Revisione Modifiche
           <button class="btn btn-success" @click="approveSelected()">Approva Selezionati</button>
         </div>
@@ -107,7 +145,7 @@
       </div>
     </section>
 
-    <!-- MARKUP SECTION -->
+    <!-- MARKUP -->
     <section :class="{ 'active': tab==='markup' }" class="mb-5">
       <div class="card shadow-sm">
         <div class="card-header bg-primary text-white">Gestione Markup</div>
@@ -127,10 +165,22 @@
           </div>
           <form @submit.prevent="saveCompany()" class="row g-3 mb-3">
             <div class="col-md-5">
-              <input class="form-control" x-model="form.name" placeholder="Nome Ditta" required />
+              <input
+                class="form-control"
+                x-model="form.name"
+                placeholder="Nome Ditta"
+                required
+              />
             </div>
             <div class="col-md-4">
-              <input class="form-control" type="number" x-model="form.markup_pct" placeholder="Markup %" step="0.01" required />
+              <input
+                class="form-control"
+                type="number"
+                x-model="form.markup_pct"
+                placeholder="Markup %"
+                step="0.01"
+                required
+              />
             </div>
             <div class="col-md-3 d-flex">
               <button class="btn btn-success me-2">Salva</button>
@@ -142,24 +192,29 @@
             <template x-for="p in preview" :key="p.minsan">
               <li class="list-group-item d-flex justify-content-between">
                 <span x-text="p.minsan"></span>
-                <span x-text="p.old_price.toFixed(2) + ' → ' + p.new_price.toFixed(2)"></span>
+                <span
+                  x-text="p.old_price.toFixed(2) + ' → ' + p.new_price.toFixed(2)"
+                ></span>
               </li>
             </template>
-            <li x-show="!preview.length" class="list-group-item text-center text-muted">Nessuna anteprima</li>
+            <li
+              x-show="!preview.length"
+              class="list-group-item text-center text-muted"
+            >
+              Nessuna anteprima
+            </li>
           </ul>
         </div>
       </div>
     </section>
 
-    <!-- LOG SECTION -->
+    <!-- LOG -->
     <section :class="{ 'active': tab==='logs' }" class="mb-5">
       <div class="card shadow-sm">
         <div class="card-header bg-primary text-white">Log Aggiornamenti</div>
         <div class="card-body table-responsive">
           <table class="table table-sm">
-            <thead class="table-light">
-              <tr><th>Data</th><th>MINSAN</th><th>Azione</th><th>Esito</th></tr>
-            </thead>
+            <thead><tr><th>Data</th><th>MINSAN</th><th>Azione</th><th>Esito</th></tr></thead>
             <tbody>
               <template x-for="l in logs" :key="l.id">
                 <tr>
@@ -167,7 +222,11 @@
                   <td x-text="l.minsan"></td>
                   <td x-text="l.action"></td>
                   <td>
-                    <span class="badge" :class="l.status==='success'?'bg-success':'bg-danger'" x-text="l.status"></span>
+                    <span
+                      class="badge"
+                      :class="l.status==='success'?'bg-success':'bg-danger'"
+                      x-text="l.status"
+                    ></span>
                   </td>
                 </tr>
               </template>
@@ -180,24 +239,41 @@
       </div>
     </section>
 
-    <!-- DATA SECTION -->
+    <!-- DATA -->
     <section :class="{ 'active': tab==='data' }" class="mb-5">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h3>Dati Inventario</h3>
-        <button class="btn btn-secondary" @click="pageStaging=1; pageNormalized=1; loadStaging(); loadNormalized()">Ricarica</button>
+        <button
+          class="btn btn-secondary"
+          @click="
+            pageStaging = 1;
+            pageNormalized = 1;
+            loadStaging();
+            loadNormalized();
+          "
+        >
+          Ricarica
+        </button>
       </div>
 
-      <!-- Ricerca e conteggi -->
+      <!-- ricerca e conteggi -->
       <div class="row mb-3">
         <div class="col-md-4">
-          <input type="text" class="form-control" placeholder="🔍 Cerca MINSAN" x-model="searchMin" />
+          <input
+            type="text"
+            class="form-control"
+            placeholder="🔍 Cerca MINSAN"
+            x-model="searchMin"
+          />
         </div>
         <div class="col-md-8 text-end">
           <span class="me-3">
-            Staging: <strong x-text="filteredStaging.length"></strong> / <em x-text="staging.length"></em>
+            Staging: <strong x-text="filteredStaging.length"></strong> /
+            <em x-text="staging.length"></em>
           </span>
           <span>
-            Normalized: <strong x-text="filteredNormalized.length"></strong> / <em x-text="normalized.length"></em>
+            Normalized: <strong x-text="filteredNormalized.length"></strong> /
+            <em x-text="normalized.length"></em>
           </span>
         </div>
       </div>
@@ -209,11 +285,16 @@
           <table class="table table-sm table-striped">
             <thead>
               <tr>
-                <th>MINSAN</th>
                 <th>Ditta</th>
+                <th>MINSAN</th>
+                <th>EAN</th>
+                <th>Descrizione</th>
                 <th>Lotto</th>
-                <th>Qty</th>
+                <th>Giacenza</th>
+                <th>CostoBase</th>
                 <th>CostoMedio</th>
+                <th>UltimoCostoDitta</th>
+                <th>DataUltimoCostoDitta</th>
                 <th>PrezzoBD</th>
                 <th>IVA</th>
                 <th>Scadenza</th>
@@ -222,34 +303,59 @@
             <tbody>
               <template x-for="r in pagedStaging" :key="r.id">
                 <tr>
-                  <td x-text="r.minsan"></td>
                   <td x-text="r.ditta"></td>
+                  <td x-text="r.minsan"></td>
+                  <td x-text="r.ean"></td>
+                  <td x-text="r.descrizione"></td>
                   <td x-text="r.lotto"></td>
-                  <td x-text="r.giacenza"></td>
+                  <td x-text="r.raw_quantity"></td>
+                  <td x-text="r.costo_base"></td>
                   <td x-text="r.costomedio"></td>
+                  <td x-text="r.ultimo_costo_ditta"></td>
+                  <td x-text="r.data_ultimo_costo_ditta"></td>
                   <td x-text="r.prezzo_bd"></td>
                   <td x-text="r.iva"></td>
-                  <td x-text="r.scadenza ? new Date(r.scadenza).toLocaleDateString() : '-'"></td>
+                  <td
+                    x-text="
+                      r.raw_expiry
+                        ? new Date(r.raw_expiry).toLocaleDateString()
+                        : '-'
+                    "
+                  ></td>
                 </tr>
               </template>
               <tr x-show="!filteredStaging.length">
-                <td colspan="8" class="text-center text-muted">Nessun record</td>
+                <td colspan="13" class="text-center text-muted">Nessun record</td>
               </tr>
             </tbody>
           </table>
-          <!-- Paginazione -->
+
+          <!-- paginazione -->
           <nav aria-label="Staging pagination">
             <ul class="pagination justify-content-center mb-0">
               <li class="page-item" :class="{disabled: pageStaging===1}">
-                <button class="page-link" @click="pageStaging = Math.max(1, pageStaging-1)">Prev</button>
+                <button
+                  class="page-link"
+                  @click="pageStaging = Math.max(1, pageStaging-1)"
+                >
+                  Prev
+                </button>
               </li>
               <template x-for="p in totalPagesStaging" :key="p">
                 <li class="page-item" :class="{active: pageStaging===p}">
                   <button class="page-link" @click="pageStaging = p" x-text="p"></button>
                 </li>
               </template>
-              <li class="page-item" :class="{disabled: pageStaging===totalPagesStaging}">
-                <button class="page-link" @click="pageStaging = Math.min(totalPagesStaging, pageStaging+1)">Next</button>
+              <li
+                class="page-item"
+                :class="{disabled: pageStaging===totalPagesStaging}"
+              >
+                <button
+                  class="page-link"
+                  @click="pageStaging = Math.min(totalPagesStaging, pageStaging+1)"
+                >
+                  Next
+                </button>
               </li>
             </ul>
           </nav>
@@ -263,8 +369,8 @@
           <table class="table table-sm table-striped">
             <thead>
               <tr>
-                <th>MINSAN</th>
                 <th>Ditta</th>
+                <th>MINSAN</th>
                 <th>Qty Totale</th>
                 <th>CostoMedio</th>
                 <th>PrezzoBD</th>
@@ -275,13 +381,19 @@
             <tbody>
               <template x-for="n in pagedNormalized" :key="n.minsan">
                 <tr>
-                  <td x-text="n.minsan"></td>
                   <td x-text="n.ditta"></td>
+                  <td x-text="n.minsan"></td>
                   <td x-text="n.total_qty"></td>
                   <td x-text="n.costomedio"></td>
                   <td x-text="n.prezzo_bd"></td>
                   <td x-text="n.iva"></td>
-                  <td x-text="n.expiry ? new Date(n.expiry).toLocaleDateString() : '-'"></td>
+                  <td
+                    x-text="
+                      n.expiry
+                        ? new Date(n.expiry).toLocaleDateString()
+                        : '-'
+                    "
+                  ></td>
                 </tr>
               </template>
               <tr x-show="!filteredNormalized.length">
@@ -289,19 +401,37 @@
               </tr>
             </tbody>
           </table>
-          <!-- Paginazione -->
+
+          <!-- paginazione -->
           <nav aria-label="Normalized pagination">
             <ul class="pagination justify-content-center mb-0">
               <li class="page-item" :class="{disabled: pageNormalized===1}">
-                <button class="page-link" @click="pageNormalized = Math.max(1, pageNormalized-1)">Prev</button>
+                <button
+                  class="page-link"
+                  @click="pageNormalized = Math.max(1, pageNormalized-1)"
+                >
+                  Prev
+                </button>
               </li>
               <template x-for="p in totalPagesNormalized" :key="p">
                 <li class="page-item" :class="{active: pageNormalized===p}">
-                  <button class="page-link" @click="pageNormalized = p" x-text="p"></button>
+                  <button
+                    class="page-link"
+                    @click="pageNormalized = p"
+                    x-text="p"
+                  ></button>
                 </li>
               </template>
-              <li class="page-item" :class="{disabled: pageNormalized===totalPagesNormalized}">
-                <button class="page-link" @click="pageNormalized = Math.min(totalPagesNormalized, pageNormalized+1)">Next</button>
+              <li
+                class="page-item"
+                :class="{disabled: pageNormalized===totalPagesNormalized}"
+              >
+                <button
+                  class="page-link"
+                  @click="pageNormalized = Math.min(totalPagesNormalized, pageNormalized+1)"
+                >
+                  Next
+                </button>
               </li>
             </ul>
           </nav>
@@ -311,23 +441,34 @@
 
   </div>
 
-  <!-- Alpine.js App Logic -->
+  <!-- Alpine.js logic -->
   <script>
     function app() {
       return {
         tab: 'upload',
-        importId: '', file: null,
-        uploadStatus: '', uploadProgress: null,
-        updates: [], companies: [], form: {id:'',name:'',markup_pct:0}, preview: [], logs: [],
-        staging: [], normalized: [],
+        importId: '',
+        file: null,
+        uploadStatus: '',
+        uploadProgress: null,
+        updates: [],
+        companies: [],
+        form: { id: '', name: '', markup_pct: 0 },
+        preview: [],
+        logs: [],
+        staging: [],
+        normalized: [],
 
-        // search & pagination
-        searchMin: '', pageStaging: 1, pageNormalized: 1, perPage: 50,
+        // ricerca & paginazione
+        searchMin: '',
+        pageStaging: 1,
+        pageNormalized: 1,
+        perPage: 50,
 
         init() {
           this.loadCompanies();
           this.loadLogs();
         },
+
         onFileChange(e) {
           this.file = e.target.files[0];
           this.uploadStatus = '';
@@ -339,7 +480,6 @@
           this.uploadStatus = 'Upload in corso…';
           this.uploadProgress = 0;
 
-          // Upload via XHR for progress
           const form = new FormData();
           form.append('file', this.file);
           const xhr = new XMLHttpRequest();
@@ -356,7 +496,7 @@
               this.uploadStatus = `${rows_imported} righe importate. Normalizzazione…`;
               this.uploadProgress = 100;
 
-              // Normalize
+              // normalize
               const normRes = await fetch('/.netlify/functions/normalize', {
                 method: 'POST',
                 headers: {'Content-Type':'application/json'},
@@ -368,7 +508,7 @@
                 return;
               }
 
-              // Compare
+              // compare
               this.uploadStatus = 'Compare in corso…';
               const cmpRes = await fetch('/.netlify/functions/compare', {
                 method: 'POST',
@@ -382,10 +522,10 @@
               }
               const count = cmpJ.updates_count || 0;
 
-              // Switch to Dati before loading
-              this.$nextTick(() => { this.tab = 'data'; });
+              // switch to dati
+              this.$nextTick(() => { this.tab = 'data' });
 
-              // Load all views
+              // load all
               this.uploadStatus = 'Caricamento dati…';
               await Promise.all([
                 this.loadUpdates(),
@@ -420,10 +560,16 @@
           );
         },
         get totalPagesStaging() {
-          return Math.max(1, Math.ceil(this.filteredStaging.length / this.perPage));
+          return Math.max(
+            1,
+            Math.ceil(this.filteredStaging.length / this.perPage)
+          );
         },
         get totalPagesNormalized() {
-          return Math.max(1, Math.ceil(this.filteredNormalized.length / this.perPage));
+          return Math.max(
+            1,
+            Math.ceil(this.filteredNormalized.length / this.perPage)
+          );
         },
         get pagedStaging() {
           const start = (this.pageStaging - 1) * this.perPage;
@@ -437,11 +583,13 @@
         // methods
         async loadUpdates() {
           if (!this.importId) return;
-          const r = await fetch(`/.netlify/functions/list-updates?import_id=${this.importId}`);
+          const r = await fetch(
+            `/.netlify/functions/list-updates?import_id=${this.importId}`
+          );
           this.updates = (await r.json()).map(u => ({ ...u, sel: false }));
         },
         toggleAll(e) {
-          this.updates.forEach(u => u.sel = e.target.checked);
+          this.updates.forEach(u => (u.sel = e.target.checked));
         },
         async approveSelected() {
           const ids = this.updates.filter(u => u.sel).map(u => u.id);
@@ -473,7 +621,9 @@
         },
 
         async previewMarkup() {
-          const r = await fetch('/.netlify/functions/preview-markup', { method: 'POST' });
+          const r = await fetch('/.netlify/functions/preview-markup', {
+            method: 'POST'
+          });
           this.preview = await r.json();
         },
 
@@ -484,16 +634,22 @@
 
         async loadStaging() {
           if (!this.importId) return;
-          const r = await fetch(`/.netlify/functions/get-staging?import_id=${this.importId}`);
+          const r = await fetch(
+            `/.netlify/functions/get-staging?import_id=${this.importId}`
+          );
           this.staging = await r.json();
-          if (this.pageStaging > this.totalPagesStaging) this.pageStaging = this.totalPagesStaging;
+          if (this.pageStaging > this.totalPagesStaging)
+            this.pageStaging = this.totalPagesStaging;
         },
 
         async loadNormalized() {
           if (!this.importId) return;
-          const r = await fetch(`/.netlify/functions/get-normalized?import_id=${this.importId}`);
+          const r = await fetch(
+            `/.netlify/functions/get-normalized?import_id=${this.importId}`
+          );
           this.normalized = await r.json();
-          if (this.pageNormalized > this.totalPagesNormalized) this.pageNormalized = this.totalPagesNormalized;
+          if (this.pageNormalized > this.totalPagesNormalized)
+            this.pageNormalized = this.totalPagesNormalized;
         },
 
         async normalizeAndReload() {
@@ -510,9 +666,8 @@
           }
           await this.loadStaging();
           await this.loadNormalized();
-
         }
-      }
+      };
     }
   </script>
 
