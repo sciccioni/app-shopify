@@ -4,272 +4,259 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Inventory Sync Dashboard</title>
+
   <!-- jQuery & Tailwind CSS -->
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
+
 <body class="bg-gray-100 min-h-screen flex flex-col">
-  <!-- Navbar/Logout -->
+  <!-- Navbar -->
   <header class="bg-white shadow">
     <div class="container mx-auto px-4 py-4 flex justify-between items-center">
       <h1 class="text-2xl font-bold">Inventory Sync</h1>
-      <button id="logout-btn" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">Logout</button>
+      <button id="logout-btn" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
+        Logout
+      </button>
     </div>
   </header>
 
-  <main class="flex-grow container mx-auto px-4 py-6">
-    <!-- Tabs -->
-    <ul id="tabs" class="flex border-b mb-4">
-      <li class="mr-1">
-        <a href="#tab-upload" class="inline-block py-2 px-4 font-semibold bg-white rounded-t-lg">Carica File</a>
-      </li>
-      <li class="mr-1">
-        <a href="#tab-review" class="inline-block py-2 px-4 font-semibold bg-gray-100 hover:bg-white rounded-t-lg">Revisione Modifiche</a>
-      </li>
-      <li class="mr-1">
-        <a href="#tab-markup" class="inline-block py-2 px-4 font-semibold bg-gray-100 hover:bg-white rounded-t-lg">Gestione Markup</a>
-      </li>
-      <li class="mr-1">
-        <a href="#tab-products" class="inline-block py-2 px-4 font-semibold bg-gray-100 hover:bg-white rounded-t-lg">Prodotti Shopify</a>
-      </li>
-      <li>
-        <a href="#tab-logs" class="inline-block py-2 px-4 font-semibold bg-gray-100 hover:bg-white rounded-t-lg">Log Aggiornamenti</a>
-      </li>
-    </ul>
+  <!-- Tabs -->
+  <main class="container mx-auto px-4 py-6 flex-grow space-y-6">
+    <nav class="flex space-x-4">
+      <button data-tab="upload"  class="tab-btn px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Carica File</button>
+      <button data-tab="review"  class="tab-btn px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Revisione Modifiche</button>
+      <button data-tab="markup"  class="tab-btn px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Gestione Markup</button>
+      <button data-tab="products" class="tab-btn px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Prodotti Shopify</button>
+      <button data-tab="log"      class="tab-btn px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Log Aggiornamenti</button>
+    </nav>
 
-    <!-- Tab Contents -->
-    <div id="tab-contents">
-      <!-- Tab 1: Carica File -->
-      <section id="tab-upload" class="tab-content">
-        <form id="upload-form" class="space-y-4 bg-white p-6 rounded-lg shadow">
-          <input type="file" id="excel-file" accept=".xlsx" class="block w-full text-gray-700" />
-          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Upload</button>
-        </form>
-        
-        <!-- Progress bar con colori migliori -->
-        <div id="progress" class="w-full bg-gray-200 rounded h-4 mt-4 hidden">
-          <div id="progress-bar" class="h-4 bg-blue-600 rounded transition-all duration-500" style="width: 0%"></div>
-        </div>
-        
-        <!-- Status messages -->
-        <div id="upload-status" class="mt-4 hidden">
-          <div id="status-message" class="p-4 rounded"></div>
-        </div>
-      </section>
+    <!-- Tab 1: Carica File -->
+    <section id="tab-upload" class="tab-content bg-white p-6 rounded-lg shadow">
+      <form id="upload-form" class="space-y-4">
+        <input type="file" id="excel-file" accept=".xlsx,.xls" class="border px-3 py-2 rounded w-full" />
+        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Upload</button>
+      </form>
 
-      <!-- Tab 2: Revisione Modifiche -->
-      <section id="tab-review" class="tab-content hidden bg-white p-6 rounded-lg shadow">
-        <!-- Statistiche di importazione -->
-        <div id="stats" class="grid grid-cols-2 gap-4 mb-6">
-          <div><strong>Righe totali:</strong> <span id="stat-rows">0</span></div>
-          <div><strong>Prodotti unici:</strong> <span id="stat-unique">0</span></div>
-          <div><strong>Modifiche trovate:</strong> <span id="stat-changes">0</span></div>
-          <div><strong>Nuove ditte:</strong> <span id="stat-new-companies">0</span></div>
-        </div>
-        <!-- Tabella DataTables -->
-        <table id="changes-table" class="min-w-full divide-y divide-gray-200">
-          <thead>
-            <tr>
-              <th>Prodotto</th>
-              <th>Minsan</th>
-              <th>Ditta</th>
-              <th>Giacenza (vecchio → nuovo)</th>
-              <th>Prezzo (vecchio → nuovo)</th>
-              <th>Prezzo Barrato (vecchio → nuovo)</th>
-              <th>Costo (vecchio → nuovo)</th>
-              <th>Azione</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-        <div class="mt-4 flex justify-end">
-          <button id="bulk-update-btn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Aggiorna Selezionati</button>
-        </div>
-      </section>
+      <!-- Barra di avanzamento -->
+      <div id="progress" class="w-full bg-gray-200 rounded h-4 mt-4 hidden">
+        <div id="progress-bar" class="bg-blue-600 h-4 rounded w-0"></div>
+      </div>
 
-      <!-- Tab 3: Gestione Markup -->
-      <section id="tab-markup" class="tab-content hidden bg-white p-6 rounded-lg shadow">
-        <form id="new-company-form" class="flex space-x-4 mb-6">
-          <input type="text" id="new-company-name" placeholder="Nuova ditta" class="border px-3 py-2 rounded w-1/3" />
-          <input type="number" id="new-company-markup" placeholder="Markup %" class="border px-3 py-2 rounded w-1/3" />
-          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Aggiungi</button>
-        </form>
-        <table id="markup-table" class="min-w-full divide-y divide-gray-200">
-          <thead>
-            <tr>
-              <th>Ditta</th>
-              <th>Markup %</th>
-              <th>Azione</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-        <button id="preview-global-btn" class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Anteprima Ricalcolo Globale</button>
-      </section>
+      <!-- Messaggi -->
+      <div id="upload-status" class="mt-4 hidden"></div>
+    </section>
 
-      <!-- Tab 4: Prodotti Shopify -->
-      <section id="tab-products" class="tab-content hidden bg-white p-6 rounded-lg shadow">
-        <table id="shopify-products-table" class="min-w-full divide-y divide-gray-200">
-          <thead>
-            <tr>
-              <th>Titolo</th>
-              <th>SKU</th>
-              <th>Prezzo</th>
-              <th>Giacenza</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </section>
+    <!-- Tab 2: Revisione Modifiche -->
+    <section id="tab-review" class="tab-content hidden bg-white p-6 rounded-lg shadow">
+      <table id="comparison-table" class="min-w-full divide-y divide-gray-200">
+        <thead>
+          <tr>
+            <th>Prodotto</th>
+            <th>Minsan</th>
+            <th>Ditta</th>
+            <th>Giacenza (vecchio → nuovo)</th>
+            <th>Prezzo (vecchio → nuovo)</th>
+            <th>Prezzo Barrato (vecchio → nuovo)</th>
+            <th>Costo (vecchio → nuovo)</th>
+            <th>Azione</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
 
-      <!-- Tab 5: Log Aggiornamenti -->
-      <section id="tab-logs" class="tab-content hidden bg-white p-6 rounded-lg shadow">
-        <table id="logs-table" class="min-w-full divide-y divide-gray-200">
-          <thead>
-            <tr>
-              <th>Data</th>
-              <th>Minsan</th>
-              <th>Stato</th>
-              <th>Dettagli</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </section>
-    </div>
+      <div class="mt-4 flex justify-end">
+        <button id="bulk-update-btn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+          Aggiorna Selezionati
+        </button>
+      </div>
+    </section>
+
+    <!-- Tab 3: Gestione Markup -->
+    <section id="tab-markup" class="tab-content hidden bg-white p-6 rounded-lg shadow">
+      <form id="new-company-form" class="flex space-x-4 mb-6">
+        <input type="text"   id="new-company-name"   placeholder="Nuova ditta"  class="border px-3 py-2 rounded w-1/3" />
+        <input type="number" id="new-company-markup" placeholder="Markup %"     class="border px-3 py-2 rounded w-1/3" />
+        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Aggiungi</button>
+      </form>
+
+      <table id="markup-table" class="min-w-full divide-y divide-gray-200">
+        <thead>
+          <tr><th>Ditta</th><th>Markup %</th><th>Azione</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- Tab 4: Prodotti Shopify (solo lettura) -->
+    <section id="tab-products" class="tab-content hidden bg-white p-6 rounded-lg shadow">
+      <table id="products-table" class="min-w-full divide-y divide-gray-200">
+        <thead>
+          <tr><th>Prodotto</th><th>Minsan</th><th>Giacenza</th><th>Prezzo</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- Tab 5: Log Aggiornamenti -->
+    <section id="tab-log" class="tab-content hidden bg-white p-6 rounded-lg shadow">
+      <table id="log-table" class="min-w-full divide-y divide-gray-200">
+        <thead>
+          <tr><th>Data</th><th>Minsan</th><th>Status</th><th>Dettagli</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
   </main>
 
-  <!-- Script JS per funzionalità tab e progress bar -->
+  <!-- Script -->
   <script>
-    // Verifica token su load
-    if (!localStorage.getItem('token')) {
-      window.location.href = 'index.html';
+    /* ----------------------------------- */
+    /* Helpers UI                          */
+    /* ----------------------------------- */
+    function showStatus(msg, type = 'info') {
+      const el = $('#upload-status');
+      el.removeClass('hidden text-red-600 text-green-600 text-blue-600');
+
+      if (type === 'error')   el.addClass('text-red-600');
+      if (type === 'success') el.addClass('text-green-600');
+      if (type === 'info')    el.addClass('text-blue-600');
+
+      el.text(msg);
     }
 
-    // Logout
-    $('#logout-btn').click(() => {
+    /* Tabs */
+    $('.tab-btn').on('click', function () {
+      const tab = $(this).data('tab');
+      $('.tab-btn').removeClass('bg-blue-600 text-white').addClass('bg-gray-300');
+      $(this).addClass('bg-blue-600 text-white');
+
+      $('.tab-content').addClass('hidden');
+      $('#tab-' + tab).removeClass('hidden');
+    });
+
+    /* Logout */
+    $('#logout-btn').on('click', () => {
       localStorage.removeItem('token');
-      window.location.href = 'index.html';
+      window.location.href = '/index.html';
     });
 
-    // Tab switching
-    $('#tabs a').click(function(e) {
-      e.preventDefault();
-      $('.tab-content').hide();
-      $($(this).attr('href')).show();
-      $('#tabs a').removeClass('border-l border-t border-r rounded-t text-blue-700');
-      $(this).addClass('border-l border-t border-r rounded-t text-blue-700');
-    });
-    $('#tabs a:first').click();
-
-    // Helper function per mostrare status
-    function showStatus(message, type = 'info') {
-      const $status = $('#upload-status');
-      const $message = $('#status-message');
-      
-      $status.removeClass('hidden');
-      $message.removeClass('bg-green-100 text-green-800 bg-red-100 text-red-800 bg-blue-100 text-blue-800');
-      
-      switch(type) {
-        case 'success':
-          $message.addClass('bg-green-100 text-green-800');
-          break;
-        case 'error':
-          $message.addClass('bg-red-100 text-red-800');
-          break;
-        default:
-          $message.addClass('bg-blue-100 text-blue-800');
-      }
-      
-      $message.text(message);
-    }
-
-    // Upload form
+    /* ----------------------------------- */
+    /* Upload Excel + workflow completo    */
+    /* ----------------------------------- */
     $('#upload-form').submit(async (e) => {
       e.preventDefault();
-      
+
       const file = $('#excel-file')[0].files[0];
       if (!file) {
         showStatus('Seleziona un file Excel', 'error');
         return;
       }
-      
-      // Reset status e mostra progress
+
+      // Reset e mostra progress
       $('#upload-status').addClass('hidden');
       $('#progress').removeClass('hidden');
       $('#progress-bar').css('width', '0%');
-      
-      // Disabilita il form durante l'upload
+
+      // Disabilita il form durante l’upload
       $('#excel-file').prop('disabled', true);
-      $('#upload-form button').prop('disabled', true).text('Caricamento...');
-      
+      $('#upload-form button').prop('disabled', true).text('Caricamento…');
+
       try {
-        // Leggi il file
+        /* 1️⃣ Lettura file */
         const reader = new FileReader();
-        
+
         reader.onload = async () => {
           try {
             const base64 = reader.result.split(',')[1];
-            
-            // Update progress
+
+            // 25 %
             $('#progress-bar').css('width', '25%');
-            showStatus('Caricamento file in corso...', 'info');
-            
-            // Upload
+            showStatus('Caricamento file in corso…', 'info');
+
+            /* 2️⃣ Upload a Netlify Function */
             const uploadRes = await fetch('/.netlify/functions/uploadExcel', {
-              method: 'POST',
-              headers: { 
+              method : 'POST',
+              headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
               },
-              body: JSON.stringify({ file: base64 })
+              body: JSON.stringify({ file: base64, filename: file.name })
             });
-            
             if (!uploadRes.ok) {
-              const error = await uploadRes.json();
-              throw new Error(error.error || 'Errore durante l\'upload');
+              const err = await uploadRes.json().catch(() => ({}));
+              throw new Error(err.error || 'Errore upload');
             }
-            
+
             $('#progress-bar').css('width', '50%');
             const { import_id } = await uploadRes.json();
-            
             showStatus(`File caricato con successo! Import ID: ${import_id}`, 'success');
-            
-            // TODO: Chiamare le funzioni normalize e compare
-            // Per ora mostriamo solo il completamento
+
+            /* 3️⃣ Normalizzazione */
+            $('#progress-bar').css('width', '60%');
+            showStatus('Normalizzazione dati in corso…', 'info');
+            const normRes = await fetch('/.netlify/functions/normalizeImport', {
+              method : 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+              },
+              body: JSON.stringify({ import_id })
+            });
+            if (!normRes.ok) {
+              const err = await normRes.json().catch(() => ({}));
+              throw new Error(err.error || 'Errore normalizzazione');
+            }
+
+            /* 4️⃣ Confronto Shopify */
+            $('#progress-bar').css('width', '80%');
+            showStatus('Confronto con Shopify…', 'info');
+            const cmpRes = await fetch('/.netlify/functions/compareWithShopify', {
+              method : 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+              },
+              body: JSON.stringify({ import_id })
+            });
+            if (!cmpRes.ok) {
+              const err = await cmpRes.json().catch(() => ({}));
+              throw new Error(err.error || 'Errore confronto Shopify');
+            }
+
+            /* 5️⃣ Finito */
             $('#progress-bar').css('width', '100%');
-            
-            // Dopo 2 secondi, nascondi la progress bar
+            showStatus('Confronto completato! Vai al tab “Revisione Modifiche”', 'success');
+
+            // Dopo 2 s nasconde la barra e resetta il form
             setTimeout(() => {
               $('#progress').addClass('hidden');
               $('#progress-bar').css('width', '0%');
             }, 2000);
-            
-            // Reset form
             $('#excel-file').val('');
-            
+
           } catch (error) {
             console.error('Errore upload:', error);
             showStatus(`Errore: ${error.message}`, 'error');
             $('#progress').addClass('hidden');
+          } finally {
+            // Riabilita il form
+            $('#excel-file').prop('disabled', false);
+            $('#upload-form button').prop('disabled', false).text('Upload');
           }
         };
-        
+
         reader.onerror = () => {
           showStatus('Errore nella lettura del file', 'error');
           $('#progress').addClass('hidden');
         };
-        
+
         reader.readAsDataURL(file);
-        
+
       } catch (error) {
-        console.error('Errore:', error);
-        showStatus('Errore generico durante l\'upload', 'error');
+        console.error('Errore generico:', error);
+        showStatus('Errore generico durante l’upload', 'error');
         $('#progress').addClass('hidden');
-      } finally {
-        // Riabilita il form
-        $('#excel-file').prop('disabled', false);
-        $('#upload-form button').prop('disabled', false).text('Upload');
       }
     });
   </script>
