@@ -4,7 +4,7 @@
   publish   = "public"
 
 [functions]
-  # Usa esbuild per bundle TypeScript
+  # Usa esbuild per bundle TypeScript con esbuild integrato
   node_bundler = "esbuild"
 
 
