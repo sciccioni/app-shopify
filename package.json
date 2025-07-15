@@ -6,7 +6,6 @@
   },
   "dependencies": {
     "@netlify/functions": "^1.2.0",
-    "@shopify/shopify-api": "^7.0.0",
     "@supabase/supabase-js": "^2.0.0",
     "dayjs": "^1.11.10",
     "jsonwebtoken": "^9.0.0",
