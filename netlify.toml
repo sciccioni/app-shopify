@@ -1,7 +1,8 @@
 [build]
   command = "npm run build"
   functions = "functions"
-  publish = "public"
+  publish = "frontend"
+
 
 [context.production.environment]
   # Variabili d'ambiente da configurare su Netlify
