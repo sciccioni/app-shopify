@@ -60,6 +60,7 @@
             <th class="px-4 py-2">Giacenza<br>(vecchio → nuovo)</th>
             <th class="px-4 py-2">Prezzo<br>(vecchio → nuovo)</th>
             <th class="px-4 py-2">Costo<br>(vecchio → nuovo)</th>
+            <th class="px-4 py-2">Prezzo BD<br>(vecchio → nuovo)</th>
             <th class="px-4 py-2">Seleziona</th>
           </tr>
         </thead>
@@ -314,6 +315,7 @@
               <td class="px-4 py-2">${change.old_inventory ?? '-'} → ${change.new_inventory ?? '-'}</td>
               <td class="px-4 py-2">€${change.old_price ?? '-'} → €${change.new_price ?? '-'}</td>
               <td class="px-4 py-2">€${change.old_cost ?? '-'} → €${change.new_cost ?? '-'}</td>
+              <td class="px-4 py-2">€${c.old_compare_price ?? '—'} → €${c.new_compare_price ?? '—'}</td>
               <td class="px-4 py-2 text-center">
                 <input type="checkbox" class="change-checkbox" data-minsan="${change.minsan}">
               </td>
