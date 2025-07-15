@@ -28,7 +28,7 @@ export const handler: Handler = async (event) => {
       prezzo_bd,
       iva,
       data_ultimo_costo_ditta,
-      raw_expiry AS scadenza
+      raw_expiry AS scadenza,
     `)
     .eq('import_id', import_id);
 
