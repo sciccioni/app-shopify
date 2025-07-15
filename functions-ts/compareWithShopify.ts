@@ -59,7 +59,7 @@ export const handler: Handler = async (event) => {
 
     const { data: rows, error } = await supabase
       .from('products')
-      .select('minsan,ditta,giacenza,prezzo_calcolato,costo_medio')
+      .select('minsan,ditta,giacenza,prezzo_calcolato,costo_medio,descrizione')
       .eq('import_id', import_id);
     if (error) throw error;
 
@@ -81,6 +81,7 @@ export const handler: Handler = async (event) => {
             import_id,
             minsan : r.minsan,
             ditta  : r.ditta,
+            product_title: r.descrizione || null,
             changes: { missing: true }
           });
           continue;
