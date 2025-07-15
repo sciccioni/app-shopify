@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Inventory Sync Dashboard</title>
 
-  <!-- jQuery & Tailwind CSS -->
+  <!-- jQuery & Tailwind -->
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
@@ -24,11 +24,11 @@
   <!-- Tabs -->
   <main class="container mx-auto px-4 py-6 flex-grow space-y-6">
     <nav class="flex space-x-4">
-      <button data-tab="upload"  class="tab-btn px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Carica File</button>
-      <button data-tab="review"  class="tab-btn px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Revisione Modifiche</button>
-      <button data-tab="markup"  class="tab-btn px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Gestione Markup</button>
-      <button data-tab="products" class="tab-btn px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Prodotti Shopify</button>
-      <button data-tab="log"      class="tab-btn px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Log Aggiornamenti</button>
+      <button data-tab="upload"  class="tab-btn px-4 py-2 bg-blue-600 text-white rounded">Carica File</button>
+      <button data-tab="review"  class="tab-btn px-4 py-2 bg-gray-300 rounded">Revisione Modifiche</button>
+      <button data-tab="markup"  class="tab-btn px-4 py-2 bg-gray-300 rounded">Gestione Markup</button>
+      <button data-tab="products" class="tab-btn px-4 py-2 bg-gray-300 rounded">Prodotti Shopify</button>
+      <button data-tab="log"      class="tab-btn px-4 py-2 bg-gray-300 rounded">Log Aggiornamenti</button>
     </nav>
 
     <!-- Tab 1: Carica File -->
@@ -38,12 +38,12 @@
         <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Upload</button>
       </form>
 
-      <!-- Barra di avanzamento -->
+      <!-- Progress bar -->
       <div id="progress" class="w-full bg-gray-200 rounded h-4 mt-4 hidden">
         <div id="progress-bar" class="bg-blue-600 h-4 rounded w-0"></div>
       </div>
 
-      <!-- Messaggi -->
+      <!-- Status -->
       <div id="upload-status" class="mt-4 hidden"></div>
     </section>
 
@@ -55,11 +55,10 @@
             <th>Prodotto</th>
             <th>Minsan</th>
             <th>Ditta</th>
-            <th>Giacenza (vecchio → nuovo)</th>
-            <th>Prezzo (vecchio → nuovo)</th>
-            <th>Prezzo Barrato (vecchio → nuovo)</th>
-            <th>Costo (vecchio → nuovo)</th>
-            <th>Azione</th>
+            <th>Giacenza<br>(vecchio → nuovo)</th>
+            <th>Prezzo<br>(vecchio → nuovo)</th>
+            <th>Costo<br>(vecchio → nuovo)</th>
+            <th>Seleziona</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -81,19 +80,15 @@
       </form>
 
       <table id="markup-table" class="min-w-full divide-y divide-gray-200">
-        <thead>
-          <tr><th>Ditta</th><th>Markup %</th><th>Azione</th></tr>
-        </thead>
+        <thead><tr><th>Ditta</th><th>Markup %</th><th>Azione</th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
 
-    <!-- Tab 4: Prodotti Shopify (solo lettura) -->
+    <!-- Tab 4: Prodotti Shopify -->
     <section id="tab-products" class="tab-content hidden bg-white p-6 rounded-lg shadow">
       <table id="products-table" class="min-w-full divide-y divide-gray-200">
-        <thead>
-          <tr><th>Prodotto</th><th>Minsan</th><th>Giacenza</th><th>Prezzo</th></tr>
-        </thead>
+        <thead><tr><th>Prodotto</th><th>Minsan</th><th>Giacenza</th><th>Prezzo</th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
@@ -101,9 +96,7 @@
     <!-- Tab 5: Log Aggiornamenti -->
     <section id="tab-log" class="tab-content hidden bg-white p-6 rounded-lg shadow">
       <table id="log-table" class="min-w-full divide-y divide-gray-200">
-        <thead>
-          <tr><th>Data</th><th>Minsan</th><th>Status</th><th>Dettagli</th></tr>
-        </thead>
+        <thead><tr><th>Data</th><th>Minsan</th><th>Status</th><th>Dettagli</th></tr></thead>
         <tbody></tbody>
       </table>
     </section>
@@ -111,9 +104,7 @@
 
   <!-- Script -->
   <script>
-    /* ----------------------------------- */
-    /* Helpers UI                          */
-    /* ----------------------------------- */
+    /* ------------ Helpers UI ------------ */
     function showStatus(msg, type = 'info') {
       const el = $('#upload-status');
       el.removeClass('hidden text-red-600 text-green-600 text-blue-600');
@@ -128,7 +119,7 @@
     /* Tabs */
     $('.tab-btn').on('click', function () {
       const tab = $(this).data('tab');
-      $('.tab-btn').removeClass('bg-blue-600 text-white').addClass('bg-gray-300');
+      $('.tab-btn').removeClass('bg-blue-600 text-white').addClass('bg-gray-300 text-black');
       $(this).addClass('bg-blue-600 text-white');
 
       $('.tab-content').addClass('hidden');
@@ -141,122 +132,77 @@
       window.location.href = '/index.html';
     });
 
-    /* ----------------------------------- */
-    /* Upload Excel + workflow completo    */
-    /* ----------------------------------- */
+    /* ------------ Upload workflow ------------ */
     $('#upload-form').submit(async (e) => {
       e.preventDefault();
-
       const file = $('#excel-file')[0].files[0];
-      if (!file) {
-        showStatus('Seleziona un file Excel', 'error');
-        return;
-      }
+      if (!file) return showStatus('Seleziona un file Excel', 'error');
 
-      // Reset e mostra progress
-      $('#upload-status').addClass('hidden');
       $('#progress').removeClass('hidden');
       $('#progress-bar').css('width', '0%');
-
-      // Disabilita il form durante l’upload
-      $('#excel-file').prop('disabled', true);
-      $('#upload-form button').prop('disabled', true).text('Caricamento…');
+      $('#upload-status').addClass('hidden');
 
       try {
-        /* 1️⃣ Lettura file */
-        const reader = new FileReader();
+        /* 1️⃣ Upload Excel */
+        const base64 = await new Promise((ok, ko) => {
+          const fr = new FileReader();
+          fr.onload  = () => ok(fr.result.split(',')[1]);
+          fr.onerror = ko;
+          fr.readAsDataURL(file);
+        });
 
-        reader.onload = async () => {
-          try {
-            const base64 = reader.result.split(',')[1];
+        $('#progress-bar').css('width', '25%');
+        showStatus('Caricamento file…', 'info');
 
-            // 25 %
-            $('#progress-bar').css('width', '25%');
-            showStatus('Caricamento file in corso…', 'info');
+        const upRes = await fetch('/.netlify/functions/uploadExcel', {
+          method : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ file: base64, filename: file.name })
+        });
+        if (!upRes.ok) throw new Error('Errore upload');
+        const { import_id } = await upRes.json();
 
-            /* 2️⃣ Upload a Netlify Function */
-            const uploadRes = await fetch('/.netlify/functions/uploadExcel', {
-              method : 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-              },
-              body: JSON.stringify({ file: base64, filename: file.name })
-            });
-            if (!uploadRes.ok) {
-              const err = await uploadRes.json().catch(() => ({}));
-              throw new Error(err.error || 'Errore upload');
-            }
+        /* 2️⃣ Normalizzazione */
+        $('#progress-bar').css('width', '50%');
+        showStatus('Normalizzazione dati…', 'info');
+        const norm = await fetch('/.netlify/functions/normalizeImport', {
+          method : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ import_id })
+        });
+        if (!norm.ok) throw new Error(await norm.text());
 
-            $('#progress-bar').css('width', '50%');
-            const { import_id } = await uploadRes.json();
-            showStatus(`File caricato con successo! Import ID: ${import_id}`, 'success');
+        /* 3️⃣ Confronto con Shopify */
+        $('#progress-bar').css('width', '75%');
+        showStatus('Confronto con Shopify…', 'info');
+        const cmp = await fetch('/.netlify/functions/compareWithShopify', {
+          method : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ import_id })
+        });
+        if (!cmp.ok) throw new Error(await cmp.text());
 
-            /* 3️⃣ Normalizzazione */
-            $('#progress-bar').css('width', '60%');
-            showStatus('Normalizzazione dati in corso…', 'info');
-            const normRes = await fetch('/.netlify/functions/normalizeImport', {
-              method : 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-              },
-              body: JSON.stringify({ import_id })
-            });
-            if (!normRes.ok) {
-              const err = await normRes.json().catch(() => ({}));
-              throw new Error(err.error || 'Errore normalizzazione');
-            }
-
-            /* 4️⃣ Confronto Shopify */
-            $('#progress-bar').css('width', '80%');
-            showStatus('Confronto con Shopify…', 'info');
-            const cmpRes = await fetch('/.netlify/functions/compareWithShopify', {
-              method : 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-              },
-              body: JSON.stringify({ import_id })
-            });
-            if (!cmpRes.ok) {
-              const err = await cmpRes.json().catch(() => ({}));
-              throw new Error(err.error || 'Errore confronto Shopify');
-            }
-
-            /* 5️⃣ Finito */
-            $('#progress-bar').css('width', '100%');
-            showStatus('Confronto completato! Vai al tab “Revisione Modifiche”', 'success');
-
-            // Dopo 2 s nasconde la barra e resetta il form
-            setTimeout(() => {
-              $('#progress').addClass('hidden');
-              $('#progress-bar').css('width', '0%');
-            }, 2000);
-            $('#excel-file').val('');
-
-          } catch (error) {
-            console.error('Errore upload:', error);
-            showStatus(`Errore: ${error.message}`, 'error');
-            $('#progress').addClass('hidden');
-          } finally {
-            // Riabilita il form
-            $('#excel-file').prop('disabled', false);
-            $('#upload-form button').prop('disabled', false).text('Upload');
-          }
-        };
-
-        reader.onerror = () => {
-          showStatus('Errore nella lettura del file', 'error');
+        /* Fine */
+        $('#progress-bar').css('width', '100%');
+        showStatus('Confronto completato! Apri “Revisione Modifiche”', 'success');
+      } catch (err) {
+        console.error(err);
+        showStatus(err.message || 'Errore', 'error');
+      } finally {
+        setTimeout(() => {
           $('#progress').addClass('hidden');
-        };
-
-        reader.readAsDataURL(file);
-
-      } catch (error) {
-        console.error('Errore generico:', error);
-        showStatus('Errore generico durante l’upload', 'error');
-        $('#progress').addClass('hidden');
+          $('#progress-bar').css('width', 0);
+        }, 1800);
+        $('#excel-file').val('');
       }
     });
   </script>
