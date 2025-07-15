@@ -89,9 +89,12 @@ export const handler: Handler = async (event) => {
         found++;
 
         const changes: Record<string, any> = {};
-        if (r.giacenza !== v.inventoryQuantity) {
-          changes.inventory = { old: v.inventoryQuantity, new: r.giacenza };
-        }
+        
+        // Inventory: sempre incluso dopo aver ottenuto v (Shopify) e r (Excel)
+        const oldInv = v.inventoryQuantity;
+        const newInv = r.giacenza;
+        changes.inventory = { old: oldInv, new: newInv };   // <— sempre
+
         if (r.prezzo_calcolato && Number(r.prezzo_calcolato) !== Number(v.price)) {
           changes.price = { old: v.price, new: r.prezzo_calcolato };
         }
