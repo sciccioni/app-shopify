@@ -3,108 +3,69 @@ import { createClient } from '@supabase/supabase-js';
 
 const sb = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!,
+  process.env.SUPABASE_SERVICE_KEY!,          // service-role
   { auth: { persistSession: false } }
 );
 
 export const handler: Handler = async (event) => {
-  /* ============   GET → restituisce la lista   ============ */
+
+  /* ---------- GET → restituisce la lista completa ---------- */
   if (event.httpMethod === 'GET') {
-    try {
-      const { data, error } = await sb
-        .from('company_markups')
-        .select('ditta, markup_percentage')
-        .order('ditta');
-      if (error) throw error;
-      return { statusCode: 200, body: JSON.stringify(data) };
-    } catch (e: any) {
-      console.error('GET company_markups', e);
-      return { statusCode: 500, body: e.message || 'Errore GET markups' };
-    }
+    const { data, error } = await sb
+      .from('company_markups')
+      .select('ditta, markup_percentage')
+      .order('ditta');
+    if (error) return { statusCode: 500, body: error.message };
+    return { statusCode: 200, body: JSON.stringify(data) };
   }
 
-  /* ============   POST → sincronizza ditte   ============ */
+  /* ---------- POST → inserisce solo le nuove ditte (10 %) --- */
   if (event.httpMethod === 'POST') {
-    try {
-      /* 1️⃣ prendo tutte le ditte (possono arrivare duplicati) */
-      const { data, error } = await sb
-        .from('products')
-        .select('ditta')
-        .not('ditta', 'is', null);
-      if (error) throw error;
+    const { data: rows, error } = await sb
+      .from('products')
+      .select('ditta')
+      .not('ditta', 'is', null);
+    if (error) return { statusCode: 500, body: error.message };
 
-      /* 2️⃣ deduplica in memoria */
-      const seen = new Set<string>();
-      const allDitte = (data || [])
-        .map(r => (r.ditta ?? '').trim())
-        .filter(name => name.length)
-        .filter(name => {
-          if (seen.has(name)) return false;
-          seen.add(name);
-          return true;
-        });
+    const seen = new Set<string>();
+    const insertRows = (rows || [])
+      .map(r => (r.ditta ?? '').trim())
+      .filter(n => n && !seen.has(n) && seen.add(n))
+      .map(n => ({ ditta: n, markup_percentage: 10.0 }));
 
-      if (!allDitte.length) {
-        return { statusCode: 200, body: JSON.stringify({ inserted: 0 }) };
-      }
+    if (!insertRows.length)
+      return { statusCode: 200, body: JSON.stringify({ inserted: 0 }) };
 
-      /* 3️⃣ verifica quali ditte non esistono già */
-      const { data: existing, error: existingErr } = await sb
-        .from('company_markups')
-        .select('ditta')
-        .in('ditta', allDitte);
-      if (existingErr) throw existingErr;
+    const { count, error: insErr } = await sb
+      .from('company_markups')
+      .insert(insertRows, { ignoreDuplicates: true, count: 'exact' });
 
-      const existingDitte = new Set((existing || []).map(r => r.ditta));
-      const newDitte = allDitte
-        .filter(ditta => !existingDitte.has(ditta))
-        .map(ditta => ({
-          ditta,
-          markup_percentage: 10.0
-        }));
-
-      if (!newDitte.length) {
-        return { statusCode: 200, body: JSON.stringify({ inserted: 0 }) };
-      }
-
-      /* 4️⃣ inserisci solo le nuove ditte */
-      const { count, error: insErr } = await sb
-        .from('company_markups')
-        .insert(newDitte, { count: 'exact' });
-      if (insErr) throw insErr;
-
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ inserted: count })
-      };
-    } catch (e: any) {
-      console.error('POST syncCompanyMarkups', e);
-      return { statusCode: 500, body: e.message || 'Errore sync markups' };
-    }
+    if (insErr) return { statusCode: 500, body: insErr.message };
+    return { statusCode: 200, body: JSON.stringify({ inserted: count }) };
   }
 
-  /* ============   PUT → salva singolo markup   ============ */
+  /* ---------- PUT → aggiorna (o crea) il markup di una ditta -- */
   if (event.httpMethod === 'PUT') {
     try {
       const { ditta, markup_percentage } = JSON.parse(event.body || '{}');
-      
-      if (!ditta || markup_percentage === undefined) {
-        return { statusCode: 400, body: 'Parametri mancanti' };
-      }
+      if (!ditta || markup_percentage === undefined)
+        return { statusCode: 400, body: 'ditta o markup_percentage mancante' };
 
       const { error } = await sb
         .from('company_markups')
-        .upsert({ ditta, markup_percentage }, { onConflict: 'ditta' });
-      
-      if (error) throw error;
+        .upsert(
+          { ditta: ditta.trim(), markup_percentage },
+          { onConflict: 'ditta' }
+        );
 
-      return { statusCode: 200, body: JSON.stringify({ success: true }) };
+      if (error) throw error;
+      return { statusCode: 200, body: JSON.stringify({ updated: true }) };
     } catch (e: any) {
-      console.error('PUT company_markups', e);
-      return { statusCode: 500, body: e.message || 'Errore salvataggio markup' };
+      console.error('PUT syncCompanyMarkups', e);
+      return { statusCode: 500, body: e.message || 'Errore aggiornamento markup' };
     }
   }
 
-  /* Altri metodi non ammessi */
+  /* Altri metodi non permessi */
   return { statusCode: 405, body: 'Method not allowed' };
 };
