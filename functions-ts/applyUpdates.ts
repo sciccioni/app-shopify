@@ -158,6 +158,7 @@ async function batchUpdateCosts(updates: Array<{id: string, amount: number}>) {
   const mutations = updates.map((update, i) => `
     cost${i}: inventoryItemUpdate(id: $id${i}, input: $input${i}) {
       userErrors { field message }
+      inventoryItem { id }
     }
   `).join('\n');
 
@@ -165,7 +166,7 @@ async function batchUpdateCosts(updates: Array<{id: string, amount: number}>) {
   updates.forEach((update, i) => {
     variables[`id${i}`] = update.id;
     variables[`input${i}`] = {
-      unitCost: {
+      cost: {
         amount: update.amount.toString(),
         currencyCode: "EUR"
       }
