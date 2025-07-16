@@ -503,6 +503,35 @@
         showStatus(error.message || 'Errore nel caricamento dati', 'error');
       }
     }
+        
+        // Aggiorna tabella
+        const tbody = $('#comparison-table tbody');
+        tbody.empty();
+        
+        if (!data.changes || data.changes.length === 0) {
+          tbody.append('<tr><td colspan="10" class="text-center py-4">Nessuna differenza da mostrare.</td></tr>');
+          return;
+        }
+        
+        // Salva i dati globalmente per i filtri
+        window.allChanges = data.changes;
+        
+        // Conta i tipi di righe
+        const toUpdate = data.changes.filter(c => !c.note).length;
+        const missing = data.changes.filter(c => c.note).length;
+        
+        $('#count-all').text(data.changes.length);
+        $('#count-to-update').text(toUpdate);
+        $('#count-missing').text(missing);
+        
+        // Mostra tutte le righe inizialmente
+        displayFilteredRows(data.changes);
+        
+      } catch (error) {
+        console.error('Errore nel caricamento dati confronto:', error);
+        showStatus(error.message || 'Errore nel caricamento dati', 'error');
+      }
+    }
 
     /* ------------ Funzione per mostrare righe filtrate ------------ */
     function displayFilteredRows(changes) {
