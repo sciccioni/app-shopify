@@ -184,7 +184,7 @@ async function batchUpdateMetafields(updates: Array<{productId: string, value: s
     ownerId: update.productId,
     namespace: "custom",
     key: "data_di_scadenza",
-    type: "single_line_text_field",
+    type: "date",
     value: update.value
   }));
 
