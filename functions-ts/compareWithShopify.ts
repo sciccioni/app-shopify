@@ -84,6 +84,8 @@ export const handler: Handler = async (event) => {
           new_compare_price: r.changes.compare_price?.new ?? '—',
           old_cost         : r.changes.cost?.old ?? '—',
           new_cost         : r.changes.cost?.new ?? '—',
+          old_expiry       : r.changes.expiry?.old ?? '—',
+          new_expiry       : r.changes.expiry?.new ?? '—',
           note             : r.changes?.missing ? 'Prodotto assente in Shopify' : ''
         };
         
