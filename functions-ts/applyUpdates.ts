@@ -166,10 +166,7 @@ async function batchUpdateCosts(updates: Array<{id: string, amount: number}>) {
   updates.forEach((update, i) => {
     variables[`id${i}`] = update.id;
     variables[`input${i}`] = {
-      cost: {
-        amount: update.amount.toString(),
-        currencyCode: "EUR"
-      }
+      cost: update.amount.toString()
     };
   });
 
