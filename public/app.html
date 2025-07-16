@@ -466,6 +466,12 @@
         
         data.changes.forEach(change => {
           const missingClass = change.note ? 'bg-red-50' : '';
+          
+          // Debug per capire cosa contiene change
+          console.log('Change object:', change);
+          console.log('old_expiry:', change.old_expiry);
+          console.log('new_expiry:', change.new_expiry);
+          
           const oldExpiry = change.old_expiry || '—';
           const newExpiry = change.new_expiry || '—';
           
