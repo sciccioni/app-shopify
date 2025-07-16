@@ -7,38 +7,34 @@ const sb = createClient(
   { auth: { persistSession:false } }
 );
 
-/* Formula SQL:
-   prezzo_calcolato = costo_medio * (1 + markup%/100) * (1 + iva%/100)
-*/
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST')
     return { statusCode:405, body:'POST only' };
 
   try {
     const { ditta, import_id } = JSON.parse(event.body||'{}');
-    if (!ditta || !import_id)
-      return { statusCode:400, body:'ditta o import_id mancante' };
+    if (!ditta) return { statusCode:400, body:'ditta mancante' };
 
-    /* ① prendo il markup aggiornato */
-    const { data: mk } = await sb
+    /* markup attuale */
+    const { data: mk, error: mkErr } = await sb
       .from('company_markups')
       .select('markup_percentage')
       .eq('ditta', ditta)
       .single();
-    if (!mk) return { statusCode:404, body:'markup non trovato' };
+    if (mkErr) throw mkErr;
 
-    /* ② aggiorno tutti i prodotti di quell’import */
-    const { error } = await sb.rpc('recalc_prezzo_calcolato', {
-      p_import_id : import_id,
-      p_ditta     : ditta,
-      p_markup    : mk.markup_percentage
-    });
-    if (error) throw error;
+    /* call SQL helper */
+    const { data: upd, error: updErr } = await sb
+      .rpc('recalc_prezzo_calcolato', {
+        p_import_id : import_id || null,   // <- può essere null
+        p_ditta     : ditta,
+        p_markup    : mk.markup_percentage
+      });
+    if (updErr) throw updErr;
 
-    return { statusCode:200, body:JSON.stringify({ success:true }) };
+    return { statusCode:200, body:JSON.stringify({ rows_updated: upd }) };
   } catch(e:any){
     console.error('recalcPrices', e);
     return { statusCode:500, body:e.message || 'Errore recalcolo' };
   }
 };
-
