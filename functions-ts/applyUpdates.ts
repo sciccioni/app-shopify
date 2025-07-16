@@ -198,8 +198,20 @@ export const handler: Handler = async (event) => {
         // Variant updates (price + compareAtPrice)
         if (r.changes.price || r.changes.compare_price) {
           const input: any = {};
-          if (r.changes.price?.new !== undefined) input.price = String(r.changes.price.new);
-          if (r.changes.compare_price?.new !== undefined) input.compareAtPrice = String(r.changes.compare_price.new);
+          
+          if (r.changes.price?.new !== undefined) {
+            input.price = {
+              amount: r.changes.price.new.toString(),
+              currencyCode: "EUR"
+            };
+          }
+          
+          if (r.changes.compare_price?.new !== undefined) {
+            input.compareAtPrice = {
+              amount: r.changes.compare_price.new.toString(),
+              currencyCode: "EUR"
+            };
+          }
           
           variantUpdates.push({ id: r.product_variant_id, input });
         }
