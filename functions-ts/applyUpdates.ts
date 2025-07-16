@@ -84,28 +84,47 @@ async function shopifyFetch(query: string, variables: any = {}) {
   });
 }
 
+/* ---------- Single mutations for debugging --------------------------- */
+async function updateSingleVariant(variantId: string, input: any) {
+  try {
+    // Test multiple possible mutation names
+    const possibleMutations = [
+      'productVariantUpdate',
+      'productVariantUpdate',
+      'variantUpdate'
+    ];
+    
+    for (const mutationName of possibleMutations) {
+      try {
+        return await shopifyFetch(`
+          mutation($id: ID!, $input: ProductVariantInput!) {
+            ${mutationName}(id: $id, input: $input) {
+              userErrors { field message }
+              productVariant { id }
+            }
+          }
+        `, { id: variantId, input });
+      } catch (e: any) {
+        console.log(`Failed with ${mutationName}:`, e.message);
+        if (mutationName === possibleMutations[possibleMutations.length - 1]) {
+          throw e; // Re-throw if all failed
+        }
+      }
+    }
+  } catch (e: any) {
+    console.error('All variant update mutations failed:', e.message);
+    throw e;
+  }
+}
+
 /* ---------- Batch mutations ------------------------------------------- */
 async function batchUpdateVariants(updates: Array<{id: string, input: any}>) {
   if (updates.length === 0) return;
   
-  const mutations = updates.map((update, i) => `
-    v${i}: productVariantUpdate(id: $id${i}, input: $input${i}) {
-      userErrors { field message }
-      productVariant { id }
-    }
-  `).join('\n');
-
-  const variables: any = {};
-  updates.forEach((update, i) => {
-    variables[`id${i}`] = update.id;
-    variables[`input${i}`] = update.input;
-  });
-
-  await shopifyFetch(`
-    mutation(${updates.map((_, i) => `$id${i}: ID!, $input${i}: ProductVariantInput!`).join(', ')}) {
-      ${mutations}
-    }
-  `, variables);
+  // For now, do them one by one to debug
+  for (const update of updates) {
+    await updateSingleVariant(update.id, update.input);
+  }
 }
 
 async function batchUpdateInventory(updates: Array<{inventoryItemId: string, delta: number}>) {
@@ -232,17 +251,11 @@ export const handler: Handler = async (event) => {
           const input: any = {};
           
           if (r.changes.price?.new !== undefined) {
-            input.price = {
-              amount: r.changes.price.new.toString(),
-              currencyCode: "EUR"
-            };
+            input.price = r.changes.price.new.toString();
           }
           
           if (r.changes.compare_price?.new !== undefined) {
-            input.compareAtPrice = {
-              amount: r.changes.compare_price.new.toString(),
-              currencyCode: "EUR"
-            };
+            input.compareAtPrice = r.changes.compare_price.new.toString();
           }
           
           variantUpdates.push({ id: r.product_variant_id, input });
