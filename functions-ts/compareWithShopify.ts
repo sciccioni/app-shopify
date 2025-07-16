@@ -22,7 +22,10 @@ async function fetchVariantsBatch(skus: string[]) {
       v${i}: productVariants(first: 1, query: "sku:${sku}") {
         edges { node {
           id sku price inventoryQuantity compareAtPrice
-          product { id title }
+          product {
+            id title
+            metafield(namespace:"custom", key:"data_di_scadenza") { value }
+          }
           inventoryItem { id unitCost { amount } }
         }}
       }
@@ -50,7 +53,67 @@ async function fetchVariantsBatch(skus: string[]) {
 
 /* ---------- handler ------------------------------------------------------ */
 export const handler: Handler = async (event) => {
-  if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'POST only' };
+  // GET per recuperare i dati di confronto
+  if (event.httpMethod === 'GET') {
+    const { import_id } = event.queryStringParameters || {};
+    if (!import_id) return { statusCode: 400, body: 'import_id mancante' };
+    
+    try {
+      /* stats unique products */
+      const { count: unique } = await supabase
+        .from('products')
+        .select('minsan', { count: 'exact', head: true })
+        .eq('import_id', import_id);
+      
+      /* diff rows */
+      const { data: rows } = await supabase
+        .from('pending_updates')
+        .select('minsan,ditta,product_title,changes')
+        .eq('import_id', import_id);
+      
+      const changes = rows!.map((r) => {
+        const c: any = {
+          description       : r.product_title ?? '',
+          minsan           : r.minsan,
+          ditta            : r.ditta ?? '',
+          old_inventory    : r.changes.inventory?.old ?? '—',
+          new_inventory    : r.changes.inventory?.new ?? '—',
+          old_price        : r.changes.price?.old ?? '—',
+          new_price        : r.changes.price?.new ?? '—',
+          old_compare_price: r.changes.compare_price?.old ?? '—',
+          new_compare_price: r.changes.compare_price?.new ?? '—',
+          old_cost         : r.changes.cost?.old ?? '—',
+          new_cost         : r.changes.cost?.new ?? '—',
+          note             : r.changes?.missing ? 'Prodotto assente in Shopify' : ''
+        };
+        
+        return c;
+      });
+      
+      const newCompanies = new Set(
+        rows!.filter(r => r.changes?.missing).map(r => r.ditta)
+      ).size;
+      
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          stats: {
+            total_rows     : rows!.length,
+            unique_products: unique || 0,
+            changes_found  : rows!.length,
+            new_companies  : newCompanies
+          },
+          changes
+        })
+      };
+    } catch (e: any) {
+      console.error('getComparisonData error', e);
+      return { statusCode: 500, body: e.message || 'Errore interno' };
+    }
+  }
+
+  // POST per eseguire il confronto
+  if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'GET or POST only' };
   const start = Date.now();
 
   try {
@@ -59,7 +122,7 @@ export const handler: Handler = async (event) => {
 
     const { data: rows, error } = await supabase
       .from('products')
-      .select('minsan,ditta,giacenza,prezzo_calcolato,costo_medio,descrizione,prezzo_bd')
+      .select('minsan,ditta,giacenza,prezzo_calcolato,costo_medio,descrizione,prezzo_bd,scadenza')
       .eq('import_id', import_id);
     if (error) throw error;
 
@@ -97,13 +160,16 @@ export const handler: Handler = async (event) => {
         const newComp  = Number(r.prezzo_bd ?? oldComp);
         const oldCost  = Number(v.inventoryItem.unitCost?.amount ?? 0);
         const newCost  = Number(r.costo_medio ?? oldCost);
+        const oldExp   = v.product.metafield?.value ?? null;
+        const newExp   = r.scadenza ?? null;
 
-        /* Se tutti e quattro i pair sono identici, saltiamo la riga */
+        /* Se tutti e cinque i pair sono identici, saltiamo la riga */
         if (
           oldInv === newInv &&
           oldPrice === newPrice &&
           oldComp === newComp &&
-          oldCost === newCost
+          oldCost === newCost &&
+          (oldExp || '') === (newExp || '')
         ) continue;
 
         const changes: Record<string, any> = {};
@@ -111,6 +177,7 @@ export const handler: Handler = async (event) => {
         changes.price         = { old: oldPrice, new: newPrice };
         changes.compare_price = { old: oldComp, new: newComp };
         changes.cost          = { old: oldCost, new: newCost };
+        changes.expiry        = { old: oldExp, new: newExp };
 
         pending.push({
           import_id,
