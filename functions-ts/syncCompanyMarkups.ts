@@ -52,11 +52,11 @@ export const handler: Handler = async (event) => {
         return { statusCode: 200, body: JSON.stringify({ inserted: 0 }) };
       }
 
-      /* 3️⃣ upsert unico senza duplicati */
-      const { count, error: upErr } = await sb
+      /* 3️⃣ INSERT ... ON CONFLICT DO NOTHING (ignora i già esistenti) */
+      const { count, error: insErr } = await sb
         .from('company_markups')
-        .upsert(values, { onConflict: 'ditta', count: 'exact' });
-      if (upErr) throw upErr;
+        .insert(values, { count: 'exact', ignoreDuplicates: true });
+      if (insErr) throw insErr;
 
       return {
         statusCode: 200,
