@@ -283,7 +283,7 @@
     async function loadComparisonData(import_id) {
       try {
         console.log('Caricamento dati confronto per import_id:', import_id);
-        const response = await fetch(`/.netlify/functions/compareWithShopify?import_id=${import_id}`, {
+        const response = await fetch(`/.netlify/functions/getComparisonData?import_id=${import_id}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
