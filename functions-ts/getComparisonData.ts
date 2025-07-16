@@ -22,7 +22,10 @@ async function fetchVariantsBatch(skus: string[]) {
       v${i}: productVariants(first: 1, query: "sku:${sku}") {
         edges { node {
           id sku price inventoryQuantity compareAtPrice
-          product { id title }
+          product {
+            id title
+            metafield(namespace:"custom", key:"data_di_scadenza") { value }
+          }
           inventoryItem { id unitCost { amount } }
         }}
       }
@@ -81,6 +84,8 @@ export const handler: Handler = async (event) => {
           new_compare_price: r.changes.compare_price?.new ?? '—',
           old_cost         : r.changes.cost?.old ?? '—',
           new_cost         : r.changes.cost?.new ?? '—',
+          old_expiry       : r.changes.expiry?.old ?? '—',
+          new_expiry       : r.changes.expiry?.new ?? '—',
           note             : r.changes?.missing ? 'Prodotto assente in Shopify' : ''
         };
         
@@ -119,7 +124,7 @@ export const handler: Handler = async (event) => {
 
     const { data: rows, error } = await supabase
       .from('products')
-      .select('minsan,ditta,giacenza,prezzo_calcolato,costo_medio,descrizione,prezzo_bd')
+      .select('minsan,ditta,giacenza,prezzo_calcolato,costo_medio,descrizione,prezzo_bd,scadenza')
       .eq('import_id', import_id);
     if (error) throw error;
 
@@ -157,13 +162,16 @@ export const handler: Handler = async (event) => {
         const newComp  = Number(r.prezzo_bd ?? oldComp);
         const oldCost  = Number(v.inventoryItem.unitCost?.amount ?? 0);
         const newCost  = Number(r.costo_medio ?? oldCost);
+        const oldExp   = v.product.metafield?.value ?? null;
+        const newExp   = r.scadenza ?? null;
 
-        /* Se tutti e quattro i pair sono identici, saltiamo la riga */
+        /* Se tutti e cinque i pair sono identici, saltiamo la riga */
         if (
           oldInv === newInv &&
           oldPrice === newPrice &&
           oldComp === newComp &&
-          oldCost === newCost
+          oldCost === newCost &&
+          (oldExp || '') === (newExp || '')
         ) continue;
 
         const changes: Record<string, any> = {};
@@ -171,6 +179,7 @@ export const handler: Handler = async (event) => {
         changes.price         = { old: oldPrice, new: newPrice };
         changes.compare_price = { old: oldComp, new: newComp };
         changes.cost          = { old: oldCost, new: newCost };
+        changes.expiry        = { old: oldExp, new: newExp };
 
         pending.push({
           import_id,
