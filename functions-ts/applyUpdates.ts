@@ -238,14 +238,14 @@ export const handler: Handler = async (event) => {
     const costUpdates: Array<{id: string, amount: number}> = [];
     const metafieldUpdates: Array<{productId: string, value: string}> = [];
     
-    const logEntries: Array<{minsan: string, status: string, details: string}> = [];
+    const logEntries: Array<{minsan: string, status: string, details: string, action: string}> = [];
     let skipped = 0;
 
     // Prepara i batch
     for (const r of rows) {
       try {
         if (r.changes?.missing) {
-          logEntries.push({ minsan: r.minsan, status: 'skipped', details: 'missing in Shopify' });
+          logEntries.push({ minsan: r.minsan, status: 'skipped', details: 'missing in Shopify', action: 'skip' });
           skipped++;
           continue;
         }
@@ -292,10 +292,10 @@ export const handler: Handler = async (event) => {
           });
         }
 
-        logEntries.push({ minsan: r.minsan, status: 'success', details: '' });
+        logEntries.push({ minsan: r.minsan, status: 'success', details: '', action: 'update' });
       } catch (e: any) {
         console.error(`Error preparing update for ${r.minsan}:`, e.message);
-        logEntries.push({ minsan: r.minsan, status: 'error', details: e.message });
+        logEntries.push({ minsan: r.minsan, status: 'error', details: e.message, action: 'update' });
       }
     }
 
