@@ -133,8 +133,8 @@
         $('.tab-content').addClass('hidden');
         $('#tab-' + tab).removeClass('hidden');
 
-        if (tab === 'review' && localStorage.lastImportId) {
-          loadComparisonData(localStorage.lastImportId);
+        if (tab === 'review' && localStorage.getItem('lastImportId')) {
+          loadComparisonData(localStorage.getItem('lastImportId'));
         } else if (tab === 'markup') {
           loadMarkups();
         }
@@ -195,34 +195,50 @@
     });
 
     $('#markup-table').on('click', '.save-markup', async function() {
-      const tr = $(this).closest('tr');
-      const name = tr.data('name');
-      const val = parseFloat(tr.find('.markup-input').val());
-      if (isNaN(val)) return alert('Valore non valido');
-      
-      $(this).prop('disabled', true);
-      try {
-        // 1. Update the markup percentage
-        await fetch('/.netlify/functions/syncCompanyMarkups', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-          body: JSON.stringify({ ditta: name, markup_percentage: val })
-        });
-        
-        // 2. Recalculate prices for the current import
-        if (localStorage.lastImportId) {
-          await fetch('/.netlify/functions/recalcPrices', {
-             method: 'POST',
-             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-             body: JSON.stringify({ ditta: name, import_id: localStorage.lastImportId })
-          });
+        const tr = $(this).closest('tr');
+        const name = tr.data('name');
+        const val = parseFloat(tr.find('.markup-input').val());
+        if (isNaN(val)) return alert('Valore non valido');
+
+        $(this).prop('disabled', true);
+        const lastImportId = localStorage.getItem('lastImportId');
+
+        try {
+            // 1. Update the markup percentage
+            await fetch('/.netlify/functions/syncCompanyMarkups', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ ditta: name, markup_percentage: val })
+            });
+            $('#markups-message').text(`Salvato ${name}...`).fadeIn();
+
+            // 2. If an import exists, trigger recalculation and refresh the data
+            if (lastImportId) {
+                // 2a. Recalculate prices on the server
+                await fetch('/.netlify/functions/recalcPrices', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    body: JSON.stringify({ ditta: name, import_id: lastImportId })
+                });
+
+                // 2b. Regenerate the comparison with Shopify data
+                await fetch('/.netlify/functions/compareWithShopify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    body: JSON.stringify({ import_id: lastImportId })
+                });
+
+                // 2c. Reload the comparison data in the UI
+                await loadComparisonData(lastImportId);
+                $('#markups-message').text(`Salvato ${name} e prezzi ricalcolati!`).delay(2500).fadeOut();
+            } else {
+                $('#markups-message').text(`Salvato ${name}`).delay(2500).fadeOut();
+            }
+        } catch (e) {
+            alert('Errore salvataggio markup: ' + e.message);
+        } finally {
+            $(this).prop('disabled', false);
         }
-         $('#markups-message').text(`Salvato ${name} e prezzi ricalcolati`).fadeIn().delay(3000).fadeOut();
-      } catch (e) {
-        alert('Errore salvataggio markup: ' + e.message);
-      } finally {
-        $(this).prop('disabled', false);
-      }
     });
 
     // --- UPLOAD WORKFLOW ---
@@ -261,7 +277,7 @@
         await runStep("Confronto con Shopify...", 75, "compareWithShopify", { import_id });
         
         $('#progress-bar').css('width', '100%');
-        showStatus('Completato! Vai a "Revisione Modifiche" per vedere i risultati.', 'success');
+        showStatus('Completato! Clicca su "Revisione Modifiche" per vedere i risultati.', 'success');
         
       } catch (error) {
         showStatus(error.message, 'error');
@@ -293,8 +309,7 @@
         currentChanges = data.changes || [];
         displayFilteredRows(currentChanges); 
         updateFilterCounts();
-        showStatus('Dati caricati.', 'success');
-        setTimeout(() => showStatus('', 'info'), 2000);
+        showStatus('', 'info').addClass('hidden');
 
       } catch (error) {
         showStatus(error.message, 'error');
