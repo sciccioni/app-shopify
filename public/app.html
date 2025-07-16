@@ -4,12 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Inventory Sync Dashboard</title>
-  <!-- jQuery & Tailwind -->
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
-  <!-- Navbar -->
   <header class="bg-white shadow">
     <div class="container mx-auto px-4 py-4 flex justify-between items-center">
       <h1 class="text-2xl font-bold">Inventory Sync</h1>
@@ -19,31 +17,26 @@
     </div>
   </header>
   
-  <!-- Tabs -->
   <main class="container mx-auto px-4 py-6 flex-grow space-y-6">
     <nav class="flex space-x-4">
-      <button data-tab="upload"  class="tab-btn px-4 py-2 bg-blue-600 text-white rounded">Carica File</button>
-      <button data-tab="review"  class="tab-btn px-4 py-2 bg-gray-300 rounded">Revisione Modifiche</button>
-      <button data-tab="markup"  class="tab-btn px-4 py-2 bg-gray-300 rounded">Gestione Markup</button>
+      <button data-tab="upload"   class="tab-btn px-4 py-2 bg-blue-600 text-white rounded">Carica File</button>
+      <button data-tab="review"   class="tab-btn px-4 py-2 bg-gray-300 rounded">Revisione Modifiche</button>
+      <button data-tab="markup"   class="tab-btn px-4 py-2 bg-gray-300 rounded">Gestione Markup</button>
       <button data-tab="products" class="tab-btn px-4 py-2 bg-gray-300 rounded">Prodotti Shopify</button>
       <button data-tab="log"      class="tab-btn px-4 py-2 bg-gray-300 rounded">Log Aggiornamenti</button>
     </nav>
     
-    <!-- Tab 1: Carica File -->
     <section id="tab-upload" class="tab-content bg-white p-6 rounded-lg shadow">
       <form id="upload-form" class="space-y-4">
         <input type="file" id="excel-file" accept=".xlsx,.xls" class="border px-3 py-2 rounded w-full" />
         <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Upload</button>
       </form>
-      <!-- Progress bar -->
       <div id="progress" class="w-full bg-gray-200 rounded h-4 mt-4 hidden">
         <div id="progress-bar" class="bg-blue-600 h-4 rounded transition-all duration-500" style="width: 0%"></div>
       </div>
-      <!-- Status -->
       <div id="upload-status" class="mt-4 hidden p-4 rounded"></div>
     </section>
     
-    <!-- Tab 2: Revisione Modifiche -->
     <section id="tab-review" class="tab-content hidden bg-white p-6 rounded-lg shadow">
       <div id="stats" class="grid grid-cols-2 gap-4 mb-6">
         <div><strong>Righe totali:</strong> <span id="stat-rows">0</span></div>
@@ -52,7 +45,6 @@
         <div><strong>Nuove ditte:</strong> <span id="stat-new-companies">0</span></div>
       </div>
       
-      <!-- Controlli filtri -->
       <div class="mb-4 flex justify-between items-center">
         <div class="flex space-x-2">
           <button id="filter-all" class="filter-btn px-3 py-1 bg-blue-600 text-white rounded text-sm">
@@ -70,7 +62,6 @@
         </div>
       </div>
       
-      <!-- Legenda colori -->
       <div class="mb-4 p-4 bg-gray-50 rounded-lg">
         <h3 class="font-semibold mb-2">Legenda:</h3>
         <div class="flex space-x-4 text-sm">
@@ -121,7 +112,6 @@
       </div>
     </section>
     
-    <!-- Tab 3: Gestione Markup -->
     <section id="tab-markup" class="tab-content hidden bg-white p-6 rounded-lg shadow">
       <div class="mb-4 flex justify-between items-center">
         <button id="sync-markups-btn"
@@ -138,7 +128,6 @@
       </table>
     </section>
     
-    <!-- Tab 4: Prodotti Shopify -->
     <section id="tab-products" class="tab-content hidden bg-white p-6 rounded-lg shadow">
       <table id="products-table" class="min-w-full divide-y divide-gray-200">
         <thead><tr><th>Prodotto</th><th>Minsan</th><th>Giacenza</th><th>Prezzo</th></tr></thead>
@@ -146,7 +135,6 @@
       </table>
     </section>
     
-    <!-- Tab 5: Log Aggiornamenti -->
     <section id="tab-log" class="tab-content hidden bg-white p-6 rounded-lg shadow">
       <table id="log-table" class="min-w-full divide-y divide-gray-200">
         <thead><tr><th>Data</th><th>Minsan</th><th>Status</th><th>Dettagli</th></tr></thead>
@@ -155,7 +143,6 @@
     </section>
   </main>
 
-  <!-- Script -->
   <script>
     // Check auth
     if (!localStorage.getItem('token')) {
@@ -183,32 +170,7 @@
       localStorage.removeItem('token');
       window.location.href = '/index.html';
     });
-
-    /* ------------ Upload workflow ------------ */
-    $('#sync-markups-btn').on('click', async () => {
-      if (!confirm('Vuoi importare tutte le ditte presenti in prodotti con markup 10%?')) return;
-      $('#sync-markups-btn').prop('disabled', true).text('Sync...');
-      try {
-        const res = await fetch('/.netlify/functions/syncCompanyMarkups', {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
-        });
-        
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-        }
-        
-        const j = await res.json();
-        alert(`Sincronizzazione completata: ${j.inserted} righe inserite o aggiornate`);
-        await loadMarkups();
-      } catch (e) {
-        console.error('Errore sync:', e);
-        alert('Errore sync: ' + e.message);
-      } finally {
-        $('#sync-markups-btn').prop('disabled', false).text('Sincronizza Ditte');
-      }
-    });
-
+    
     /* ------------ Gestione Markup ------------ */
     async function loadMarkups() {
       try {
@@ -308,7 +270,7 @@
       }
     });
 
-    /* ------------ Load Markups quando si apre il tab ------------ */
+    /* ------------ Tabs Logic------------ */
     $('.tab-btn').on('click', async function () {
       const tab = $(this).data('tab');
       $('.tab-btn').removeClass('bg-blue-600 text-white').addClass('bg-gray-300 text-black');
@@ -326,6 +288,8 @@
         await loadMarkups();
       }
     });
+    
+    /* ------------ Upload Workflow ------------ */
     $('#upload-form').submit(async (e) => {
       e.preventDefault();
       
@@ -474,36 +438,7 @@
         $('#stat-unique').text(data.stats?.unique_products || 0);
         $('#stat-changes').text(data.stats?.changes_found || 0);
         $('#stat-new-companies').text(data.stats?.new_companies || 0);
-        
-        // Aggiorna tabella
-        const tbody = $('#comparison-table tbody');
-        tbody.empty();
-        
-        if (!data.changes || data.changes.length === 0) {
-          tbody.append('<tr><td colspan="10" class="text-center py-4">Nessuna differenza da mostrare.</td></tr>');
-          return;
-        }
-        
-        // Salva i dati globalmente per i filtri
-        window.allChanges = data.changes;
-        
-        // Conta i tipi di righe
-        const toUpdate = data.changes.filter(c => !c.note).length;
-        const missing = data.changes.filter(c => c.note).length;
-        
-        $('#count-all').text(data.changes.length);
-        $('#count-to-update').text(toUpdate);
-        $('#count-missing').text(missing);
-        
-        // Mostra tutte le righe inizialmente
-        displayFilteredRows(data.changes);
-        
-      } catch (error) {
-        console.error('Errore nel caricamento dati confronto:', error);
-        showStatus(error.message || 'Errore nel caricamento dati', 'error');
-      }
-    }
-        
+
         // Aggiorna tabella
         const tbody = $('#comparison-table tbody');
         tbody.empty();
@@ -589,33 +524,6 @@
       
       displayFilteredRows(filteredChanges);
     });
-
-    /* ------------ Carica diff & stats ------------ */
-    async function loadComparisonData(import_id) {
-      try {
-        console.log('Caricamento dati confronto per import_id:', import_id);
-        const response = await fetch(`/.netlify/functions/compareWithShopify?import_id=${import_id}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Errore caricamento dati:', errorText);
-          throw new Error(`Errore caricamento dati: ${errorText}`);
-        }
-        
-        const data = await response.json();
-        console.log('Dati caricati:', data);
-        
-        // Aggiorna statistiche
-        $('#stat-rows').text(data.stats?.total_rows || 0);
-        $('#stat-unique').text(data.stats?.unique_products || 0);
-        $('#stat-changes').text(data.stats?.changes_found || 0);
-        $('#stat-new-companies').text(data.stats?.new_companies || 0);
-
-    /* ------------ Sync Markups ------------ */
 
     /* ------------ Select All Functionality ------------ */
     $('#select-all').on('change', function() {
