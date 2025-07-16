@@ -139,7 +139,133 @@
       el.text(msg);
     }
 
-    /* Tabs */
+    /* Logout */
+    $('#logout-btn').on('click', () => {
+      localStorage.removeItem('token');
+      window.location.href = '/index.html';
+    });
+
+    /* ------------ Upload workflow ------------ */
+    $('#sync-markups-btn').on('click', async () => {
+      if (!confirm('Vuoi importare tutte le ditte presenti in prodotti con markup 10%?')) return;
+      $('#sync-markups-btn').prop('disabled', true).text('Sync...');
+      try {
+        const res = await fetch('/.netlify/functions/syncCompanyMarkups', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+        });
+        
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        }
+        
+        const j = await res.json();
+        alert(`Sincronizzazione completata: ${j.inserted} righe inserite o aggiornate`);
+        await loadMarkups();
+      } catch (e) {
+        console.error('Errore sync:', e);
+        alert('Errore sync: ' + e.message);
+      } finally {
+        $('#sync-markups-btn').prop('disabled', false).text('Sincronizza Ditte');
+      }
+    });
+
+    /* ------------ Gestione Markup ------------ */
+    async function loadMarkups() {
+      try {
+        const res = await fetch('/.netlify/functions/getMarkups', {
+          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+        });
+        
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        }
+        
+        const data = await res.json();
+        const tbody = $('#markup-table tbody').empty();
+        
+        data.forEach(m => {
+          const name = m.ditta || m.company_name;
+          tbody.append(`<tr>
+            <td class="px-4 py-2">${name}</td>
+            <td class="px-4 py-2">${m.markup_percentage}%</td>
+            <td class="px-4 py-2">
+              <button class="del-markup text-red-600 hover:text-red-800" data-name="${name}">🗑</button>
+            </td>
+          </tr>`);
+        });
+      } catch (e) {
+        console.error('Errore caricamento markup:', e);
+        alert('Errore caricamento markup: ' + e.message);
+      }
+    }
+
+    /* Carica markup quando apro il tab */
+    $('[data-tab="markup"]').on('click', loadMarkups);
+
+    /* Aggiungi / aggiorna markup */
+    $('#new-company-form').submit(async (e) => {
+      e.preventDefault();
+      const name = $('#new-company-name').val().trim();
+      const perc = parseFloat($('#new-company-markup').val());
+      
+      if (!name || isNaN(perc)) {
+        alert('Inserisci nome ditta e percentuale validi');
+        return;
+      }
+      
+      try {
+        const res = await fetch('/.netlify/functions/saveMarkup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + localStorage.getItem('token')
+          },
+          body: JSON.stringify({ ditta: name, markup_percentage: perc })
+        });
+        
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        }
+        
+        $('#new-company-name').val('');
+        $('#new-company-markup').val('');
+        await loadMarkups();
+        
+      } catch (e) {
+        console.error('Errore salvataggio markup:', e);
+        alert('Errore salvataggio markup: ' + e.message);
+      }
+    });
+
+    /* Delete markup inline */
+    $('#markup-table').on('click', '.del-markup', async function() {
+      const name = $(this).data('name');
+      if (!confirm(`Eliminare markup per "${name}"?`)) return;
+      
+      try {
+        const res = await fetch('/.netlify/functions/deleteMarkup', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + localStorage.getItem('token')
+          },
+          body: JSON.stringify({ ditta: name })
+        });
+        
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        }
+        
+        await loadMarkups();
+        
+      } catch (e) {
+        console.error('Errore eliminazione markup:', e);
+        alert('Errore eliminazione markup: ' + e.message);
+      }
+    });
+
+    /* ------------ Load Markups quando si apre il tab ------------ */
     $('.tab-btn').on('click', async function () {
       const tab = $(this).data('tab');
       $('.tab-btn').removeClass('bg-blue-600 text-white').addClass('bg-gray-300 text-black');
@@ -151,15 +277,12 @@
       if (tab === 'review' && localStorage.lastImportId) {
         await loadComparisonData(localStorage.lastImportId);
       }
+      
+      /* Quando apro "Gestione Markup" carico i markup */
+      if (tab === 'markup') {
+        await loadMarkups();
+      }
     });
-
-    /* Logout */
-    $('#logout-btn').on('click', () => {
-      localStorage.removeItem('token');
-      window.location.href = '/index.html';
-    });
-
-    /* ------------ Upload workflow ------------ */
     $('#upload-form').submit(async (e) => {
       e.preventDefault();
       
