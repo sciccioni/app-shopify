@@ -63,19 +63,19 @@
         </div>
       </div>
       
-      <table id="comparison-table" class="min-w-full divide-y divide-gray-200">
+      <table id="comparison-table" class="min-w-full divide-y divide-gray-200 text-sm">
         <thead>
-          <tr>
-            <th class="px-2 py-2 w-12">#</th>
+          <tr class="bg-gray-50">
+            <th class="px-2 py-2 w-12 text-left">#</th>
             <th class="px-4 py-2 text-left">Prodotto</th>
             <th class="px-4 py-2 text-left">Minsan</th>
             <th class="px-4 py-2 text-left">Ditta</th>
-            <th class="px-4 py-2 text-left">Giacenza (vecchio → nuovo)</th>
-            <th class="px-4 py-2 text-left">Prezzo (vecchio → nuovo)</th>
-            <th class="px-4 py-2 text-left">Costo (vecchio → nuovo)</th>
-            <th class="px-4 py-2 text-left">Prezzo BD (vecchio → nuovo)</th>
-            <th class="px-4 py-2 text-left">Scadenza (vecchia → nuova)</th>
-            <th class="px-4 py-2"><input type="checkbox" id="select-all"><label for="select-all" class="ml-2 text-sm">Tutti</label></th>
+            <th class="px-4 py-2 text-left">Giacenza<br>(vecchio → nuovo)</th>
+            <th class="px-4 py-2 text-left">Prezzo<br>(vecchio → nuovo)</th>
+            <th class="px-4 py-2 text-left">Costo<br>(vecchio → nuovo)</th>
+            <th class="px-4 py-2 text-left">Prezzo BD<br>(vecchio → nuovo)</th>
+            <th class="px-4 py-2 text-left">Scadenza<br>(vecchia → nuova)</th>
+            <th class="px-4 py-2"><div class="flex items-center"><input type="checkbox" id="select-all" class="mr-2"><label for="select-all">Tutti</label></div></th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -112,12 +112,35 @@
     // Global state
     let currentChanges = [];
 
-    // Check auth
-    if (!localStorage.getItem('token')) {
-      window.location.href = '/index.html';
-    }
+    // --- GENERAL & UI ---
+    $(document).ready(function() {
+      // Check auth on load
+      if (!localStorage.getItem('token')) {
+        window.location.href = '/index.html';
+      }
 
-    // --- HELPERS ---
+      // Logout handler
+      $('#logout-btn').on('click', () => {
+        localStorage.removeItem('token');
+        window.location.href = '/index.html';
+      });
+
+      // Tab navigation
+      $('.tab-btn').on('click', function () {
+        const tab = $(this).data('tab');
+        $('.tab-btn').removeClass('bg-blue-600 text-white').addClass('bg-gray-300');
+        $(this).addClass('bg-blue-600 text-white').removeClass('bg-gray-300');
+        $('.tab-content').addClass('hidden');
+        $('#tab-' + tab).removeClass('hidden');
+
+        if (tab === 'review' && localStorage.lastImportId) {
+          loadComparisonData(localStorage.lastImportId);
+        } else if (tab === 'markup') {
+          loadMarkups();
+        }
+      });
+    });
+
     function showStatus(msg, type = 'info') {
       const el = $('#upload-status');
       el.removeClass('hidden bg-red-100 text-red-600 bg-green-100 text-green-600 bg-blue-100 text-blue-600');
@@ -129,32 +152,11 @@
       el.addClass(classMap[type]).text(msg);
     }
 
-    // --- TABS & LOGOUT ---
-    $('#logout-btn').on('click', () => {
-      localStorage.removeItem('token');
-      window.location.href = '/index.html';
-    });
-
-    $('.tab-btn').on('click', async function () {
-      const tab = $(this).data('tab');
-      $('.tab-btn').removeClass('bg-blue-600 text-white').addClass('bg-gray-300');
-      $(this).addClass('bg-blue-600 text-white').removeClass('bg-gray-300');
-      $('.tab-content').addClass('hidden');
-      $('#tab-' + tab).removeClass('hidden');
-
-      if (tab === 'review' && localStorage.lastImportId) {
-        await loadComparisonData(localStorage.lastImportId);
-      }
-      if (tab === 'markup') {
-        await loadMarkups();
-      }
-    });
-
     // --- MARKUP MANAGEMENT ---
     async function loadMarkups() {
       try {
         const res = await fetch('/.netlify/functions/syncCompanyMarkups', {
-          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
         
@@ -174,16 +176,16 @@
     }
 
     $('#sync-markups-btn').on('click', async () => {
-      if (!confirm('Vuoi aggiungere nuove ditte con markup 10%?')) return;
+      if (!confirm('Vuoi aggiungere nuove ditte dalla lista prodotti con markup predefinito 10%?')) return;
       $('#sync-markups-btn').prop('disabled', true).text('Sincronizzo…');
       try {
         const res = await fetch('/.netlify/functions/syncCompanyMarkups', {
           method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
         const result = await res.json();
-        $('#markups-message').removeClass('hidden').text(`Aggiunte ${result.inserted} nuove ditte`).fadeOut(3000);
+        $('#markups-message').text(`Aggiunte ${result.inserted} nuove ditte`).fadeIn().delay(3000).fadeOut();
         await loadMarkups();
       } catch (e) {
         alert('Errore sincronizzazione: ' + e.message);
@@ -200,21 +202,22 @@
       
       $(this).prop('disabled', true);
       try {
+        // 1. Update the markup percentage
         await fetch('/.netlify/functions/syncCompanyMarkups', {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
           body: JSON.stringify({ ditta: name, markup_percentage: val })
         });
-        // Now, recalculate prices and update the view
+        
+        // 2. Recalculate prices for the current import
         if (localStorage.lastImportId) {
           await fetch('/.netlify/functions/recalcPrices', {
              method: 'POST',
-             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
              body: JSON.stringify({ ditta: name, import_id: localStorage.lastImportId })
           });
-          $('#markups-message').removeClass('hidden').text(`Salvato ${name} e prezzi ricalcolati`).fadeIn().fadeOut(3000);
-          await loadComparisonData(localStorage.lastImportId); // Refresh review tab data
         }
+         $('#markups-message').text(`Salvato ${name} e prezzi ricalcolati`).fadeIn().delay(3000).fadeOut();
       } catch (e) {
         alert('Errore salvataggio markup: ' + e.message);
       } finally {
@@ -223,71 +226,75 @@
     });
 
     // --- UPLOAD WORKFLOW ---
-    $('#upload-form').submit(async (e) => {
+    $('#upload-form').on('submit', async function(e) {
       e.preventDefault();
       const file = $('#excel-file')[0].files[0];
       if (!file) return showStatus('Seleziona un file Excel', 'error');
 
       $('#progress').removeClass('hidden');
       $('#upload-form :input').prop('disabled', true);
+      $('#upload-form button').text('Caricamento...');
 
       try {
         const base64 = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = reject;
+          reader.onerror = (error) => reject(error);
           reader.readAsDataURL(file);
         });
 
-        const runStep = async (step, endpoint, body) => {
-            showStatus(step.msg, 'info');
+        const runStep = async (msg, progress, endpoint, body) => {
+            showStatus(msg, 'info');
             const res = await fetch(`/.netlify/functions/${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify(body)
             });
-            $('#progress-bar').css('width', `${step.progress}%`);
-            if (!res.ok) throw new Error(`${step.msg} fallito: ${await res.text()}`);
+            $('#progress-bar').css('width', `${progress}%`);
+            if (!res.ok) throw new Error(`${msg} fallito: ${await res.text()}`);
             return res.json();
         };
 
-        const { import_id } = await runStep({msg: "Upload file", progress: 25}, "uploadExcel", { file: base64, filename: file.name });
-        localStorage.lastImportId = import_id;
-
-        await runStep({msg: "Normalizzazione dati", progress: 50}, "normalizeImport", { import_id });
-        await runStep({msg: "Confronto con Shopify", progress: 75}, "compareWithShopify", { import_id });
+        const { import_id } = await runStep("Upload file...", 25, "uploadExcel", { file: base64, filename: file.name });
+        localStorage.setItem('lastImportId', import_id);
+        await runStep("Normalizzazione dati...", 50, "normalizeImport", { import_id });
+        await runStep("Confronto con Shopify...", 75, "compareWithShopify", { import_id });
         
-        $('#progress-bar').css('width', `100%`);
-        showStatus('Completato! Vai a "Revisione Modifiche"', 'success');
-        await loadComparisonData(import_id);
-
+        $('#progress-bar').css('width', '100%');
+        showStatus('Completato! Vai a "Revisione Modifiche" per vedere i risultati.', 'success');
+        
       } catch (error) {
         showStatus(error.message, 'error');
       } finally {
         $('#upload-form :input').prop('disabled', false);
         $('#upload-form button').text('Upload');
-        setTimeout(() => $('#progress').addClass('hidden'), 3000);
+        setTimeout(() => {
+            $('#progress').addClass('hidden');
+            $('#progress-bar').css('width', '0%');
+        }, 3000);
       }
     });
 
-    // --- REVIEW & UPDATE ---
+    // --- REVIEW & UPDATE TABLE LOGIC ---
     async function loadComparisonData(import_id) {
+      showStatus('Caricamento dati di confronto...', 'info');
       try {
-        const res = await fetch(`/.netlify/functions/compareWithShopify?import_id=${import_id}`, {
+        const response = await fetch(`/.netlify/functions/compareWithShopify?import_id=${import_id}`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
-        if (!res.ok) throw new Error(`Errore caricamento dati: ${await res.text()}`);
-        const data = await res.json();
+        if (!response.ok) throw new Error(`Errore caricamento dati: ${await response.text()}`);
+        const data = await response.json();
 
-        // Update stats
         $('#stat-rows').text(data.stats?.total_rows || 0);
         $('#stat-unique').text(data.stats?.unique_products || 0);
         $('#stat-changes').text(data.stats?.changes_found || 0);
         $('#stat-new-companies').text(data.stats?.new_companies || 0);
 
         currentChanges = data.changes || [];
-        displayFilteredRows(currentChanges); // Display all by default
+        displayFilteredRows(currentChanges); 
         updateFilterCounts();
+        showStatus('Dati caricati.', 'success');
+        setTimeout(() => showStatus('', 'info'), 2000);
 
       } catch (error) {
         showStatus(error.message, 'error');
@@ -297,14 +304,14 @@
     function displayFilteredRows(changes) {
       const tbody = $('#comparison-table tbody').empty();
       if (!changes.length) {
-          tbody.append('<tr><td colspan="10" class="text-center py-4">Nessun dato da mostrare.</td></tr>');
+          tbody.append('<tr><td colspan="10" class="text-center py-4">Nessun dato da mostrare per questo filtro.</td></tr>');
       }
       changes.forEach((change, index) => {
         const missingClass = change.note ? 'bg-red-50' : '';
         const formatChange = (oldVal, newVal) => `${oldVal ?? '—'} → ${newVal ?? '—'}`;
         tbody.append(`
           <tr class="${missingClass}">
-            <td class="px-2 py-2 text-gray-500 text-sm">${index + 1}</td>
+            <td class="px-2 py-2 text-gray-500">${index + 1}</td>
             <td class="px-4 py-2">${change.description || ''}</td>
             <td class="px-4 py-2">${change.minsan}</td>
             <td class="px-4 py-2">${change.ditta || ''}</td>
@@ -331,10 +338,13 @@
       $(this).addClass('bg-blue-600 text-white').removeClass('bg-gray-300 text-gray-700');
       
       const filterId = $(this).attr('id');
-      let filtered = currentChanges;
-      if (filterId === 'filter-to-update') filtered = currentChanges.filter(c => !c.note);
-      if (filterId === 'filter-missing') filtered = currentChanges.filter(c => c.note);
-      displayFilteredRows(filtered);
+      let filteredData = currentChanges;
+      if (filterId === 'filter-to-update') {
+        filteredData = currentChanges.filter(c => !c.note);
+      } else if (filterId === 'filter-missing') {
+        filteredData = currentChanges.filter(c => c.note);
+      }
+      displayFilteredRows(filteredData);
     });
 
     $('#select-all').on('change', function() {
@@ -342,35 +352,38 @@
     });
 
     $('#comparison-table').on('change', '.change-checkbox', function() {
-      const allCheckable = $('.change-checkbox:not(:disabled)').length;
-      const allChecked = $('.change-checkbox:not(:disabled):checked').length;
-      $('#select-all').prop('checked', allCheckable === allChecked);
+      if ($('.change-checkbox:not(:disabled):checked').length === $('.change-checkbox:not(:disabled)').length) {
+        $('#select-all').prop('checked', true);
+      } else {
+        $('#select-all').prop('checked', false);
+      }
     });
 
     $('#bulk-update-btn').on('click', async () => {
       const minsans = $('.change-checkbox:checked').map((_, el) => $(el).data('minsan')).get();
-      if (!minsans.length) return alert('Seleziona almeno una riga');
-      if (!confirm(`Inviare ${minsans.length} aggiornamenti a Shopify?`)) return;
+      if (!minsans.length) return alert('Seleziona almeno una riga da aggiornare.');
+      if (!confirm(`Sei sicuro di voler inviare ${minsans.length} aggiornamenti a Shopify?`)) return;
       
       $('#apply-spinner').removeClass('hidden');
       $('#bulk-update-btn').prop('disabled', true);
       try {
         const res = await fetch('/.netlify/functions/applyUpdates', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token') },
-          body: JSON.stringify({ import_id: localStorage.lastImportId, minsans })
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+          body: JSON.stringify({ import_id: localStorage.getItem('lastImportId'), minsans })
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-        const j = await res.json();
-        alert(`Aggiornamento completato.\nSuccessi: ${j.updated}\nErrori: ${j.errors}${j.skipped ? `\nSaltati: ${j.skipped}` : ''}`);
-        await loadComparisonData(localStorage.lastImportId);
+        const result = await res.json();
+        alert(`Aggiornamento completato.\nSuccessi: ${result.updated}\nErrori: ${result.errors.length}${result.skipped ? `\nSaltati: ${result.skipped}` : ''}`);
+        await loadComparisonData(localStorage.getItem('lastImportId'));
       } catch (e) {
-        alert('Errore aggiornamento: ' + e.message);
+        alert('Errore durante l\'aggiornamento di massa: ' + e.message);
       } finally {
         $('#apply-spinner').addClass('hidden');
         $('#bulk-update-btn').prop('disabled', false);
       }
     });
+
   </script>
 </body>
 </html>
