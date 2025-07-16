@@ -198,41 +198,41 @@
         const tr = $(this).closest('tr');
         const name = tr.data('name');
         const val = parseFloat(tr.find('.markup-input').val());
-        if (isNaN(val)) return alert('Valore non valido');
-
+        if (isNaN(val) || val < 0 || val > 999.99) {
+            alert('Il markup deve essere un numero compreso tra 0 e 999,99');
+            return;
+        }
         $(this).prop('disabled', true);
-        const lastImportId = localStorage.getItem('lastImportId');
-
         try {
-            // 1. Update the markup percentage
-            await fetch('/.netlify/functions/syncCompanyMarkups', {
+            // 1. Save/update the percentage
+            const put = await fetch('/.netlify/functions/syncCompanyMarkups', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: JSON.stringify({ ditta: name, markup_percentage: val })
             });
-            $('#markups-message').text(`Salvato ${name}...`).fadeIn();
+            if (!put.ok) throw new Error(await put.text());
 
-            // 2. If an import exists, trigger recalculation and refresh the data
+            // 2. Recalculate prices for ALL imports of that company
+            const rc = await fetch('/.netlify/functions/recalcPrices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: JSON.stringify({ ditta: name, import_id: null }) // import_id: null to affect all
+            });
+            const rcJson = await rc.json();
+            console.log('recalcPrices rows_updated:', rcJson.rows_updated);
+
+            // 3. If there is an active import, regenerate the diff and refresh the UI
+            const lastImportId = localStorage.getItem('lastImportId');
             if (lastImportId) {
-                // 2a. Recalculate prices on the server
-                await fetch('/.netlify/functions/recalcPrices', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                    body: JSON.stringify({ ditta: name, import_id: lastImportId })
-                });
-
-                // 2b. Regenerate the comparison with Shopify data
                 await fetch('/.netlify/functions/compareWithShopify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                     body: JSON.stringify({ import_id: lastImportId })
                 });
-
-                // 2c. Reload the comparison data in the UI
                 await loadComparisonData(lastImportId);
-                $('#markups-message').text(`Salvato ${name} e prezzi ricalcolati!`).delay(2500).fadeOut();
+                $('#markups-message').text(`Salvato ${name} e prezzi ricalcolati!`).fadeIn().delay(2500).fadeOut();
             } else {
-                $('#markups-message').text(`Salvato ${name}`).delay(2500).fadeOut();
+                $('#markups-message').text(`Salvato ${name}`).fadeIn().delay(2500).fadeOut();
             }
         } catch (e) {
             alert('Errore salvataggio markup: ' + e.message);
