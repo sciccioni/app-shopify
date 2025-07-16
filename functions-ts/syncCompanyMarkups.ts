@@ -3,41 +3,54 @@ import { createClient } from '@supabase/supabase-js';
 
 const sb = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!,    // service-role => bypass RLS
-  { auth: { persistSession:false } }
+  process.env.SUPABASE_SERVICE_KEY!,
+  { auth: { persistSession: false } }
 );
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST')
-    return { statusCode:405, body:'POST only' };
+    return { statusCode: 405, body: 'POST only' };
 
   try {
-    /* 1️⃣  prendo tutte le ditte distinte da products */
-    const { data: ditte } = await sb
+    /* 1️⃣ prendo tutte le ditte (possono arrivare duplicati) */
+    const { data, error } = await sb
       .from('products')
-      .select('ditta', { head:false, distinct:'ditta' })
+      .select('ditta')
       .not('ditta', 'is', null);
 
-    const values = (ditte || [])
-      .filter(d => d.ditta?.trim().length)
-      .map(d => ({
-        ditta: d.ditta.trim(),
+    if (error) throw error;
+
+    /* 2️⃣ deduplica in memoria */
+    const seen = new Set<string>();
+    const values = (data || [])
+      .map(r => (r.ditta ?? '').trim())
+      .filter(name => name.length)
+      .filter(name => {
+        if (seen.has(name)) return false;
+        seen.add(name);
+        return true;
+      })
+      .map(name => ({
+        ditta: name,
         markup_percentage: 10.0
       }));
 
     if (!values.length)
-      return { statusCode:200, body:JSON.stringify({ inserted:0 }) };
+      return { statusCode: 200, body: JSON.stringify({ inserted: 0 }) };
 
-    /* 2️⃣  upsert nella tabella markups */
-    const { count, error } = await sb
+    /* 3️⃣ upsert unico senza duplicati */
+    const { count, error: upErr } = await sb
       .from('company_markups')
-      .upsert(values, { onConflict:'ditta', count:'exact' });
+      .upsert(values, { onConflict: 'ditta', count: 'exact' });
 
-    if (error) throw error;
+    if (upErr) throw upErr;
 
-    return { statusCode:200, body:JSON.stringify({ inserted: count }) };
-  } catch (e:any) {
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ inserted: count })
+    };
+  } catch (e: any) {
     console.error('syncCompanyMarkups', e);
-    return { statusCode:500, body:e.message || 'Errore sync markups' };
+    return { statusCode: 500, body: e.message || 'Errore sync markups' };
   }
 };
