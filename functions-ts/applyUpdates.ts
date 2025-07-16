@@ -10,7 +10,7 @@ const sb = createClient(
 
 const STORE   = process.env.SHOPIFY_STORE_NAME!;
 const TOKEN   = process.env.SHOPIFY_ADMIN_API_TOKEN!;
-const API_VER = process.env.SHOPIFY_API_VERSION || '2025-07';
+const API_VER = process.env.SHOPIFY_API_VERSION || '2024-07';
 const LOC_ID  = process.env.SHOPIFY_LOCATION_ID!;
 
 /* ---------- Rate Limiter -------------------------------------------- */
@@ -86,35 +86,14 @@ async function shopifyFetch(query: string, variables: any = {}) {
 
 /* ---------- Single mutations for debugging --------------------------- */
 async function updateSingleVariant(variantId: string, input: any) {
-  try {
-    // Test multiple possible mutation names
-    const possibleMutations = [
-      'productVariantUpdate',
-      'productVariantUpdate',
-      'variantUpdate'
-    ];
-    
-    for (const mutationName of possibleMutations) {
-      try {
-        return await shopifyFetch(`
-          mutation($id: ID!, $input: ProductVariantInput!) {
-            ${mutationName}(id: $id, input: $input) {
-              userErrors { field message }
-              productVariant { id }
-            }
-          }
-        `, { id: variantId, input });
-      } catch (e: any) {
-        console.log(`Failed with ${mutationName}:`, e.message);
-        if (mutationName === possibleMutations[possibleMutations.length - 1]) {
-          throw e; // Re-throw if all failed
-        }
+  return await shopifyFetch(`
+    mutation($id: ID!, $input: ProductVariantInput!) {
+      productVariantUpdate(id: $id, input: $input) {
+        userErrors { field message }
+        productVariant { id }
       }
     }
-  } catch (e: any) {
-    console.error('All variant update mutations failed:', e.message);
-    throw e;
-  }
+  `, { id: variantId, input });
 }
 
 /* ---------- Batch mutations ------------------------------------------- */
