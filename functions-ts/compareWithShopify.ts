@@ -88,41 +88,40 @@ export const handler: Handler = async (event) => {
         }
         found++;
 
+        /* …dopo aver ottenuto v (Shopify) e r (Excel)… */
+        const oldInv   = v.inventoryQuantity;
+        const newInv   = r.giacenza;
+        const oldPrice = Number(v.price);
+        const newPrice = Number(r.prezzo_calcolato ?? oldPrice);
+        const oldComp  = Number(v.compareAtPrice ?? 0);
+        const newComp  = Number(r.prezzo_bd ?? oldComp);
+        const oldCost  = Number(v.inventoryItem.unitCost?.amount ?? 0);
+        const newCost  = Number(r.costo_medio ?? oldCost);
+
+        /* Se tutti e quattro i pair sono identici, saltiamo la riga */
+        if (
+          oldInv === newInv &&
+          oldPrice === newPrice &&
+          oldComp === newComp &&
+          oldCost === newCost
+        ) continue;
+
         const changes: Record<string, any> = {};
-        
-        // Inventory: sempre incluso dopo aver ottenuto v (Shopify) e r (Excel)
-        const oldInv = v.inventoryQuantity;
-        const newInv = r.giacenza;
-        changes.inventory = { old: oldInv, new: newInv };   // <— sempre
+        changes.inventory     = { old: oldInv, new: newInv };
+        changes.price         = { old: oldPrice, new: newPrice };
+        changes.compare_price = { old: oldComp, new: newComp };
+        changes.cost          = { old: oldCost, new: newCost };
 
-        /* prezzo di listino */
-        if (r.prezzo_calcolato &&
-            Number(r.prezzo_calcolato) !== Number(v.price)) {
-          changes.price = { old: v.price, new: r.prezzo_calcolato };
-        }
-        /* prezzo di riferimento (prezzo BD ↔ compareAtPrice) */
-        if (r.prezzo_bd &&
-            Number(r.prezzo_bd) !== Number(v.compareAtPrice ?? 0)) {
-          changes.compare_price = { old: v.compareAtPrice ?? 0, new: r.prezzo_bd };
-        }
-        /* costo medio */
-        const oldCost = Number(v.inventoryItem.unitCost?.amount ?? 0);
-        if (r.costo_medio && Number(r.costo_medio) !== oldCost) {
-          changes.cost = { old: oldCost, new: r.costo_medio };
-        }
-
-        if (Object.keys(changes).length) {
-          pending.push({
-            import_id,
-            product_id        : v.product.id,
-            product_variant_id: v.id,
-            inventory_item_id : v.inventoryItem.id,
-            product_title     : v.product.title,
-            minsan            : r.minsan,
-            ditta             : r.ditta,
-            changes
-          });
-        }
+        pending.push({
+          import_id,
+          product_id        : v.product.id,
+          product_variant_id: v.id,
+          inventory_item_id : v.inventoryItem.id,
+          product_title     : v.product.title,
+          minsan            : r.minsan,
+          ditta             : r.ditta,
+          changes
+        });
       }
     }
 
