@@ -84,23 +84,80 @@ async function shopifyFetch(query: string, variables: any = {}) {
   });
 }
 
+/* ---------- REST API utilities ---------------------------------------- */
+async function shopifyRestFetch(endpoint: string, method: string = 'GET', body?: any) {
+  return rateLimiter.add(async () => {
+    const res = await fetch(`https://${STORE}.myshopify.com/admin/api/${API_VER}/${endpoint}`, {
+      method,
+      headers: { 
+        'Content-Type': 'application/json', 
+        'X-Shopify-Access-Token': TOKEN 
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`REST API ${res.status}: ${errorText}`);
+    }
+    
+    return res.json();
+  });
+}
+
 /* ---------- Single mutations for debugging --------------------------- */
 async function updateSingleVariant(variantId: string, input: any) {
+  // Extract the numeric ID from the GraphQL ID
+  const numericId = variantId.replace('gid://shopify/ProductVariant/', '');
+  
+  const updateData: any = { variant: {} };
+  
+  if (input.price !== undefined) {
+    updateData.variant.price = input.price;
+  }
+  
+  if (input.compareAtPrice !== undefined) {
+    updateData.variant.compare_at_price = input.compareAtPrice;
+  }
+  
+  return await shopifyRestFetch(`variants/${numericId}.json`, 'PUT', updateData);
+}
+
+async function updateSingleInventory(inventoryItemId: string, delta: number) {
+  // Use GraphQL for inventory as it's the recommended way
   return await shopifyFetch(`
-    mutation($id: ID!, $input: ProductVariantInput!) {
-      productVariantUpdate(id: $id, input: $input) {
+    mutation($inventoryItemId: ID!, $locationId: ID!, $availableDelta: Int!) {
+      inventoryAdjustQuantity(input: {
+        inventoryItemId: $inventoryItemId,
+        locationId: $locationId,
+        availableDelta: $availableDelta
+      }) {
         userErrors { field message }
-        productVariant { id }
       }
     }
-  `, { id: variantId, input });
+  `, {
+    inventoryItemId,
+    locationId: LOC_ID,
+    availableDelta: delta
+  });
+}
+
+async function updateSingleCost(inventoryItemId: string, cost: number) {
+  // Extract numeric ID and use REST API
+  const numericId = inventoryItemId.replace('gid://shopify/InventoryItem/', '');
+  
+  return await shopifyRestFetch(`inventory_items/${numericId}.json`, 'PUT', {
+    inventory_item: {
+      cost: cost.toString()
+    }
+  });
 }
 
 /* ---------- Batch mutations ------------------------------------------- */
 async function batchUpdateVariants(updates: Array<{id: string, input: any}>) {
   if (updates.length === 0) return;
   
-  // For now, do them one by one to debug
+  // Use REST API one by one
   for (const update of updates) {
     await updateSingleVariant(update.id, update.input);
   }
@@ -109,51 +166,21 @@ async function batchUpdateVariants(updates: Array<{id: string, input: any}>) {
 async function batchUpdateInventory(updates: Array<{inventoryItemId: string, delta: number}>) {
   if (updates.length === 0) return;
   
-  const mutations = updates.map((update, i) => `
-    inv${i}: inventoryAdjustQuantity(input: $input${i}) {
-      userErrors { field message }
+  // Use GraphQL one by one for inventory
+  for (const update of updates) {
+    if (update.delta !== 0) {
+      await updateSingleInventory(update.inventoryItemId, update.delta);
     }
-  `).join('\n');
-
-  const variables: any = {};
-  updates.forEach((update, i) => {
-    variables[`input${i}`] = {
-      inventoryItemId: update.inventoryItemId,
-      availableDelta: update.delta,
-      locationId: LOC_ID
-    };
-  });
-
-  await shopifyFetch(`
-    mutation(${updates.map((_, i) => `$input${i}: InventoryAdjustQuantityInput!`).join(', ')}) {
-      ${mutations}
-    }
-  `, variables);
+  }
 }
 
 async function batchUpdateCosts(updates: Array<{id: string, amount: number}>) {
   if (updates.length === 0) return;
   
-  const mutations = updates.map((update, i) => `
-    cost${i}: inventoryItemUpdate(id: $id${i}, input: $input${i}) {
-      userErrors { field message }
-      inventoryItem { id }
-    }
-  `).join('\n');
-
-  const variables: any = {};
-  updates.forEach((update, i) => {
-    variables[`id${i}`] = update.id;
-    variables[`input${i}`] = {
-      cost: update.amount.toString()
-    };
-  });
-
-  await shopifyFetch(`
-    mutation(${updates.map((_, i) => `$id${i}: ID!, $input${i}: InventoryItemInput!`).join(', ')}) {
-      ${mutations}
-    }
-  `, variables);
+  // Use REST API one by one
+  for (const update of updates) {
+    await updateSingleCost(update.id, update.amount);
+  }
 }
 
 async function batchUpdateMetafields(updates: Array<{productId: string, value: string}>) {
