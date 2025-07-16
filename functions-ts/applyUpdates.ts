@@ -89,43 +89,75 @@ async function batchUpdateVariants(updates: Array<{id: string, input: any}>) {
   if (updates.length === 0) return;
   
   const mutations = updates.map((update, i) => `
-    v${i}: productVariantUpdate(id: "${update.id}", input: ${JSON.stringify(update.input)}) {
+    v${i}: productVariantUpdate(id: $id${i}, input: $input${i}) {
       userErrors { field message }
       productVariant { id }
     }
   `).join('\n');
 
-  await shopifyFetch(`mutation { ${mutations} }`);
+  const variables: any = {};
+  updates.forEach((update, i) => {
+    variables[`id${i}`] = update.id;
+    variables[`input${i}`] = update.input;
+  });
+
+  await shopifyFetch(`
+    mutation(${updates.map((_, i) => `$id${i}: ID!, $input${i}: ProductVariantInput!`).join(', ')}) {
+      ${mutations}
+    }
+  `, variables);
 }
 
 async function batchUpdateInventory(updates: Array<{inventoryItemId: string, delta: number}>) {
   if (updates.length === 0) return;
   
   const mutations = updates.map((update, i) => `
-    inv${i}: inventoryAdjustQuantity(input: {
-      inventoryItemId: "${update.inventoryItemId}",
-      availableDelta: ${update.delta},
-      locationId: "${LOC_ID}"
-    }) {
+    inv${i}: inventoryAdjustQuantity(input: $input${i}) {
       userErrors { field message }
     }
   `).join('\n');
 
-  await shopifyFetch(`mutation { ${mutations} }`);
+  const variables: any = {};
+  updates.forEach((update, i) => {
+    variables[`input${i}`] = {
+      inventoryItemId: update.inventoryItemId,
+      availableDelta: update.delta,
+      locationId: LOC_ID
+    };
+  });
+
+  await shopifyFetch(`
+    mutation(${updates.map((_, i) => `$input${i}: InventoryAdjustQuantityInput!`).join(', ')}) {
+      ${mutations}
+    }
+  `, variables);
 }
 
 async function batchUpdateCosts(updates: Array<{id: string, amount: number}>) {
   if (updates.length === 0) return;
   
   const mutations = updates.map((update, i) => `
-    cost${i}: inventoryItemUpdate(id: "${update.id}", input: {
-      unitCost: { amount: "${update.amount}", currencyCode: "EUR" }
-    }) {
+    cost${i}: inventoryItemUpdate(id: $id${i}, input: $input${i}) {
       userErrors { field message }
     }
   `).join('\n');
 
-  await shopifyFetch(`mutation { ${mutations} }`);
+  const variables: any = {};
+  updates.forEach((update, i) => {
+    variables[`id${i}`] = update.id;
+    variables[`input${i}`] = {
+      unitCost: {
+        amount: update.amount.toString(),
+        currencyCode: "EUR"
+      }
+    };
+  });
+
+  await shopifyFetch(`
+    mutation(${updates.map((_, i) => `$id${i}: ID!, $input${i}: InventoryItemInput!`).join(', ')}) {
+      ${mutations}
+    }
+  `, variables);
 }
 
 async function batchUpdateMetafields(updates: Array<{productId: string, value: string}>) {
