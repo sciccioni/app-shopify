@@ -52,6 +52,24 @@
         <div><strong>Nuove ditte:</strong> <span id="stat-new-companies">0</span></div>
       </div>
       
+      <!-- Controlli filtri -->
+      <div class="mb-4 flex justify-between items-center">
+        <div class="flex space-x-2">
+          <button id="filter-all" class="filter-btn px-3 py-1 bg-blue-600 text-white rounded text-sm">
+            Tutte (<span id="count-all">0</span>)
+          </button>
+          <button id="filter-to-update" class="filter-btn px-3 py-1 bg-gray-300 text-gray-700 rounded text-sm">
+            Da aggiornare (<span id="count-to-update">0</span>)
+          </button>
+          <button id="filter-missing" class="filter-btn px-3 py-1 bg-gray-300 text-gray-700 rounded text-sm">
+            Non trovate (<span id="count-missing">0</span>)
+          </button>
+        </div>
+        <div class="text-sm text-gray-600">
+          Righe visualizzate: <span id="visible-count">0</span>
+        </div>
+      </div>
+      
       <!-- Legenda colori -->
       <div class="mb-4 p-4 bg-gray-50 rounded-lg">
         <h3 class="font-semibold mb-2">Legenda:</h3>
@@ -70,6 +88,7 @@
       <table id="comparison-table" class="min-w-full divide-y divide-gray-200">
         <thead>
           <tr>
+            <th class="px-2 py-2 w-12">#</th>
             <th class="px-4 py-2">Prodotto</th>
             <th class="px-4 py-2">Minsan</th>
             <th class="px-4 py-2">Ditta</th>
@@ -214,7 +233,7 @@
                        value="${m.markup_percentage}">
               </td>
               <td class="px-4 py-2">
-                <button class="save-markup text-green-600 hover:text-green-800" title="Salva">💾</button>
+                <button class="save-markup text-green-600 hover:text-green-800 cursor-pointer" title="Salva">💾</button>
               </td>
             </tr>`);
         });
@@ -461,32 +480,23 @@
         tbody.empty();
         
         if (!data.changes || data.changes.length === 0) {
-          tbody.append('<tr><td colspan="9" class="text-center py-4">Nessuna differenza da mostrare.</td></tr>');
+          tbody.append('<tr><td colspan="10" class="text-center py-4">Nessuna differenza da mostrare.</td></tr>');
           return;
         }
         
-        data.changes.forEach(change => {
-          const missingClass = change.note ? 'bg-red-50' : '';
-          
-          const oldExpiry = change.old_expiry || '—';
-          const newExpiry = change.new_expiry || '—';
-          
-          tbody.append(`
-            <tr class="${missingClass}">
-              <td class="px-4 py-2">${change.description || ''}</td>
-              <td class="px-4 py-2">${change.minsan}</td>
-              <td class="px-4 py-2">${change.ditta || ''}</td>
-              <td class="px-4 py-2">${change.old_inventory ?? '-'} → ${change.new_inventory ?? '-'}</td>
-              <td class="px-4 py-2">€${change.old_price ?? '-'} → €${change.new_price ?? '-'}</td>
-              <td class="px-4 py-2">€${change.old_cost ?? '-'} → €${change.new_cost ?? '-'}</td>
-              <td class="px-4 py-2">€${change.old_compare_price ?? '—'} → €${change.new_compare_price ?? '—'}</td>
-              <td class="px-4 py-2">${oldExpiry} → ${newExpiry}</td>
-              <td class="px-4 py-2 text-center">
-                <input type="checkbox" class="change-checkbox" data-minsan="${change.minsan}" ${change.note ? 'disabled' : ''}>
-              </td>
-            </tr>
-          `);
-        });
+        // Salva i dati globalmente per i filtri
+        window.allChanges = data.changes;
+        
+        // Conta i tipi di righe
+        const toUpdate = data.changes.filter(c => !c.note).length;
+        const missing = data.changes.filter(c => c.note).length;
+        
+        $('#count-all').text(data.changes.length);
+        $('#count-to-update').text(toUpdate);
+        $('#count-missing').text(missing);
+        
+        // Mostra tutte le righe inizialmente
+        displayFilteredRows(data.changes);
         
       } catch (error) {
         console.error('Errore nel caricamento dati confronto:', error);
@@ -494,30 +504,89 @@
       }
     }
 
-    /* ------------ Sync Markups ------------ */
-    $('#sync-markups-btn').on('click', async () => {
-      if (!confirm('Vuoi importare tutte le ditte presenti in prodotti con markup 10%?')) return;
-      $('#sync-markups-btn').prop('disabled', true).text('Sync...');
+    /* ------------ Funzione per mostrare righe filtrate ------------ */
+    function displayFilteredRows(changes) {
+      const tbody = $('#comparison-table tbody');
+      tbody.empty();
+      
+      changes.forEach((change, index) => {
+        const missingClass = change.note ? 'bg-red-50' : '';
+        const rowNumber = index + 1;
+        
+        const oldExpiry = change.old_expiry || '—';
+        const newExpiry = change.new_expiry || '—';
+        
+        tbody.append(`
+          <tr class="${missingClass}" data-type="${change.note ? 'missing' : 'update'}">
+            <td class="px-2 py-2 text-gray-500 text-sm">${rowNumber}</td>
+            <td class="px-4 py-2">${change.description || ''}</td>
+            <td class="px-4 py-2">${change.minsan}</td>
+            <td class="px-4 py-2">${change.ditta || ''}</td>
+            <td class="px-4 py-2">${change.old_inventory ?? '-'} → ${change.new_inventory ?? '-'}</td>
+            <td class="px-4 py-2">€${change.old_price ?? '-'} → €${change.new_price ?? '-'}</td>
+            <td class="px-4 py-2">€${change.old_cost ?? '-'} → €${change.new_cost ?? '-'}</td>
+            <td class="px-4 py-2">€${change.old_compare_price ?? '—'} → €${change.new_compare_price ?? '—'}</td>
+            <td class="px-4 py-2">${oldExpiry} → ${newExpiry}</td>
+            <td class="px-4 py-2 text-center">
+              <input type="checkbox" class="change-checkbox" data-minsan="${change.minsan}" ${change.note ? 'disabled' : ''}>
+            </td>
+          </tr>
+        `);
+      });
+      
+      // Aggiorna contatore righe visibili
+      $('#visible-count').text(changes.length);
+      
+      // Reset checkbox "Tutti"
+      $('#select-all').prop('checked', false);
+    }
+
+    /* ------------ Filtri ------------ */
+    $('.filter-btn').on('click', function() {
+      // Aggiorna stile pulsanti
+      $('.filter-btn').removeClass('bg-blue-600 text-white').addClass('bg-gray-300 text-gray-700');
+      $(this).removeClass('bg-gray-300 text-gray-700').addClass('bg-blue-600 text-white');
+      
+      const filterId = $(this).attr('id');
+      let filteredChanges = [];
+      
+      if (filterId === 'filter-all') {
+        filteredChanges = window.allChanges;
+      } else if (filterId === 'filter-to-update') {
+        filteredChanges = window.allChanges.filter(c => !c.note);
+      } else if (filterId === 'filter-missing') {
+        filteredChanges = window.allChanges.filter(c => c.note);
+      }
+      
+      displayFilteredRows(filteredChanges);
+    });
+
+    /* ------------ Carica diff & stats ------------ */
+    async function loadComparisonData(import_id) {
       try {
-        const res = await fetch('/.netlify/functions/syncCompanyMarkups', {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+        console.log('Caricamento dati confronto per import_id:', import_id);
+        const response = await fetch(`/.netlify/functions/compareWithShopify?import_id=${import_id}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
         });
         
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Errore caricamento dati:', errorText);
+          throw new Error(`Errore caricamento dati: ${errorText}`);
         }
         
-        const j = await res.json();
-        alert(`Sincronizzazione completata: ${j.inserted} righe inserite o aggiornate`);
-        await loadMarkups();
-      } catch (e) {
-        console.error('Errore sync:', e);
-        alert('Errore sync: ' + e.message);
-      } finally {
-        $('#sync-markups-btn').prop('disabled', false).text('Sincronizza Ditte');
-      }
-    });
+        const data = await response.json();
+        console.log('Dati caricati:', data);
+        
+        // Aggiorna statistiche
+        $('#stat-rows').text(data.stats?.total_rows || 0);
+        $('#stat-unique').text(data.stats?.unique_products || 0);
+        $('#stat-changes').text(data.stats?.changes_found || 0);
+        $('#stat-new-companies').text(data.stats?.new_companies || 0);
+
+    /* ------------ Sync Markups ------------ */
 
     /* ------------ Select All Functionality ------------ */
     $('#select-all').on('change', function() {
