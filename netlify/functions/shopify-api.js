@@ -16,7 +16,7 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
     }
 
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
-    // CORREZIONE QUI: da SHOPIFY_STORE_FRAME a SHOPIFY_STORE_NAME
+    // CORREZIONE FINALE E DEFINITIVA QUI: da SHOPIFY_STORE_FRAME a SHOPIFY_STORE_NAME
     const url = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/${cleanEndpoint}`;
     const options = {
         method: method,
