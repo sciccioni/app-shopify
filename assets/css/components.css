@@ -150,13 +150,40 @@
 }
 
 /* Table row specific styles */
-.row-synced { /* Potrebbe non servire uno stile specifico se è il default */ }
 .row-new { background-color: var(--info-color-light); }
 .row-modified { background-color: var(--warning-color-light); }
 .row-shopify-only { background-color: var(--error-color-light); }
-
 
 /* Text colors for differences */
 .text-success { color: var(--success-color); font-weight: bold; }
 .text-danger { color: var(--error-color); font-weight: bold; }
 .text-warning { color: var(--warning-color); font-weight: bold; }
+
+/* Preview Modal Specific Styles */
+.preview-diff-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+
+.preview-diff-table th, .preview-diff-table td {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    text-align: left;
+}
+
+.preview-diff-table th {
+    background-color: var(--gray-light);
+    color: var(--text-color);
+    font-weight: bold;
+}
+
+.diff-original {
+    text-decoration: line-through;
+    color: var(--error-color-dark);
+}
+
+.diff-new {
+    color: var(--success-color);
+    font-weight: bold;
+}

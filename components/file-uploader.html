@@ -1,8 +1,8 @@
 <template id="file-uploader-template">
   <div class="file-uploader-container">
-    <h2>Importa/Aggiorna Prodotti</h2>
+    <h3>Carica File Excel</h3>
     <div id="drop-area" class="drop-area">
-      <p>Trascina qui il file Excel o clicca per selezionare</p>
+      <p>Trascina qui il file Excel (.xls, .xlsx) o clicca per selezionare</p>
       <input type="file" id="fileInput" accept=".xls,.xlsx" style="display: none;">
       <button id="selectFileBtn" class="btn primary">Seleziona File</button>
     </div>
@@ -13,6 +13,6 @@
       <span id="progress-text">0%</span>
       <span id="file-name" class="file-name"></span>
     </div>
-    <div id="upload-status" class="upload-status"></div>
+    <div id="uploader-status" class="upload-status hidden"></div>
   </div>
 </template>

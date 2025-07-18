@@ -1,15 +1,20 @@
 const SHOPIFY_STORE_NAME = process.env.SHOPIFY_STORE_NAME;
 const SHOPIFY_ADMIN_API_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
-const SHOPIFY_API_VERSION = '2024-07'; // Puoi aggiornare la versione API
+const SHOPIFY_API_VERSION = '2024-07'; // Versione API di Shopify
 
 /**
  * Funzione per effettuare richieste all'Admin API di Shopify.
- * @param {string} endpoint - L'endpoint dell'API (es. 'products.json')
+ * @param {string} endpoint - L'endpoint dell'API (es. 'products.json', 'products/{id}.json')
  * @param {string} method - Metodo HTTP (GET, POST, PUT, DELETE)
- * @param {object} body - Corpo della richiesta per POST/PUT
- * @returns {Promise<object>} - La risposta dell'API
+ * @param {object} [body=null] - Corpo della richiesta per POST/PUT.
+ * @returns {Promise<object>} - La risposta dell'API.
+ * @throws {Error} Se la richiesta fallisce o la risposta non è OK.
  */
 async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
+    if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN) {
+        throw new Error('Variabili d\'ambiente Shopify non configurate.');
+    }
+
     const url = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/${endpoint}`;
     const options = {
         method: method,
@@ -23,10 +28,12 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
         options.body = JSON.stringify(body);
     }
 
+    console.log(`Shopify API Call: ${method} ${url}`);
     try {
         const response = await fetch(url, options);
         if (!response.ok) {
             const errorText = await response.text();
+            console.error(`Shopify API Error (${response.status} ${response.statusText}): ${errorText}`);
             throw new Error(`Shopify API Error: ${response.status} - ${errorText}`);
         }
         return await response.json();
@@ -37,28 +44,31 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
 }
 
 /**
- * Recupera tutti i prodotti Shopify con le loro varianti e, se presenti, i metafields di scadenza.
- * Implementa la paginazione per gestire grandi quantità di prodotti.
- * @returns {Promise<Array<object>>} Array di oggetti prodotto Shopify
+ * Recupera tutti i prodotti Shopify con le loro varianti e metafields rilevanti.
+ * Implementa la paginazione usando l'header Link di Shopify.
+ * @returns {Promise<Array<object>>} Array di oggetti prodotto Shopify, normalizzati.
+ * @throws {Error} Se il recupero fallisce.
  */
 async function getShopifyProducts() {
     let allProducts = [];
-    let nextLink = `products.json?fields=id,title,variants,metafields`; // Richiedi solo i campi necessari
+    // Richiedi solo i campi necessari per performance. includi metafields per Minsan e Scadenza.
+    let nextLink = `products.json?fields=id,title,handle,variants,metafields`;
 
     try {
         while (nextLink) {
-            const response = await callShopifyAdminApi(nextLink);
-            allProducts = allProducts.concat(response.products);
+            console.log(`Fetching Shopify products: ${nextLink}`);
+            const responseData = await callShopifyAdminApi(nextLink);
+            allProducts = allProducts.concat(responseData.products);
 
-            // Gestione della paginazione con l'header Link
-            const linkHeader = response.headers?.get('Link') || response.headers?.link; // Netlify Function fetch might have a different header object
+            // Shopify usa l'header 'Link' per la paginazione
+            const linkHeader = responseData.headers?.get('Link') || responseData.headers?.link;
             if (linkHeader) {
                 const parts = linkHeader.split(',');
                 const nextPart = parts.find(p => p.includes('rel="next"'));
                 if (nextPart) {
                     const urlMatch = nextPart.match(/<(.*?)>/);
                     if (urlMatch && urlMatch[1]) {
-                        // Estrai solo il percorso relativo per la prossima chiamata
+                        // Estrai solo il percorso relativo per la prossima chiamata (es. "products.json?page_info=...")
                         const urlObj = new URL(urlMatch[1]);
                         nextLink = `${urlObj.pathname.split('/').pop()}${urlObj.search}`;
                     } else {
@@ -72,27 +82,33 @@ async function getShopifyProducts() {
             }
         }
 
-        // Normalizza i prodotti Shopify per facilitare il confronto
+        // Normalizza i prodotti Shopify per facilitare il confronto nel frontend
         return allProducts.map(product => {
             const variant = product.variants && product.variants.length > 0 ? product.variants[0] : {};
-            const minsanMetafield = product.metafields?.find(m => m.key === 'minsan' && m.namespace === 'custom_fields'); // Assumi minsan come custom metafield
-            const scadenzaMetafield = product.metafields?.find(m => m.key === 'scadenza' && m.namespace === 'custom_fields'); // Assumi scadenza come custom metafield
+
+            // Cerca Minsan e Scadenza nei metafields.
+            // Assumi che Minsan sia memorizzato in un metafield 'minsan' con namespace 'custom_fields'
+            // E la Scadenza in un metafield 'scadenza' con namespace 'custom_fields'
+            const minsanMetafield = product.metafields?.find(m => m.key === 'minsan' && m.namespace === 'custom_fields');
+            const scadenzaMetafield = product.metafields?.find(m => m.key === 'scadenza' && m.namespace === 'custom_fields');
 
             return {
                 id: product.id,
                 title: product.title,
-                minsan: minsanMetafield ? String(minsanMetafield.value) : (variant.sku ? String(variant.sku) : String(product.id)), // Preferisci metafield, poi SKU, altrimenti ID prodotto Shopify
+                handle: product.handle,
+                // Priorità per minsan: metafield, poi SKU della variante, altrimenti ID prodotto Shopify
+                minsan: minsanMetafield?.value ? String(minsanMetafield.value).trim() : (variant.sku ? String(variant.sku).trim() : String(product.id).trim()),
                 variants: product.variants, // Manteniamo tutte le varianti per operazioni future
                 Giacenza: variant.inventory_quantity || 0,
                 PrezzoBD: parseFloat(variant.price || 0),
-                Scadenza: scadenzaMetafield ? scadenzaMetafield.value : null,
+                Scadenza: scadenzaMetafield?.value || null, // Valore grezzo del metafield di scadenza
                 metafields: product.metafields // Manteniamo i metafields per completezza
             };
         });
 
     } catch (error) {
         console.error('Errore nel recupero prodotti Shopify:', error);
-        throw new Error('Impossibile recuperare i prodotti da Shopify.');
+        throw new Error('Impossibile recuperare i prodotti da Shopify: ' + error.message);
     }
 }
 
