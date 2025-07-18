@@ -1,6 +1,7 @@
 const XLSX = require('xlsx');
 const multipart = require('parse-multipart-data');
-const { getShopifyProducts } = require('../functions/shopify-api');
+// Importiamo getShopifyProducts con la sua nuova capacità di filtraggio
+const { getShopifyProducts } = require('../functions/shopify-api'); 
 
 exports.handler = async (event, context) => {
     if (event.httpMethod !== 'POST') {
@@ -25,14 +26,17 @@ exports.handler = async (event, context) => {
         const sheetName = workbook.SheetNames[0]; // Prende il primo foglio
         const sheet = workbook.Sheets[sheetName];
 
-        // *** MODIFICA QUI: Ritorna al metodo standard di sheet_to_json che gestisce gli header automaticamente ***
-        // 'header: 1' istruisce a usare la prima riga come header. 'raw: true' mantiene i valori non-stringa come numeri, ecc.
-        const rawData = XLSX.utils.sheet_to_json(sheet, { raw: true });
+        // sheet_to_json con header:1 per leggere la prima riga come intestazione e raw:true per tipi originali
+        const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
 
-        // Definisci la mappatura delle colonne. Le chiavi sono i nomi nel tuo JSON finale, i valori sono i possibili nomi delle colonne nel tuo Excel.
+        // Mappa gli header dalla prima riga (rawData[0]) ai nomi delle colonne desiderati
+        const headers = rawData[0];
+        const dataRows = rawData.slice(1); // Tutte le righe tranne l'header
+
+        // Mappatura dinamica per tollerare piccole variazioni nel nome delle colonne
         const columnMapping = {
             'Ditta': ['Ditta', 'Azienda'],
-            'Minsan': ['Minsan', 'CodiceMinsan', 'MINSAN'], // Aggiungi MINSAN se in maiuscolo
+            'Minsan': ['Minsan', 'CodiceMinsan', 'MINSAN'], // Aggiungi maiuscole per maggiore compatibilità
             'EAN': ['EAN', 'CodiceEAN', 'CODICE_EAN'],
             'Descrizione': ['Descrizione', 'Descr', 'NomeProdotto'],
             'Scadenza': ['Scadenza', 'DataScadenza', 'SCADENZA'],
@@ -46,54 +50,59 @@ exports.handler = async (event, context) => {
             'IVA': ['IVA', 'Imposta']
         };
 
-        const processedProductsMap = new Map();
-
-        for (const rawRow of rawData) {
-            // Crea un oggetto riga normalizzato usando la mappatura
-            const row = {};
-            for (const key in columnMapping) {
-                const possibleNames = columnMapping[key];
-                for (const name of possibleNames) {
-                    if (rawRow[name] !== undefined) {
-                        row[key] = rawRow[name];
-                        break; // Trovato il valore, passa al prossimo campo
-                    }
-                    // Aggiungi un controllo per lowercase/uppercase se i nomi variano
-                    if (rawRow[name.toLowerCase()] !== undefined) {
-                        row[key] = rawRow[name.toLowerCase()];
-                        break;
-                    }
-                    if (rawRow[name.toUpperCase()] !== undefined) {
-                        row[key] = rawRow[name.toUpperCase()];
-                        break;
-                    }
+        // Funzione helper per trovare il valore della colonna basandosi su più nomi possibili
+        const getColumnValue = (rowObj, possibleNames) => {
+            for (const name of possibleNames) {
+                if (rowObj[name] !== undefined && rowObj[name] !== null) {
+                    return rowObj[name];
+                }
+                // Prova anche versioni upper/lower case nel caso l'header non sia mappato esattamente
+                if (typeof name === 'string') {
+                    const lowerName = name.toLowerCase();
+                    if (rawRow[lowerName] !== undefined && rawRow[lowerName] !== null) return rawRow[lowerName];
+                    const upperName = name.toUpperCase();
+                    if (rawRow[upperName] !== undefined && rawRow[upperName] !== null) return rawRow[upperName];
                 }
             }
+            return undefined; // Ritorna undefined se nessuna corrispondenza
+        };
 
-            const minsan = String(row.Minsan || '').trim();
+        const processedProductsMap = new Map();
+        const minsanListFromFile = new Set(); // Per raccogliere tutti i Minsan unici dal file
+
+        for (const rowData of dataRows) {
+            // Crea un oggetto riga con header come chiavi e valori come valori
+            const rawRow = headers.reduce((acc, header, index) => {
+                acc[header] = rowData[index];
+                return acc;
+            }, {});
+
+            // Estrai i valori usando la mappatura
+            const minsan = String(getColumnValue(rawRow, columnMapping.Minsan) || '').trim();
             if (!minsan || minsan.length < 9) {
-                console.warn(`Minsan non valido o troppo corto saltato (min 9 cifre): ${row.Minsan || rawRow['Minsan']}`);
+                console.warn(`Minsan non valido o troppo corto saltato (min 9 cifre): ${minsan}`);
                 continue;
             }
+            minsanListFromFile.add(minsan); // Aggiungi il Minsan alla lista
 
-            const giacenzaRaw = row.Giacenza;
+            const giacenzaRaw = getColumnValue(rawRow, columnMapping.Giacenza);
             const giacenza = parseFloat(giacenzaRaw || 0);
 
-            const lotto = String(row.Lotto || '').trim();
-            let scadenza = row.Scadenza;
+            const lotto = String(getColumnValue(rawRow, columnMapping.Lotto) || '').trim();
+            let scadenza = getColumnValue(rawRow, columnMapping.Scadenza);
 
             // Tentativo più robusto di conversione data Excel (numerico) a stringa YYYY-MM-DD
             if (typeof scadenza === 'number' && !isNaN(scadenza)) {
                 try {
                     const date = XLSX.SSF.parse_date_code(scadenza);
-                    if (date && date.y && date.m && date.d) { // Assicurati che tutti i componenti della data siano validi
+                    if (date && date.y && date.m && date.d) {
                         scadenza = `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
                     } else {
                         scadenza = String(scadenza).trim(); // Fallback
                     }
                 } catch (e) {
                     console.warn(`Errore durante la conversione della data Excel per Minsan ${minsan}: ${scadenza}. Usando la stringa originale.`, e);
-                    scadenza = String(scadenza || '').trim(); // Fallback alla stringa originale
+                    scadenza = String(scadenza || '').trim(); // Fallback
                 }
             } else {
                 scadenza = String(scadenza || '').trim(); // Assicura che sia una stringa
@@ -103,19 +112,19 @@ exports.handler = async (event, context) => {
             // Inizializza o recupera il prodotto nella mappa
             if (!processedProductsMap.has(minsan)) {
                 processedProductsMap.set(minsan, {
-                    Ditta: String(row.Ditta || '').trim(),
+                    Ditta: String(getColumnValue(rawRow, columnMapping.Ditta) || '').trim(),
                     Minsan: minsan,
-                    EAN: String(row.EAN || '').trim(),
-                    Descrizione: String(row.Descrizione || '').trim(),
+                    EAN: String(getColumnValue(rawRow, columnMapping.EAN) || '').trim(),
+                    Descrizione: String(getColumnValue(rawRow, columnMapping.Descrizione) || '').trim(),
                     Giacenza: 0, // Verrà sommata
                     Scadenza: null, // Verrà aggiornata con la più recente
                     Lotti: [], // Per tracciare i lotti originali (opzionale)
-                    CostoBase: parseFloat(row.CostoBase || 0),
-                    CostoMedio: parseFloat(row.CostoMedio || 0),
-                    UltimoCostoDitta: parseFloat(row.UltimoCostoDitta || 0),
-                    DataUltimoCostoDitta: String(row.DataUltimoCostoDitta || '').trim(),
-                    PrezzoBD: parseFloat(row.PrezzoBD || 0),
-                    IVA: parseFloat(row.IVA || 0)
+                    CostoBase: parseFloat(getColumnValue(rawRow, columnMapping.CostoBase) || 0),
+                    CostoMedio: parseFloat(getColumnValue(rawRow, columnMapping.CostoMedio) || 0),
+                    UltimoCostoDitta: parseFloat(getColumnValue(rawRow, columnMapping.UltimoCostoDitta) || 0),
+                    DataUltimoCostoDitta: String(getColumnValue(rawRow, columnMapping.DataUltimoCostoDitta) || '').trim(),
+                    PrezzoBD: parseFloat(getColumnValue(rawRow, columnMapping.PrezzoBD) || 0),
+                    IVA: parseFloat(getColumnValue(rawRow, columnMapping.IVA) || 0)
                 });
             }
 
@@ -125,7 +134,7 @@ exports.handler = async (event, context) => {
             product.Giacenza += Math.max(0, giacenza);
 
             // Gestione della scadenza più recente per il Minsan
-            if (scadenza && scadenza !== '-') { // Evita di considerare '-' come una data valida
+            if (scadenza && scadenza !== '-') {
                 const currentProductScadenzaDate = product.Scadenza ? new Date(product.Scadenza) : null;
                 const newScadenzaDate = new Date(scadenza);
 
@@ -138,9 +147,9 @@ exports.handler = async (event, context) => {
         const processedProducts = Array.from(processedProductsMap.values());
         console.log(`Elaborati ${processedProducts.length} prodotti unici dal file Excel.`);
 
-        // Recupera i prodotti esistenti da Shopify
-        const shopifyProducts = await getShopifyProducts();
-        console.log(`Recuperati ${shopifyProducts.length} prodotti da Shopify.`);
+        // Passa la lista dei Minsan unici alla funzione getShopifyProducts per ottimizzare il recupero
+        const shopifyProducts = await getShopifyProducts(Array.from(minsanListFromFile));
+        console.log(`Recuperati ${shopifyProducts.length} prodotti da Shopify (filtrati per Minsan del file).`);
 
 
         return {

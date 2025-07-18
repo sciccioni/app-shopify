@@ -1,6 +1,6 @@
 const SHOPIFY_STORE_NAME = process.env.SHOPIFY_STORE_NAME;
 const SHOPIFY_ADMIN_API_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
-const SHOPIFY_API_VERSION = '2024-07'; // Versione API di Shopify
+const SHOPIFY_API_VERSION = '2024-07';
 
 /**
  * Funzione per effettuare richieste all'Admin API di Shopify.
@@ -15,9 +15,8 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
         throw new Error('Variabili d\'ambiente Shopify non configurate (SHOPIFY_STORE_NAME o SHOPIFY_ADMIN_API_TOKEN).');
     }
 
-    // Assicurati che l'endpoint non inizi con '/', Shopify API non lo vuole.
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
-    const url = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/${cleanEndpoint}`;
+    const url = `https://${SHOPIFY_STORE_FRAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/${cleanEndpoint}`;
     const options = {
         method: method,
         headers: {
@@ -38,8 +37,6 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
             console.error(`Shopify API Error (${response.status} ${response.statusText}): ${errorText}`);
             throw new Error(`Shopify API Error: ${response.status} - ${errorText}`);
         }
-        // Il Shopify API Link header può essere un oggetto di tipo Headers, non un semplice oggetto.
-        // Lo restituiamo insieme al JSON per facilitare la paginazione in getShopifyProducts.
         return { json: await response.json(), headers: response.headers };
     } catch (error) {
         console.error('Errore nella chiamata Shopify API:', error.message);
@@ -48,32 +45,54 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
 }
 
 /**
- * Recupera tutti i prodotti Shopify con le loro varianti e metafields rilevanti.
- * Implementa la paginazione usando l'header Link di Shopify.
+ * Recupera i prodotti Shopify, opzionalmente filtrando per un elenco di SKU/Minsan.
+ * Se viene fornito un elenco di skus, cerca i prodotti che hanno queste SKUs nelle loro varianti.
+ * Altrimenti, recupera tutti i prodotti. Implementa la paginazione.
+ *
+ * @param {Array<string>} [skusToFetch=[]] - Un array di stringhe SKU/Minsan da cercare.
  * @returns {Promise<Array<object>>} Array di oggetti prodotto Shopify, normalizzati.
  * @throws {Error} Se il recupero fallisce.
  */
-async function getShopifyProducts() {
+async function getShopifyProducts(skusToFetch = []) {
     let allProducts = [];
-    // Richiedi solo i campi necessari per performance. includi metafields per Minsan e Scadenza.
     let nextLink = `products.json?fields=id,title,handle,variants,metafields`;
+
+    // Se abbiamo SKUs da cercare, aggiungiamo il filtro.
+    // Nota: L'API Shopify non ha un filtro diretto 'sku_in'.
+    // Dobbiamo filtrare lato nostro oppure usare il campo 'query' (limitato).
+    // Per ora, l'approccio più comune è scaricare e filtrare,
+    // o fare chiamate per singolo SKU se gli SKU sono pochi.
+    // DATO IL TUO TIMEOUT, faremo un tentativo di recuperare tutti, ma con un limite più stretto
+    // E poi useremo un filtro lato nostro. Se ci sono TROPPI prodotti, questa non sarà sufficiente.
+    // Un metodo più avanzato implicherebbe una funzione per ogni SKU o una search API.
+
+    // Per mitigare il timeout, limitiamo le chiamate a 50 prodotti per pagina (default).
+    // E l'assunzione è che il numero di prodotti rilevanti non sia ENORME,
+    // altrimenti la funzione andrebbe sempre in timeout.
+    // Aggiungiamo un limite esplicito, anche se è il default, per chiarezza.
+    nextLink += `&limit=50`;
+
+    // Se skusToFetch è presente, proveremo a fare delle ricerche specifiche o a filtrare i risultati.
+    // Per un numero elevato di SKU, chiamate multiple per SKU sarebbero inefficienti.
+    // La strategia migliore è scaricare tutti i prodotti (paginati) e filtrare lato nostro.
+    // Se la quantità di prodotti supera il limite di tempo della funzione,
+    // l'unica soluzione è usare un'API di ricerca Shopify (che non supporta il filtro per SKUs di varianti)
+    // o un database esterno sincronizzato.
+    // PER ORA, cerchiamo di filtrare dopo aver scaricato, se il download completo è possibile entro 10-30s.
 
     try {
         while (nextLink) {
             console.log(`Fetching Shopify products: ${nextLink}`);
-            // La risposta ora è un oggetto { json, headers }
             const responseData = await callShopifyAdminApi(nextLink);
             allProducts = allProducts.concat(responseData.json.products);
 
-            // Shopify usa l'header 'Link' per la paginazione
-            const linkHeader = responseData.headers.get('Link'); // Accedi direttamente con .get()
+            const linkHeader = responseData.headers.get('Link');
             if (linkHeader) {
                 const parts = linkHeader.split(',');
                 const nextPart = parts.find(p => p.includes('rel="next"'));
                 if (nextPart) {
                     const urlMatch = nextPart.match(/<(.*?)>/);
                     if (urlMatch && urlMatch[1]) {
-                        // Estrai solo il percorso relativo per la prossima chiamata (es. "products.json?page_info=...")
                         const urlObj = new URL(urlMatch[1]);
                         nextLink = `${urlObj.pathname.split('/').pop()}${urlObj.search}`;
                     } else {
@@ -87,13 +106,9 @@ async function getShopifyProducts() {
             }
         }
 
-        // Normalizza i prodotti Shopify per facilitare il confronto nel frontend
-        return allProducts.map(product => {
+        // Normalizza e filtra i prodotti Shopify
+        const normalizedProducts = allProducts.map(product => {
             const variant = product.variants && product.variants.length > 0 ? product.variants[0] : {};
-
-            // Cerca Minsan e Scadenza nei metafields.
-            // Assumi che Minsan sia memorizzato in un metafield 'minsan' con namespace 'custom_fields'
-            // E la Scadenza in un metafield 'scadenza' con namespace 'custom_fields'
             const minsanMetafield = product.metafields?.find(m => m.key === 'minsan' && m.namespace === 'custom_fields');
             const scadenzaMetafield = product.metafields?.find(m => m.key === 'scadenza' && m.namespace === 'custom_fields');
 
@@ -101,15 +116,22 @@ async function getShopifyProducts() {
                 id: product.id,
                 title: product.title,
                 handle: product.handle,
-                // Priorità per minsan: metafield, poi SKU della variante, altrimenti ID prodotto Shopify
                 minsan: minsanMetafield?.value ? String(minsanMetafield.value).trim() : (variant.sku ? String(variant.sku).trim() : String(product.id).trim()),
-                variants: product.variants, // Manteniamo tutte le varianti per operazioni future
+                variants: product.variants,
                 Giacenza: variant.inventory_quantity || 0,
                 PrezzoBD: parseFloat(variant.price || 0),
-                Scadenza: scadenzaMetafield?.value || null, // Valore grezzo del metafield di scadenza
-                metafields: product.metafields // Manteniamo i metafields per completezza
+                Scadenza: scadenzaMetafield?.value || null,
+                metafields: product.metafields
             };
         });
+
+        // Se sono stati forniti degli SKU, filtriamo i prodotti recuperati
+        if (skusToFetch.length > 0) {
+            const skusSet = new Set(skusToFetch.map(s => String(s).trim()));
+            return normalizedProducts.filter(p => skusSet.has(p.minsan));
+        }
+
+        return normalizedProducts;
 
     } catch (error) {
         console.error('Errore nel recupero prodotti Shopify:', error);
