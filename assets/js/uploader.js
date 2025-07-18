@@ -4,22 +4,26 @@ import { showUploaderStatus, updateUploaderProgress, toggleLoader } from './ui.j
 
 /**
  * Inizializza l'interfaccia di caricamento file e gestisce l'invio alla Netlify Function.
- * @param {function} onUploadSuccess - Callback da eseguire con i dati elaborati in caso di successo.
+ * Ora accetta direttamente gli elementi DOM come parametri.
+ * @param {object} options - Oggetto contenente gli elementi DOM e la callback.
+ * @param {HTMLElement} options.dropArea - Elemento HTML per l'area di drop.
+ * @param {HTMLInputElement} options.fileInput - Elemento HTML input di tipo file.
+ * @param {HTMLElement} options.selectFileBtn - Elemento HTML bottone per selezionare file.
+ * @param {function} options.onUploadSuccess - Callback da eseguire con i dati elaborati in caso di successo.
  */
-export function initializeFileUploader(onUploadSuccess) {
-    const dropArea = document.getElementById('drop-area');
-    const fileInput = document.getElementById('fileInput');
-    const selectFileBtn = document.getElementById('selectFileBtn');
+export function initializeFileUploader({ dropArea, fileInput, selectFileBtn, onUploadSuccess }) {
 
-    // **IMPORTANTE: Verifica che gli elementi siano stati trovati prima di aggiungere i listener**
+    // Non sono più necessari i getElementById qui, perché li riceviamo già
+    // Ma è utile lasciare i controlli per robustezza se qualcosa va storto a monte
     if (!dropArea || !fileInput || !selectFileBtn) {
-        console.error("Errore: Elementi UI dell'uploader non trovati nel DOM. Assicurati che 'file-uploader.html' sia caricato correttamente nell'HTML prima di inizializzare uploader.js.");
-        return; // Esce dalla funzione se gli elementi non ci sono
+        console.error("Errore (uploader.js): Riferimenti agli elementi UI dell'uploader mancanti. L'inizializzazione è fallita.");
+        return; // Esce dalla funzione se gli elementi non sono validi
     }
 
     // Reset dello stato iniziale dell'uploader dopo che gli elementi sono disponibili
     showUploaderStatus('', false); // Nasconde eventuali messaggi precedenti
     updateUploaderProgress(0); // Resetta la progress bar
+
 
     // Gestione Drag & Drop
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -64,7 +68,7 @@ export function initializeFileUploader(onUploadSuccess) {
         }
 
         showUploaderStatus('Caricamento ed elaborazione in corso...', false);
-        updateUploaderProgress(10, file.name); // Inizia la progress bar
+        updateUploaderProgress(10, file.name);
 
         const formData = new FormData();
         formData.append('excelFile', file);
@@ -85,7 +89,6 @@ export function initializeFileUploader(onUploadSuccess) {
             updateUploaderProgress(100, file.name);
             showUploaderStatus('File elaborato con successo! Dati caricati per il confronto.', false);
 
-            // Chiama la callback di successo per passare i dati al modulo principale
             if (onUploadSuccess) {
                 onUploadSuccess(data.processedProducts, data.shopifyProducts);
             }
