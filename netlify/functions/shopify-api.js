@@ -57,7 +57,8 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
  */
 async function getShopifyProducts(skusToFetch = [], pageInfo = null, limit = 20) {
     let products = [];
-    let queryParams = `fields=id,title,handle,variants,metafields&limit=${limit}`;
+    // Aggiungiamo 'vendor' esplicitamente nei campi richiesti per assicurarne la presenza
+    let queryParams = `fields=id,title,handle,vendor,variants,metafields&limit=${limit}`; 
 
     if (pageInfo) {
         queryParams += `&page_info=${pageInfo}`;
@@ -104,6 +105,7 @@ async function getShopifyProducts(skusToFetch = [], pageInfo = null, limit = 20)
                 id: product.id,
                 title: product.title,
                 handle: product.handle,
+                vendor: product.vendor || '-', // Aggiungi il campo vendor qui
                 minsan: minsanMetafield?.value ? String(minsanMetafield.value).trim() : (variant.sku ? String(variant.sku).trim() : String(product.id).trim()),
                 variants: product.variants,
                 Giacenza: variant.inventory_quantity || 0,

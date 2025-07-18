@@ -1,6 +1,6 @@
-// assets/js/shopify-products.js - COMPLETISSIMO E CORRETTO
+// assets/js/shopify-products.js - AGGIORNATO E COMPLETO (Aggiunta Ditta e Ricerca)
 
-import { toggleLoader, showUploaderStatus, showModal, hideModal } from './ui.js';
+import { toggleLoader, showUploaderStatus } from './ui.js';
 
 // Variabili di stato per la paginazione
 let currentPage = 1;
@@ -32,8 +32,6 @@ export async function initializeShopifyProductsTab() {
     }
 
     // Aggiungi listener per la ricerca
-    // La ricerca ora avverrà sui dati DELLA PAGINA CORRENTE per non richiedere troppi dati.
-    // Per una ricerca su TUTTI i prodotti, si richiederebbe un endpoint API Shopify di ricerca (o database esterno).
     let searchTimeout;
     searchInput.addEventListener('input', () => {
         clearTimeout(searchTimeout);
@@ -97,7 +95,7 @@ async function loadAndRenderShopifyProducts(forceRefresh = false, pageInfo = nul
     const shopifyProductsLoader = document.getElementById('shopifyProductsLoader'); // Il loader specifico della tab
 
     if (!tablePlaceholder || !statusDiv || !prevPageBtn || !nextPageBtn || !pageInfoSpan || !shopifyProductsLoader) {
-        console.error("Elementi UI per la tab Prodotti Shopify mancanti durante loadAndRender. Assicurati che il componente HTML sia completamente appeso.");
+        console.error("Elementi UI per la tab Prodotti Shopify mancanti during loadAndRender. Assicurati che il componente HTML sia completamente appeso.");
         return;
     }
 
@@ -169,6 +167,7 @@ function renderShopifyProductsTable(products) {
         return (
             String(p.minsan || '').toLowerCase().includes(searchTerm) ||
             String(p.title || '').toLowerCase().includes(searchTerm) ||
+            String(p.vendor || '').toLowerCase().includes(searchTerm) || // Includi il campo 'vendor' nella ricerca
             String(p.variants?.[0]?.sku || '').toLowerCase().includes(searchTerm) ||
             String(p.variants?.[0]?.barcode || '').toLowerCase().includes(searchTerm)
         );
@@ -189,7 +188,7 @@ function renderShopifyProductsTable(products) {
                 <tr>
                     <th>Minsan / SKU</th>
                     <th>Descrizione</th>
-                    <th>Prezzo</th>
+                    <th>Ditta</th> <th>Prezzo</th>
                     <th>Giacenza</th>
                     <th>Scadenza</th>
                     <th>Stato</th>
@@ -205,6 +204,7 @@ function renderShopifyProductsTable(products) {
         const price = parseFloat(variant.price ?? 0).toFixed(2);
         const minsan = product.minsan || variant.sku || product.id; // Il minsan normalizzato
         const barcode = variant.barcode || '-';
+        const vendor = product.vendor || '-'; // Recupera il campo vendor
 
         let statusClass = 'status-indicator';
         let statusText = 'Attivo';
@@ -217,7 +217,7 @@ function renderShopifyProductsTable(products) {
             <tr>
                 <td>${minsan} <br><small>${barcode !== '-' ? 'EAN: ' + barcode : ''}</small></td>
                 <td>${product.title}</td>
-                <td>€ ${price}</td>
+                <td>${vendor}</td> <td>€ ${price}</td>
                 <td>${inventoryQuantity}</td>
                 <td>${product.Scadenza || '-'}</td>
                 <td><span class="${statusClass}">${statusText}</span></td>
