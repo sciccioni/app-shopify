@@ -95,16 +95,16 @@
     box-shadow: var(--box-shadow);
     border-radius: var(--border-radius);
     overflow: hidden; /* Per rispettare il border-radius sui bordi della tabella */
-    min-width: 800px; /* Assicura una larghezza minima per la tabella sui piccoli schermi */
+    min-width: 900px; /* Aumentato leggermente per accomodare più colonne */
 }
 
 .data-table th,
 .data-table td {
-    padding: 12px 15px;
+    padding: 8px 10px; /* Ridotto il padding per diminuire la larghezza delle colonne */
     border: 1px solid var(--border-color);
     text-align: left;
-    /* white-space: nowrap; */ /* Rimosso per permettere al testo di andare a capo */
     vertical-align: top; /* Allinea il contenuto in alto */
+    font-size: 0.85em; /* Diminuisci la dimensione del font per il contenuto delle celle */
 }
 
 .data-table th {
@@ -112,7 +112,7 @@
     color: white;
     font-weight: bold;
     text-transform: uppercase;
-    font-size: 0.85em;
+    font-size: 0.8em; /* Diminuisci la dimensione del font per gli header */
     position: sticky; /* Rende le intestazioni sticky */
     top: 0; /* Rimangono in alto allo scroll */
     z-index: 10; /* Assicura che siano sopra il contenuto della tabella */
@@ -130,11 +130,11 @@
 .status-indicator {
     padding: 4px 8px;
     border-radius: 4px;
-    font-size: 0.8em;
+    font-size: 0.75em; /* Diminuisci ancora per i badge */
     font-weight: bold;
     text-transform: uppercase;
     display: inline-block;
-    min-width: 70px; /* Larghezza minima per coerenza visiva */
+    min-width: 60px; /* Larghezza minima per coerenza visiva */
     text-align: center;
 }
 
@@ -177,6 +177,7 @@
     background-color: var(--background-light); /* Assicura sfondo bianco per la tabella nella modal */
     border-radius: var(--border-radius);
     overflow: hidden;
+    font-size: 0.9em; /* Diminuisci il font nella modal */
 }
 
 .preview-diff-table th, .preview-diff-table td {
@@ -201,7 +202,7 @@
     font-weight: bold;
 }
 
-.table-actions {
+.modal-actions {
     margin-top: 20px;
     text-align: right; /* Allinea i bottoni a destra */
 }

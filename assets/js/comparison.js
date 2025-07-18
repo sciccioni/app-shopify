@@ -198,7 +198,9 @@ export function renderComparisonTable(fileProducts, shopifyProducts) {
     }
 
     // Aggiungi listener per i bottoni "Anteprima" (deleghiamo l'evento al container della tabella)
-    comparisonTableContainer.removeEventListener('click', handleTableActions); // Rimuovi il listener precedente per evitare duplicati
+    // È CRUCIALE rimuovere e riaggiungere il listener per la delegazione ad ogni render della tabella
+    // per evitare listener multipli se renderComparisonTable viene chiamata più volte.
+    comparisonTableContainer.removeEventListener('click', handleTableActions);
     comparisonTableContainer.addEventListener('click', handleTableActions);
 
     // Gestori eventi per i bottoni di approvazione bulk
@@ -210,6 +212,8 @@ export function renderComparisonTable(fileProducts, shopifyProducts) {
 }
 
 function handleSelectAll(e) {
+    // Nota: Questa funzione è globale o comunque accessibile dal listener del checkbox.
+    // Funzionerà perché querySelectorAll('.product-checkbox') cercherà nel DOM aggiornato.
     document.querySelectorAll('.product-checkbox').forEach(checkbox => {
         if (!checkbox.disabled) {
             checkbox.checked = e.target.checked;
@@ -217,6 +221,7 @@ function handleSelectAll(e) {
     });
 }
 
+// Delega degli eventi per Anteprima e Approva singoli
 function handleTableActions(e) {
     if (e.target.classList.contains('btn-preview')) {
         const minsan = e.target.dataset.minsan;
@@ -227,6 +232,8 @@ function handleTableActions(e) {
     } else if (e.target.classList.contains('btn-approve-single')) {
         const minsan = e.target.dataset.minsan;
         const action = e.target.dataset.action; // 'add', 'update', 'zero-inventory'
+        // Assicurati che l'elemento uploader-status esista e sia accessibile globalmente.
+        // È stato appeso in main.js.
         showUploaderStatus(document.getElementById('uploader-status'), `Richiesta di approvazione per Minsan: ${minsan} (Azione: ${action}) - Da implementare`, 'info');
         console.log('Approva singolo Minsan:', minsan, 'Azione:', action);
         // Qui dovrai chiamare la Netlify Function appropriata per l'approvazione singola
@@ -248,7 +255,7 @@ function handleApproveSelected() {
 function handleApproveAll() {
     // Filtra solo i prodotti che richiedono approvazione
     const allPendingMinsans = Array.from(document.querySelectorAll('.data-table tbody tr'))
-                                .filter(row => row.querySelector('.product-checkbox:not(:disabled)'))
+                                .filter(row => row.querySelector('.product-checkbox:not(:disabled)')) // Trova checkbox non disabilitati
                                 .map(row => row.dataset.minsan);
     if (allPendingMinsans.length > 0) {
         showUploaderStatus(document.getElementById('uploader-status'), `Approva tutti i ${allPendingMinsans.length} prodotti in attesa - Da implementare`, 'info');
@@ -270,28 +277,35 @@ function handleApproveAll() {
 export function showProductPreviewModal(minsan, fileProduct, shopifyProduct, type) {
     const modalTitle = document.getElementById('preview-modal-title');
     const diffTbody = document.getElementById('preview-diff-tbody');
-    const approveBtn = document.getElementById('preview-modal-approve-btn');
-    const modalOverlay = document.getElementById('preview-modal-overlay');
+    let newApproveBtn = document.getElementById('preview-modal-approve-btn'); // Usiamo let per riassegnare
 
-    if (!modalTitle || !diffTbody || !approveBtn || !modalOverlay) {
+    if (!modalTitle || !diffTbody || !newApproveBtn || !document.getElementById('preview-modal-overlay')) {
         console.error("Elementi della modal di anteprima non trovati. Assicurarsi che 'preview-modal.html' sia caricato.");
         return;
     }
 
-    // Rimuovi vecchi listener per evitare duplicati, clonando il bottone
-    // Questa è una tecnica per rimuovere tutti i listener associati a un elemento specifico
-    const oldApproveBtn = approveBtn.cloneNode(true);
-    approveBtn.parentNode.replaceChild(oldApproveBtn, approveBtn);
-    const newApproveBtn = document.getElementById('preview-modal-approve-btn'); // Recupera il riferimento al nuovo bottone
+    // Per assicurarsi che i listener del bottone di approvazione siano unici
+    // Rimuovi il vecchio bottone di approvazione clonandolo e sostituendolo
+    const oldApproveBtn = newApproveBtn;
+    newApproveBtn = oldApproveBtn.cloneNode(true); // Clona il bottone
+    oldApproveBtn.parentNode.replaceChild(newApproveBtn, oldApproveBtn); // Sostituisci il vecchio con il clone
 
-    // Listener per chiudere la modal
-    // Usiamo ?. per evitare errori se gli elementi non esistono (ma a questo punto dovrebbero)
-    document.getElementById('preview-modal-close-btn')?.addEventListener('click', () => hideModal('preview-modal-overlay'));
-    document.getElementById('preview-modal-cancel-btn')?.addEventListener('click', () => hideModal('preview-modal-overlay'));
+    // Pulisci i listener precedenti della modal (solo per i bottoni di chiusura che non vengono clonati)
+    // Non è necessario rimuovere e riaggiungere il listener per la chiusura sull'overlay se viene gestito come fatto in ui.js
+    // MA ASSICURATI CHE SIANO SULLA MODAL OVERLAY E NON SUL CONTENUTO PER CHIUSURA CLICK ESTERNO.
+    document.getElementById('preview-modal-close-btn')?.removeEventListener('click', hideModalWrapper);
+    document.getElementById('preview-modal-cancel-btn')?.removeEventListener('click', hideModalWrapper);
+    
+    const hideModalWrapper = () => hideModal('preview-modal-overlay'); // Wrapper per riutilizzare la funzione
+
+    document.getElementById('preview-modal-close-btn')?.addEventListener('click', hideModalWrapper);
+    document.getElementById('preview-modal-cancel-btn')?.addEventListener('click', hideModalWrapper);
 
 
     let productTitle = fileProduct?.Descrizione || shopifyProduct?.title || 'Prodotto Sconosciuto';
     modalTitle.textContent = `Anteprima Modifiche per ${minsan} - "${productTitle}"`;
+
+    diffTbody.innerHTML = ''; // Pulisce il contenuto precedente della tabella di confronto
 
 
     if (type === 'shopify-only') {
@@ -301,7 +315,8 @@ export function showProductPreviewModal(minsan, fileProduct, shopifyProduct, typ
         const currentScadenza = shopifyProduct?.Scadenza || '-';
 
         diffTbody.innerHTML = `
-            <tr><td>Descrizione</td><td>${shopifyProduct?.title || '-'}</td><td>(Nessuna modifica)</td></tr>
+            <tr><td>Descrizione</td><td>${shopifyProd
+            ?.title || '-'}</td><td>(Nessuna modifica)</td></tr>
             <tr>
                 <td>Giacenza</td>
                 <td><span class="diff-original">${currentGiacenza}</span></td>
@@ -325,34 +340,36 @@ export function showProductPreviewModal(minsan, fileProduct, shopifyProduct, typ
 
     } else if (fileProd) {
         // Anteprima per nuovo prodotto o modifica da file
-        const currentShopifyGiacenza = shopifyProduct?.variants[0]?.inventory_quantity ?? 0;
-        const currentShopifyPrice = parseFloat(shopifyProduct?.variants[0]?.price ?? 0).toFixed(2);
-        const currentShopifyScadenza = shopifyProduct?.Scadenza || '-';
+        const currentShopifyGiacenza = shopifyProd
+        ?.variants[0]?.inventory_quantity ?? 0;
+        const currentShopifyPrice = parseFloat(shopifyProd
+        ?.variants[0]?.price ?? 0).toFixed(2);
+        const currentShopifyScadenza = shopifyProd?.Scadenza || '-';
 
         let giacenzaRow = `
             <td>Giacenza</td>
-            <td>${shopifyProduct ? `<span class="diff-original">${currentShopifyGiacenza}</span>` : 'N.D.'}</td>
+            <td>${shopifyProd ? `<span class="diff-original">${currentShopifyGiacenza}</span>` : 'N.D.'}</td>
             <td><span class="diff-new">${fileProd.Giacenza}</span></td>
         `;
-        if (shopifyProduct && fileProd.Giacenza === currentShopifyGiacenza) {
+        if (shopifyProd && fileProd.Giacenza === currentShopifyGiacenza) {
             giacenzaRow = `<td>Giacenza</td><td colspan="2">${fileProd.Giacenza}</td>`;
         }
 
         let prezzoRow = `
             <td>Prezzo BD</td>
-            <td>${shopifyProduct ? `<span class="diff-original">${currentShopifyPrice}</span>` : 'N.D.'}</td>
+            <td>${shopifyProd ? `<span class="diff-original">${currentShopifyPrice}</span>` : 'N.D.'}</td>
             <td><span class="diff-new">${fileProd.PrezzoBD}</span></td>
         `;
-        if (shopifyProduct && Math.abs(fileProd.PrezzoBD - parseFloat(currentShopifyPrice)) < 0.001) {
+        if (shopifyProd && Math.abs(fileProd.PrezzoBD - parseFloat(currentShopifyPrice)) < 0.001) {
             prezzoRow = `<td>Prezzo BD</td><td colspan="2">${fileProd.PrezzoBD}</td>`;
         }
 
         let scadenzaRow = `
             <td>Scadenza</td>
-            <td>${shopifyProduct ? `<span class="diff-original">${currentShopifyScadenza || '-'}</span>` : 'N.D.'}</td>
+            <td>${shopifyProd ? `<span class="diff-original">${currentShopifyScadenza || '-'}</span>` : 'N.D.'}</td>
             <td><span class="diff-new">${fileProd.Scadenza || '-'}</span></td>
         `;
-        if (shopifyProduct && (fileProd.Scadenza || '') === (currentShopifyScadenza || '')) {
+        if (shopifyProd && (fileProd.Scadenza || '') === (currentShopifyScadenza || '')) {
             scadenzaRow = `<td>Scadenza</td><td colspan="2">${fileProd.Scadenza || '-'}</td>`;
         }
 
@@ -366,14 +383,14 @@ export function showProductPreviewModal(minsan, fileProduct, shopifyProduct, typ
             <tr>${scadenzaRow}</tr>
             <tr><td>IVA</td><td colspan="2">${fileProd.IVA}%</td></tr>
             <tr><td colspan="3" style="font-style: italic;">
-                ${shopifyProduct ?
+                ${shopifyProd ?
                     (type === 'modified-product' ? 'Verranno applicate le modifiche ai campi evidenziati su Shopify.' : '') :
                     'Questo prodotto è nuovo e verrà creato su Shopify.'
                 }
             </td></tr>
         `;
-        newApproveBtn.textContent = shopifyProduct ? 'Approva Aggiornamento' : 'Crea Prodotto';
-        newApproveBtn.dataset.action = shopifyProduct ? 'update' : 'add';
+        newApproveBtn.textContent = shopifyProd ? 'Approva Aggiornamento' : 'Crea Prodotto';
+        newApproveBtn.dataset.action = shopifyProd ? 'update' : 'add';
         newApproveBtn.dataset.minsan = minsan;
 
     } else {
