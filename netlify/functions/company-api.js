@@ -1,42 +1,9 @@
-// netlify/functions/company-api.js - VERSIONE COMPLETA, CON LOGGING SENSIBILE PER DEBUG PASSWORD
+// netlify/functions/company-api.js - AGGIORNATO (Conversione markup_percentage a numero)
 
 const { Pool } = require('pg');
-const { URL } = require('url'); // Importa il modulo URL di Node.js
-
-// --- INIZIO BLOCCO DIAGNOSTICO CRITICO (Rimuovere immediatamente dopo il debug!) ---
-let connectionStringFromEnv = process.env.SUPABASE_URL;
-let finalConnectionString = connectionStringFromEnv;
-
-console.log('--- INIZIO DEBUG CONNESSIONE SUPABASE ---');
-console.log('DEBUG: Valore grezzo di process.env.SUPABASE_URL:', connectionStringFromEnv ? `Stringa presente (lunghezza: ${connectionStringFromEnv.length})` : 'UNDEFINED o VUOTA!');
-
-if (connectionStringFromEnv && connectionStringFromEnv.length > 0) {
-    try {
-        const parsedUrl = new URL(connectionStringFromEnv);
-        // *** ATTENZIONE: LOGGING DI CREDENZIALI SENSIBILI! ***
-        // *** QUESTI CONSOLE.LOG DEVONO ESSERE RIMOSSI IMMEDIATAMENTE DOPO IL DEBUG! ***
-        console.log('DEBUG: Tentativo di connessione con Username:', parsedUrl.username);
-        console.log('DEBUG: Tentativo di connessione con Password:', parsedUrl.password); // !!! Rimuovi questo SUBITO !!!
-        // ***************************************************
-
-        finalConnectionString = connectionStringFromEnv; // Usa la stringa originale se parsata correttamente
-
-    } catch (e) {
-        console.error('DEBUG: Errore nel parsing di SUPABASE_URL come URL standard:', e.message);
-        console.error('DEBUG: Questo suggerisce un formato errato o caratteri non codificati nella stringa.');
-        // Se il parsing fallisce, potremmo ancora avere un problema con la stringa, anche se meno probabile ora.
-        // Tentativo di fallback se la password ha caratteri speciali, ma il problema più comune è ora la corrispondenza.
-    }
-} else {
-    // Se la variabile d'ambiente è effettivamente mancante o vuota
-    throw new Error("Errore di configurazione: SUPABASE_URL non è impostata o è vuota nell'ambiente della funzione.");
-}
-console.log('--- FINE DEBUG CONNESSIONE SUPABASE ---');
-// --- FINE BLOCCO DIAGNOSTICO CRITICO ---
-
 
 const pool = new Pool({
-    connectionString: finalConnectionString,
+    connectionString: process.env.SUPABASE_URL,
     ssl: {
         rejectUnauthorized: false
     }
@@ -58,11 +25,11 @@ exports.handler = async (event, context) => {
     }
 
     try {
-        client = await pool.connect(); // Questo è il punto in cui l'errore si manifesta
+        client = await pool.connect();
 
         const { httpMethod, path, body } = event;
         const segments = path.split('/');
-        const id = segments[segments.length - 1];
+        const id = segments[segments.length - 1]; 
         const isCollectionPath = segments[segments.length - 1] === 'company-api'; 
 
         let responseBody;
@@ -70,82 +37,60 @@ exports.handler = async (event, context) => {
 
         switch (httpMethod) {
             case 'GET':
-                const { rows } = await client.query('SELECT id, ditta as name, markup_percentage as markup FROM company_markups ORDER BY ditta ASC');
-                responseBody = { companies: rows };
+                // *** MODIFICA QUI: Conversione di markup_percentage a numero ***
+                const { rows } = await client.query('SELECT id, ditta as name, CAST(markup_percentage AS NUMERIC) as markup FROM company_markups ORDER BY ditta ASC');
+                // Alternativa: Converti in JS dopo la query, per esempio:
+                // const { rows } = await client.query('SELECT id, ditta as name, markup_percentage FROM company_markups ORDER BY ditta ASC');
+                // rows.forEach(row => row.markup = parseFloat(row.markup_percentage)); // Se preferisci la conversione lato JS
+                responseBody = { companies: rows.map(row => ({
+                    id: row.id,
+                    name: row.name,
+                    markup: parseFloat(row.markup) // Garantisci che sia un numero prima di inviarlo al frontend
+                }))};
                 break;
 
             case 'POST':
-                if (!isCollectionPath) {
-                     statusCode = 400;
-                     responseBody = { message: 'Operazione POST non valida per un ID specifico.' };
-                     break;
-                }
+                if (!isCollectionPath) { statusCode = 400; responseBody = { message: 'Operazione POST non valida per un ID specifico.' }; break; }
                 const { name, markup } = JSON.parse(body);
-                if (!name || markup === undefined) {
-                    statusCode = 400;
-                    responseBody = { message: 'Nome ditta e markup sono obbligatori.' };
-                } else {
+                if (!name || markup === undefined) { statusCode = 400; responseBody = { message: 'Nome ditta e markup sono obbligatori.' }; } else {
                     const { rows: insertedRows } = await client.query(
                         'INSERT INTO company_markups (ditta, markup_percentage) VALUES ($1, $2) RETURNING id, ditta as name, markup_percentage as markup, created_at',
                         [name, markup]
                     );
-                    statusCode = 201;
-                    responseBody = { company: insertedRows[0], message: 'Ditta aggiunta con successo.' };
+                    statusCode = 201; 
+                    responseBody = { company: { // Ritorna l'oggetto correttamente formattato
+                        id: insertedRows[0].id,
+                        name: insertedRows[0].name,
+                        markup: parseFloat(insertedRows[0].markup) // Converte anche qui al ritorno
+                    }, message: 'Ditta aggiunta con successo.' };
                 }
                 break;
 
             case 'PUT':
-                if (isCollectionPath) {
-                     statusCode = 400;
-                     responseBody = { message: 'Operazione PUT richiede un ID ditta.' };
-                     break;
-                }
+                if (isCollectionPath) { statusCode = 400; responseBody = { message: 'Operazione PUT richiede un ID ditta.' }; break; }
                 const { name: updateName, markup: updateMarkup } = JSON.parse(body);
-                if (!id || !updateName || updateMarkup === undefined) {
-                    statusCode = 400;
-                    responseBody = { message: 'ID, nome ditta e markup sono obbligatori per l\'aggiornamento.' };
-                } else {
+                if (!id || !updateName || updateMarkup === undefined) { statusCode = 400; responseBody = { message: 'ID, nome ditta e markup sono obbligatori per l\'aggiornamento.' }; } else {
                     const { rowCount } = await client.query(
                         'UPDATE company_markups SET ditta = $1, markup_percentage = $2 WHERE id = $3',
                         [updateName, updateMarkup, id]
                     );
-                    if (rowCount === 0) {
-                        statusCode = 404;
-                        responseBody = { message: 'Ditta non trovata.' };
-                    } else {
-                        statusCode = 200;
-                        responseBody = { message: 'Ditta aggiornata con successo.' };
-                    }
+                    if (rowCount === 0) { statusCode = 404; responseBody = { message: 'Ditta non trovata.' }; } else { statusCode = 200; responseBody = { message: 'Ditta aggiornata con successo.' }; }
                 }
                 break;
 
             case 'DELETE':
-                if (isCollectionPath) {
-                     statusCode = 400;
-                     responseBody = { message: 'Operazione DELETE richiede un ID ditta.' };
-                     break;
-                }
-                if (!id) {
-                    statusCode = 400;
-                    responseBody = { message: 'ID ditta è obbligatorio per l\'eliminazione.' };
-                } else {
+                if (isCollectionPath) { statusCode = 400; responseBody = { message: 'Operazione DELETE richiede un ID ditta.' }; break; }
+                if (!id) { statusCode = 400; responseBody = { message: 'ID ditta è obbligatorio per l\'eliminazione.' }; } else {
                     const { rowCount } = await client.query(
                         'DELETE FROM company_markups WHERE id = $1',
                         [id]
                     );
-                    if (rowCount === 0) {
-                        statusCode = 404;
-                        responseBody = { message: 'Ditta non trovata.' };
-                    } else {
-                        statusCode = 204;
-                        responseBody = {};
-                    }
+                    if (rowCount === 0) { statusCode = 404; responseBody = { message: 'Ditta non trovata.' }; } else { statusCode = 204; responseBody = {}; }
                 }
                 break;
 
             default:
-                statusCode = 405;
-                responseBody = { message: 'Metodo non permesso.' };
+                statusCode = 405; responseBody = { message: 'Metodo non permesso.' };
         }
 
         return {
@@ -161,6 +106,15 @@ exports.handler = async (event, context) => {
 
     } catch (error) {
         console.error('Errore nella Netlify Function company-api:', error);
+        let errorMessage = 'Errore interno del server.';
+        if (error.message.includes('password authentication failed')) {
+            errorMessage = 'Errore di autenticazione al database. Verifica password.';
+        } else if (error.message.includes('connect ETIMEDOUT') || error.message.includes('ENOTFOUND')) {
+            errorMessage = 'Impossibile connettersi al database. Verifica URL o stato del DB.';
+        } else if (error.code && error.code.startsWith('42')) {
+            errorMessage = 'Errore nel database: Verifica schema della tabella o query.';
+        }
+        
         return {
             statusCode: 500,
             headers: {
