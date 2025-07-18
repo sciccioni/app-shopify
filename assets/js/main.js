@@ -1,24 +1,63 @@
-// assets/js/main.js - COMPLETO E CORRETTO
+// assets/js/main.js - COMPLETO E CORRETTO (AGGIORNATO PER INIZIALIZZAZIONE TAB)
 
 import { loadComponent, initializeTabNavigation } from './ui.js';
 import { initializeFileUploader } from './uploader.js';
 import { renderComparisonTable } from './comparison.js';
-// Importa il nuovo modulo per la gestione della tab Prodotti Shopify
-import { initializeShopifyProductsTab } from './shopify-products.js';
+import { initializeShopifyProductsTab } from './shopify-products.js'; // Importa il modulo per la tab Prodotti Shopify
 
 // Variabili globali per i dati, usate tra i moduli
 window.currentFileProducts = [];
 window.currentShopifyProducts = [];
-// Nuova variabile globale per memorizzare tutti i prodotti Shopify
-window.allShopifyProducts = null; // Inizialmente null, verrà popolato al primo accesso alla tab
+window.allShopifyProducts = null; // Inizialmente null, verrà popolato al primo accesso alla tab Prodotti Shopify
+window.currentShopifyPageProducts = []; // I prodotti della pagina corrente della tab Shopify
+
+// Funzione di inizializzazione specifica per la tab "Importa/Aggiorna Prodotti"
+async function initializeImportUpdateTab() {
+    console.log("Inizializzazione tab 'Importa/Aggiorna Prodotti'...");
+    const fileUploaderSection = document.getElementById('file-uploader-section');
+
+    // Se l'uploader non è già stato appeso (prima esecuzione)
+    // Non è più necessario appendere qui se main.js gestisce l'append all'avvio
+    // Ci assicuriamo solo che i listener siano inizializzati, passando gli elementi correttamente.
+    const dropArea = fileUploaderSection.querySelector('#drop-area');
+    const fileInput = fileUploaderSection.querySelector('#fileInput');
+    const selectFileBtn = fileUploaderSection.querySelector('#selectFileBtn');
+    const uploaderStatusDiv = fileUploaderSection.querySelector('#uploader-status');
+    const progressBarContainer = fileUploaderSection.querySelector('#progress-container');
+    const progressBar = fileUploaderSection.querySelector('#progress-bar');
+    const progressText = fileUploaderSection.querySelector('#progress-text');
+    const fileNameSpan = fileUploaderSection.querySelector('#file-name');
+
+    if (dropArea && fileInput && selectFileBtn && uploaderStatusDiv && progressBarContainer && progressBar && progressText && fileNameSpan) {
+        initializeFileUploader({
+            dropArea: dropArea,
+            fileInput: fileInput,
+            selectFileBtn: selectFileBtn,
+            uploaderStatusDiv: uploaderStatusDiv,
+            progressBarContainer: progressBarContainer,
+            progressBar: progressBar,
+            progressText: progressText,
+            fileNameSpan: fileNameSpan,
+            onUploadSuccess: async (processedProducts, shopifyProducts) => {
+                window.currentFileProducts = processedProducts;
+                window.currentShopifyProducts = shopifyProducts;
+                renderComparisonTable(processedProducts, shopifyProducts);
+            }
+        });
+    } else {
+        console.error("initializeImportUpdateTab: Impossibile trovare uno o più elementi UI dell'uploader. La funzionalità di upload potrebbe non essere attiva.", {
+            dropArea, fileInput, selectFileBtn, uploaderStatusDiv, progressBarContainer, progressBar, progressText, fileNameSpan
+        });
+    }
+}
+
 
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. Ottieni i riferimenti ai contenitori principali (devono esistere in index.html)
     const fileUploaderSection = document.getElementById('file-uploader-section');
     const comparisonTableSection = document.getElementById('comparison-table-section');
     const modalContainer = document.getElementById('modal-container');
-    // Riferimento al contenitore della tab Prodotti Shopify
-    const shopifyProductsTabContent = document.getElementById('shopify-products-tab');
+    const shopifyProductsTabContent = document.getElementById('shopify-products-tab'); // Contenitore per la tab dei prodotti Shopify
 
 
     // Verifica che i contenitori esistano prima di procedere
@@ -61,10 +100,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error("ERRORE: Impossibile caricare il DocumentFragment del componente 'preview-modal'.");
     }
 
-    // NUOVO: Carica il componente della tabella Prodotti Shopify
+    // NUOVO: Carica il componente della tabella Prodotti Shopify (solo append, inizializzazione alla selezione tab)
     const shopifyProductsTableFragment = await loadComponent('shopify-products-table');
     if (shopifyProductsTableFragment) {
-        // Appendi al div della tab Prodotti Shopify, non al suo contenuto interno
         shopifyProductsTabContent.innerHTML = ''; // Pulisci il contenitore della tab
         shopifyProductsTabContent.appendChild(shopifyProductsTableFragment);
         console.log("Componente 'shopify-products-table' appeso con successo.");
@@ -73,44 +111,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
 
-    // 3. Inizializza la logica di navigazione a tab
-    // Passa la funzione di inizializzazione della nuova tab
+    // 3. Inizializza la logica di navigazione a tab, registrando le callback
     initializeTabNavigation({
-        'shopify-products': initializeShopifyProductsTab // Associa la funzione alla tab ID
+        'import-update': initializeImportUpdateTab, // Funzione per inizializzare la tab di upload
+        'shopify-products': initializeShopifyProductsTab // Funzione per inizializzare la tab Prodotti Shopify
+        // 'change-log': initializeChangeLogTab // Se avrai una callback per la tab Change Log
     });
 
-    // 4. Ora che tutti i componenti sono stati appesi e sono parte del DOM, recupera i riferimenti agli elementi UI.
-    // Usiamo querySelector sul *contenitore padre specifico* per maggiore robustezza.
-    const dropArea = fileUploaderSection.querySelector('#drop-area');
-    const fileInput = fileUploaderSection.querySelector('#fileInput');
-    const selectFileBtn = fileUploaderSection.querySelector('#selectFileBtn');
-    const uploaderStatusDiv = fileUploaderSection.querySelector('#uploader-status');
-    const progressBarContainer = fileUploaderSection.querySelector('#progress-container');
-    const progressBar = fileUploaderSection.querySelector('#progress-bar');
-    const progressText = fileUploaderSection.querySelector('#progress-text');
-    const fileNameSpan = fileUploaderSection.querySelector('#file-name');
-
-    // 5. Verifica che tutti gli elementi critici per l'uploader siano stati trovati.
-    if (dropArea && fileInput && selectFileBtn && uploaderStatusDiv && progressBarContainer && progressBar && progressText && fileNameSpan) {
-        console.log("Tutti gli elementi UI dell'uploader sono stati trovati. Inizializzo l'uploader.");
-        initializeFileUploader({
-            dropArea: dropArea,
-            fileInput: fileInput,
-            selectFileBtn: selectFileBtn,
-            uploaderStatusDiv: uploaderStatusDiv,
-            progressBarContainer: progressBarContainer,
-            progressBar: progressBar,
-            progressText: progressText,
-            fileNameSpan: fileNameSpan,
-            onUploadSuccess: async (processedProducts, shopifyProducts) => {
-                window.currentFileProducts = processedProducts;
-                window.currentShopifyProducts = shopifyProducts;
-                renderComparisonTable(processedProducts, shopifyProducts);
-            }
-        });
-    } else {
-        console.error("ERRORE FATALE: Impossibile trovare uno o più elementi UI dell'uploader dopo l'append del componente. Verificare ID e struttura di 'file-uploader.html'.", {
-            dropArea, fileInput, selectFileBtn, uploaderStatusDiv, progressBarContainer, progressBar, progressText, fileNameSpan
-        });
-    }
+    // La callback iniziale per la tab "Importa/Aggiorna" verrà chiamata automaticamente da initializeTabNavigation
+    // dopo che tutti i componenti sono stati appesi, risolvendo il problema dell'uploader.
 });

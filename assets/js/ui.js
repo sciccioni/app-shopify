@@ -1,4 +1,4 @@
-// assets/js/ui.js - COMPLETO E CORRETTO (AGGIORNATO PER CALLBACK TAB)
+// assets/js/ui.js - COMPLETO E CORRETTO (REVISIONATO PER INIZIALIZZAZIONE TAB)
 
 /**
  * Mappa le funzioni di callback per l'inizializzazione delle tab.
@@ -44,20 +44,21 @@ export async function loadComponent(componentName) {
  * @param {Object.<string, Function>} callbacks - Oggetto con ID della tab come chiave e funzione di inizializzazione come valore.
  */
 export function initializeTabNavigation(callbacks = {}) {
-    // Unisci le callback passate con quelle interne, se ce ne fossero.
+    // Unisci le callback passate
     Object.assign(tabInitCallbacks, callbacks);
 
     const tabButtons = document.querySelectorAll('.tab-button');
     const tabContents = document.querySelectorAll('.tab-content');
 
     if (tabButtons.length === 0 || tabContents.length === 0) {
-        console.warn("Elementi per la navigazione a tab non trovati. La navigazione potrebbe non funzionare.");
+        console.warn("initializeTabNavigation: Elementi per la navigazione a tab non trovati. La navigazione potrebbe non funzionare.");
         return;
     }
 
     tabButtons.forEach(button => {
-        button.addEventListener('click', async () => { // Reso async per le callback
+        button.addEventListener('click', async () => {
             const targetTabId = button.dataset.tab;
+            console.log(`Tab cliccata: ${targetTabId}`);
 
             // Aggiorna classi attive per i bottoni
             tabButtons.forEach(btn => btn.classList.remove('active'));
@@ -72,35 +73,44 @@ export function initializeTabNavigation(callbacks = {}) {
             const selectedTabContent = document.getElementById(`${targetTabId}-tab`);
             if (selectedTabContent) {
                 selectedTabContent.classList.remove('hidden');
+                console.log(`Mostrata tab content: ${targetTabId}-tab`);
 
                 // Chiama la funzione di inizializzazione specifica per la tab, se esiste
                 if (tabInitCallbacks[targetTabId] && typeof tabInitCallbacks[targetTabId] === 'function') {
-                    console.log(`Attivazione callback per tab: ${targetTabId}`);
+                    console.log(`Esecuzione callback per tab: ${targetTabId}`);
                     try {
-                        await tabInitCallbacks[targetTabId](); // Esegui la callback, attendendo se è async
+                        // Await la callback per assicurarsi che l'inizializzazione sia completa
+                        await tabInitCallbacks[targetTabId]();
                     } catch (e) {
-                        console.error(`Errore nell'inizializzazione della tab '${targetTabId}':`, e);
+                        console.error(`Errore nell'esecuzione della callback per la tab '${targetTabId}':`, e);
                     }
                 }
             } else {
-                console.warn(`Contenuto della tab con ID '${targetTabId}-tab' non trovato.`);
+                console.warn(`initializeTabNavigation: Contenuto della tab con ID '${targetTabId}-tab' non trovato.`);
             }
         });
     });
 
-    // Per la tab attiva all'avvio, esegui la sua callback
+    // NUOVO: Trigger la callback per la tab attiva all'avvio.
+    // Questo è cruciale per inizializzare il contenuto della prima tab (Importa/Aggiorna)
+    // una volta che il DOM è pronto e i componenti sono stati appesi.
     const activeTabButton = document.querySelector('.tab-button.active');
     if (activeTabButton) {
         const initialTabId = activeTabButton.dataset.tab;
         if (tabInitCallbacks[initialTabId] && typeof tabInitCallbacks[initialTabId] === 'function') {
-             console.log(`Attivazione callback iniziale per tab: ${initialTabId}`);
+             console.log(`initializeTabNavigation: Esecuzione callback iniziale per tab: ${initialTabId}`);
              try {
-                // Non await qui per non bloccare il DOMContentLoaded, ma la callback stessa può essere async
+                // Esegui la callback iniziale. Non la awaitamo qui per non bloccare il DOMContentLoaded,
+                // ma la callback stessa può essere async.
                 tabInitCallbacks[initialTabId]();
             } catch (e) {
-                console.error(`Errore nell'inizializzazione iniziale della tab '${initialTabId}':`, e);
+                console.error(`initializeTabNavigation: Errore nell'inizializzazione iniziale della tab '${initialTabId}':`, e);
             }
+        } else {
+            console.warn(`initializeTabNavigation: Nessuna callback registrata per la tab iniziale '${initialTabId}'.`);
         }
+    } else {
+        console.warn("initializeTabNavigation: Nessuna tab attiva trovata all'avvio.");
     }
 }
 
