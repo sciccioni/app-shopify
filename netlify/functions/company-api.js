@@ -1,64 +1,101 @@
-// netlify/functions/company-api.js - NUOVO ENDPOINT API PER LA GESTIONE DITTE (SUPABASE)
+// netlify/functions/company-api.js - AGGIORNAMENTO DIAGNOSTICO FINALE
 
-const { Pool } = require('pg'); // Importa il client PostgreSQL
+const { Pool } = require('pg');
+const { URL } = require('url'); // Importa il modulo URL di Node.js
 
-// Configura il pool di connessioni a Supabase usando le variabili d'ambiente
+// --- INIZIO BLOCCO DIAGNOSTICO/CORREZIONE VARIABILE D'AMBIENTE ---
+let connectionStringFromEnv = process.env.SUPABASE_URL;
+let finalConnectionString = connectionStringFromEnv;
+
+console.log('DEBUG (company-api): Valore grezzo di process.env.SUPABASE_URL:', connectionStringFromEnv ? `Stringa presente (lunghezza: ${connectionStringFromEnv.length})` : 'UNDEFINED o VUOTA!');
+
+if (connectionStringFromEnv && connectionStringFromEnv.length > 0) {
+    try {
+        // Tenta di parsare la stringa come URL per verificare il formato.
+        // Questo riprodurrà il controllo che fa pg-connection-string
+        const testUrl = new URL(connectionStringFromEnv);
+        console.log('DEBUG (company-api): Parsed URL protocol:', testUrl.protocol);
+        console.log('DEBUG (company-api): Parsed URL hostname:', testUrl.hostname);
+        console.log('DEBUG (company-api): Parsed URL port:', testUrl.port);
+        console.log('DEBUG (company-api): Parsed URL username:', testUrl.username);
+        console.log('DEBUG (company-api): Parsed URL password length:', testUrl.password ? testUrl.password.length : 0); // NON LOGGARE LA PASSWORD!
+        console.log('DEBUG (company-api): Parsed URL pathname:', testUrl.pathname);
+        console.log('DEBUG (company-api): Parsed URL searchParams (expected to be an object):', typeof testUrl.searchParams);
+
+        // Se la stringa è stata parsata con successo, la riusiamo tale e quale
+        // Altrimenti, se fallisce il parsing, finalConnectionString rimarrà l'originale
+        // o verrà gestito dal catch esterno.
+        finalConnectionString = connectionStringFromEnv;
+
+    } catch (e) {
+        console.error('DEBUG (company-api): Errore nel parsing di SUPABASE_URL come URL standard:', e.message);
+        console.error('DEBUG (company-api): Questo suggerisce un formato errato o caratteri non codificati nella stringa.');
+        // Tentativo di correzione euristica se la password ha caratteri speciali non codificati
+        if (connectionStringFromEnv.includes('[YOUR-PASSWORD]')) {
+             console.error('DEBUG (company-api): La stringa contiene ancora il placeholder [YOUR-PASSWORD]! Devi sostituirlo con la password reale e non le parentesi.');
+        } else if (connectionStringFromEnv.includes('#') || connectionStringFromEnv.includes('&') || connectionStringFromEnv.includes('$') || connectionStringFromEnv.includes('%')) {
+            console.warn('DEBUG (company-api): La stringa di connessione potrebbe contenere caratteri speciali non codificati URL. Riprova a codificare la password.');
+            // Un'ultima risorsa: prova a ricodificare solo la password se c'è un pattern riconosciuto
+            const parts = connectionStringFromEnv.match(/(.*?:)(.*?)(@.*)/);
+            if (parts && parts[2]) {
+                const encodedPassword = encodeURIComponent(parts[2]);
+                finalConnectionString = parts[1] + encodedPassword + parts[3];
+                console.log('DEBUG (company-api): Tentato di ricodificare la password nella stringa di connessione.');
+            }
+        }
+    }
+} else {
+    // Se la variabile d'ambiente è effettivamente mancante o vuota
+    throw new Error("Errore di configurazione: SUPABASE_URL non è impostata o è vuota nell'ambiente della funzione.");
+}
+
+// --- FINE BLOCCO DIAGNOSTICO/CORREZIONE ---
+
 const pool = new Pool({
-    connectionString: process.env.SUPABASE_URL.replace('postgresql://', 'postgres://') + // Assicurati sia postgres:// per il driver pg
-                      '?pgbouncer=true', // Abilita pgbouncer se stai usando il connection string di pgbouncer
+    connectionString: finalConnectionString, // Usa la stringa processata o diagnosticata
     ssl: {
-        rejectUnauthorized: false // Accetta certificati auto-firmati di Supabase (per il deploy)
+        rejectUnauthorized: false
     }
 });
 
-// Aggiungi un client per il Service Role Key per query dirette
-const supabaseServiceRoleClient = (async () => {
-    try {
-        // Estrai le credenziali per la Service Role Key direttamente dall'URL di Supabase
-        const supabaseUrl = process.env.SUPABASE_URL;
-        const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
-
-        if (!supabaseUrl || !supabaseServiceKey) {
-            throw new Error('SUPABASE_URL o SUPABASE_SERVICE_KEY non sono definiti.');
-        }
-
-        // Il client Supabase JS SDK è più comodo per l'API PostgREST con Service Key
-        // Installalo se vuoi usarlo: npm install @supabase/supabase-js
-        // const { createClient } = require('@supabase/supabase-js');
-        // return createClient(supabaseUrl, supabaseServiceKey);
-
-        // Alternativa: Se preferisci usare fetch direttamente per chiamate API PostgREST
-        // Per semplicità, inizialmente useremo pg per le query dirette al DB via Pool.
-        // Se volessimo usare la REST API di Supabase, questo sarebbe il posto per configurarla.
-        return null; // Non usiamo un client SDK qui, ma una connessione diretta pg
-    } catch (error) {
-        console.error("Errore nel creare il client Supabase Service Role:", error);
-        throw error;
-    }
-})();
-
-
 exports.handler = async (event, context) => {
-    let client; // Variabile per la connessione al database
+    let client;
+
+    if (event.httpMethod === 'OPTIONS') {
+        return {
+            statusCode: 200,
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+            },
+            body: ''
+        };
+    }
 
     try {
-        client = await pool.connect(); // Ottieni una connessione dal pool
+        client = await pool.connect(); // Questo è il punto in cui l'errore si manifesta
 
-        const { httpMethod, path, body, queryStringParameters } = event;
-        const id = path.split('/').pop(); // Estrae l'ID dalla URL se presente
+        const { httpMethod, path, body } = event;
+        const segments = path.split('/');
+        const id = segments[segments.length - 1];
+        const isCollectionPath = segments[segments.length - 1] === 'company-api'; 
 
         let responseBody;
         let statusCode = 200;
 
         switch (httpMethod) {
             case 'GET':
-                // Recupera tutte le ditte
                 const { rows } = await client.query('SELECT id, ditta as name, markup_percentage as markup FROM company_markups ORDER BY ditta ASC');
                 responseBody = { companies: rows };
                 break;
 
             case 'POST':
-                // Aggiungi una nuova ditta
+                if (!isCollectionPath) {
+                     statusCode = 400;
+                     responseBody = { message: 'Operazione POST non valida per un ID specifico.' };
+                     break;
+                }
                 const { name, markup } = JSON.parse(body);
                 if (!name || markup === undefined) {
                     statusCode = 400;
@@ -74,7 +111,11 @@ exports.handler = async (event, context) => {
                 break;
 
             case 'PUT':
-                // Aggiorna una ditta esistente
+                if (isCollectionPath) {
+                     statusCode = 400;
+                     responseBody = { message: 'Operazione PUT richiede un ID ditta.' };
+                     break;
+                }
                 const { name: updateName, markup: updateMarkup } = JSON.parse(body);
                 if (!id || !updateName || updateMarkup === undefined) {
                     statusCode = 400;
@@ -95,7 +136,11 @@ exports.handler = async (event, context) => {
                 break;
 
             case 'DELETE':
-                // Elimina una ditta
+                if (isCollectionPath) {
+                     statusCode = 400;
+                     responseBody = { message: 'Operazione DELETE richiede un ID ditta.' };
+                     break;
+                }
                 if (!id) {
                     statusCode = 400;
                     responseBody = { message: 'ID ditta è obbligatorio per l\'eliminazione.' };
@@ -108,7 +153,7 @@ exports.handler = async (event, context) => {
                         statusCode = 404;
                         responseBody = { message: 'Ditta non trovata.' };
                     } else {
-                        statusCode = 204; // No Content for successful delete
+                        statusCode = 204;
                         responseBody = {};
                     }
                 }
@@ -123,9 +168,9 @@ exports.handler = async (event, context) => {
             statusCode: statusCode,
             headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*', // Permetti chiamate da qualsiasi origine (per testing)
+                'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type'
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization'
             },
             body: JSON.stringify(responseBody),
         };
@@ -138,13 +183,13 @@ exports.handler = async (event, context) => {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type'
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization'
             },
             body: JSON.stringify({ message: `Errore interno del server: ${error.message}` }),
         };
     } finally {
         if (client) {
-            client.release(); // Rilascia la connessione al pool
+            client.release();
         }
     }
 };
