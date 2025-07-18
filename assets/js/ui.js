@@ -1,31 +1,35 @@
-// assets/js/ui.js - Gestione generale dell'interfaccia utente (loading, modals, tabs, notifiche)
+// assets/js/ui.js - AGGIORNATO PER RISOLVERE ERRORE NULL
 
 /**
- * Carica un componente HTML da un file template e lo inietta in un elemento target.
+ * Carica un componente HTML da un file template.
+ * Non lo inietta direttamente, ma restituisce l'elemento root del componente.
+ * Sarà responsabilità del chiamante (es. main.js) inserirlo nel DOM.
  * @param {string} componentName - Il nome del file del componente (es. 'file-uploader').
- * @param {string} targetElementId - L'ID dell'elemento dove iniettare il componente.
- * @returns {Promise<boolean>} Vero se caricato con successo, falso altrimenti.
+ * @returns {Promise<HTMLElement|null>} L'elemento HTML root del componente caricato e clonato, o null in caso di errore.
  */
-export async function loadComponent(componentName, targetElementId) {
+export async function loadComponent(componentName) { // Rimosso targetElementId qui
     try {
         const response = await fetch(`components/${componentName}.html`);
         if (!response.ok) {
             console.error(`Errore HTTP durante il caricamento del componente ${componentName}.html: ${response.status} ${response.statusText}`);
-            return false;
+            return null;
         }
         const text = await response.text();
         const template = document.createElement('template');
         template.innerHTML = text;
-        const target = document.getElementById(targetElementId);
-        if (target) {
-            target.appendChild(template.content.cloneNode(true));
-            return true;
+
+        // Clona il contenuto del template e restituisci il primo elemento figlio.
+        // Questo sarà il div radice del tuo componente (es. .file-uploader-container o .comparison-table-container).
+        // Questo elemento è ora disconnesso dal DOM finché non viene append.
+        if (template.content.firstElementChild) {
+            return template.content.firstElementChild.cloneNode(true);
+        } else {
+            console.error(`Il template ${componentName}.html non contiene un elemento radice.`);
+            return null;
         }
-        console.error(`Elemento target con ID '${targetElementId}' non trovato per il componente '${componentName}'.`);
-        return false;
     } catch (error) {
         console.error(`Errore nel caricamento del componente ${componentName}:`, error);
-        return false;
+        return null;
     }
 }
 
@@ -37,7 +41,6 @@ export function initializeTabNavigation() {
     const tabContents = document.querySelectorAll('.tab-content');
 
     if (tabButtons.length === 0 || tabContents.length === 0) {
-        // Non è un errore critico se le tab non sono presenti, ma un warning utile.
         console.warn("Elementi per la navigazione a tab non trovati. La navigazione potrebbe non funzionare.");
         return;
     }
@@ -62,38 +65,37 @@ export function initializeTabNavigation() {
 
 /**
  * Mostra un messaggio di stato nell'uploader.
+ * Questa funzione ora opera su elementi passati, non cerca globalmente.
+ * @param {HTMLElement} statusDiv - L'elemento div dove mostrare lo stato.
  * @param {string} message - Il messaggio da visualizzare.
  * @param {boolean} isError - Vero se è un messaggio di errore, falso altrimenti.
  */
-export function showUploaderStatus(message, isError = false) {
-    const uploadStatusDiv = document.getElementById('uploader-status');
-    if (uploadStatusDiv) {
-        uploadStatusDiv.textContent = message;
-        uploadStatusDiv.className = `upload-status ${isError ? 'error' : ''}`;
-        uploadStatusDiv.classList.remove('hidden');
+export function showUploaderStatus(statusDiv, message, isError = false) {
+    if (statusDiv) {
+        statusDiv.textContent = message;
+        statusDiv.className = `upload-status ${isError ? 'error' : ''}`;
+        statusDiv.classList.remove('hidden');
         if (!isError) {
             setTimeout(() => {
-                uploadStatusDiv.classList.add('hidden');
+                statusDiv.classList.add('hidden');
             }, 5000);
         }
     } else {
-        // Questo warning è meno critico dato che l'errore precedente dovrebbe essere risolto
-        // ma è un buon indicatore se il div status non esiste per qualche motivo.
-        console.warn('Elemento #uploader-status non trovato per visualizzare lo stato. Messaggio: ' + message);
+        console.warn('Elemento statusDiv non fornito per showUploaderStatus. Messaggio: ' + message);
     }
 }
 
 /**
  * Aggiorna lo stato della progress bar dell'uploader.
+ * Questa funzione ora opera su elementi passati, non cerca globalmente.
+ * @param {HTMLElement} progressBarContainer - Contenitore della progress bar.
+ * @param {HTMLElement} progressBar - La barra di progresso.
+ * @param {HTMLElement} progressText - Testo della percentuale.
+ * @param {HTMLElement} fileNameSpan - Span per il nome del file.
  * @param {number} percentage - Percentuale di avanzamento (0-100).
  * @param {string} [fileName=''] - Nome del file per visualizzazione.
  */
-export function updateUploaderProgress(percentage, fileName = '') {
-    const progressBarContainer = document.getElementById('progress-container');
-    const progressBar = document.getElementById('progress-bar');
-    const progressText = document.getElementById('progress-text');
-    const fileNameSpan = document.getElementById('file-name');
-
+export function updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, percentage, fileName = '') {
     if (progressBarContainer && progressBar && progressText && fileNameSpan) {
         if (percentage === 0) {
              progressBarContainer.classList.add('hidden');
@@ -111,7 +113,7 @@ export function updateUploaderProgress(percentage, fileName = '') {
             if (fileName) fileNameSpan.textContent = `(${fileName})`;
         }
     } else {
-        console.warn('Elementi della progress bar non trovati per aggiornare il progresso.');
+        console.warn('Elementi della progress bar non forniti per updateUploaderProgress.');
     }
 }
 
@@ -132,7 +134,6 @@ export function toggleLoader(show) {
                     <p style="margin-top: 15px; font-weight: bold; color: var(--primary-color-dark);">Caricamento...</p>
                 </div>
             `;
-            // Aggiungiamo al body per essere sicuri che sia sovrapposto a tutto
             document.body.appendChild(loader);
         }
         loader.classList.remove('hidden');
