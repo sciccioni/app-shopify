@@ -1,6 +1,5 @@
-// assets/js/uploader.js - AGGIORNATO
+// assets/js/uploader.js - AGGIORNATO (Dipende da main.js che passa elementi validi)
 
-// Importa le funzioni di UI che ora accettano gli elementi DOM come parametri
 import { showUploaderStatus, updateUploaderProgress, toggleLoader } from './ui.js';
 
 /**

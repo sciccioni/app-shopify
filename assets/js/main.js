@@ -1,4 +1,4 @@
-// assets/js/main.js - AGGIORNATO
+// assets/js/main.js - AGGIORNATO (Con logica di Append e Inizializzazione Affidabile)
 
 import { loadComponent, initializeTabNavigation } from './ui.js';
 import { initializeFileUploader } from './uploader.js';
@@ -9,54 +9,65 @@ window.currentFileProducts = [];
 window.currentShopifyProducts = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Carica e appendi direttamente i componenti UI nelle rispettive sezioni.
-    // loadComponent ora restituisce l'elemento root clonato, non lo appende.
-
+    // 1. Ottieni i riferimenti ai contenitori principali
     const fileUploaderSection = document.getElementById('file-uploader-section');
     const comparisonTableSection = document.getElementById('comparison-table-section');
     const modalContainer = document.getElementById('modal-container');
 
+    // Verifica che i contenitori esistano prima di procedere
+    if (!fileUploaderSection || !comparisonTableSection || !modalContainer) {
+        console.error("ERRORE CRITICO: Uno o più sezioni principali dell'applicazione (file-uploader-section, comparison-table-section, modal-container) non sono state trovate in index.html. Assicurati che gli ID siano corretti.");
+        return; // Non possiamo continuare senza i contenitori base
+    }
+
+    // 2. Carica i DocumentFragment dei componenti e appendili ai rispettivi contenitori.
+    // Effettua il append IMMEDIATAMENTE dopo il caricamento per garantire che siano nel DOM.
+
     // Carica il componente Uploader
-    const uploaderRoot = await loadComponent('file-uploader');
-    if (uploaderRoot && fileUploaderSection) {
-        fileUploaderSection.appendChild(uploaderRoot);
+    const uploaderFragment = await loadComponent('file-uploader');
+    if (uploaderFragment) {
+        fileUploaderSection.appendChild(uploaderFragment);
+        console.log("Componente 'file-uploader' appeso con successo.");
     } else {
-        console.error("ERRORE CRITICO: Impossibile caricare o appendere il componente 'file-uploader'.");
-        return; // Fermiamo l'esecuzione se il componente chiave non è disponibile
+        console.error("ERRORE CRITICO: Impossibile caricare il DocumentFragment del componente 'file-uploader'. La funzionalità di upload non sarà disponibile.");
+        return; // Se l'uploader non carica, fermiamo qui
     }
 
     // Carica il componente Comparison Table
-    const comparisonRoot = await loadComponent('comparison-table');
-    if (comparisonRoot && comparisonTableSection) {
-        comparisonTableSection.appendChild(comparisonRoot);
+    const comparisonFragment = await loadComponent('comparison-table');
+    if (comparisonFragment) {
+        comparisonTableSection.appendChild(comparisonFragment);
+        console.log("Componente 'comparison-table' appeso con successo.");
     } else {
-        console.error("ERRORE CRITICO: Impossibile caricare o appendere il componente 'comparison-table'.");
-        // Non è critico come l'uploader, ma è importante per l'UX
+        console.error("ERRORE: Impossibile caricare il DocumentFragment del componente 'comparison-table'.");
     }
 
     // Carica il componente Preview Modal
-    const previewModalRoot = await loadComponent('preview-modal');
-    if (previewModalRoot && modalContainer) {
-        modalContainer.appendChild(previewModalRoot);
+    const previewModalFragment = await loadComponent('preview-modal');
+    if (previewModalFragment) {
+        modalContainer.appendChild(previewModalFragment);
+        console.log("Componente 'preview-modal' appeso con successo.");
     } else {
-        console.error("ERRORE CRITICO: Impossibile caricare o appendere il componente 'preview-modal'.");
+        console.error("ERRORE: Impossibile caricare il DocumentFragment del componente 'preview-modal'.");
     }
 
-    // 2. Inizializza la logica di navigazione a tab
+    // 3. Inizializza la logica di navigazione a tab
     initializeTabNavigation();
 
-    // 3. Inizializza la logica per l'uploader, passando i riferimenti agli elementi HTML
-    // Ora che gli elementi sono certamente nel DOM (appena appesi), possiamo queryarli con fiducia.
-    const dropArea = uploaderRoot.querySelector('#drop-area');
-    const fileInput = uploaderRoot.querySelector('#fileInput');
-    const selectFileBtn = uploaderRoot.querySelector('#selectFileBtn');
-    const uploaderStatusDiv = uploaderRoot.querySelector('#uploader-status');
-    const progressBarContainer = uploaderRoot.querySelector('#progress-container');
-    const progressBar = uploaderRoot.querySelector('#progress-bar');
-    const progressText = uploaderRoot.querySelector('#progress-text');
-    const fileNameSpan = uploaderRoot.querySelector('#file-name');
+    // 4. Ora che tutti i componenti sono stati appesi, recupera i riferimenti agli elementi UI.
+    // Usiamo querySelector sul *contenitore padre specifico* per maggiore robustezza.
+    const dropArea = fileUploaderSection.querySelector('#drop-area');
+    const fileInput = fileUploaderSection.querySelector('#fileInput');
+    const selectFileBtn = fileUploaderSection.querySelector('#selectFileBtn');
+    const uploaderStatusDiv = fileUploaderSection.querySelector('#uploader-status');
+    const progressBarContainer = fileUploaderSection.querySelector('#progress-container');
+    const progressBar = fileUploaderSection.querySelector('#progress-bar');
+    const progressText = fileUploaderSection.querySelector('#progress-text');
+    const fileNameSpan = fileUploaderSection.querySelector('#file-name');
 
+    // 5. Verifica che tutti gli elementi critici per l'uploader siano stati trovati.
     if (dropArea && fileInput && selectFileBtn && uploaderStatusDiv && progressBarContainer && progressBar && progressText && fileNameSpan) {
+        console.log("Tutti gli elementi UI dell'uploader sono stati trovati. Inizializzo l'uploader.");
         initializeFileUploader({
             dropArea: dropArea,
             fileInput: fileInput,
@@ -73,7 +84,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     } else {
-        console.error("ERRORE: Impossibile trovare uno o più elementi UI dell'uploader all'interno del componente caricato dopo l'append. Verificare ID e struttura di 'file-uploader.html'.", {
+        console.error("ERRORE FATALE: Impossibile trovare uno o più elementi UI dell'uploader dopo l'append del componente. Verificare ID e struttura di 'file-uploader.html'.", {
             dropArea, fileInput, selectFileBtn, uploaderStatusDiv, progressBarContainer, progressBar, progressText, fileNameSpan
         });
     }
