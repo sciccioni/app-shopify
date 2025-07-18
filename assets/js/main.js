@@ -1,4 +1,4 @@
-// assets/js/main.js - COMPLETO E CORRETTO (AGGIORNATO PER INIZIALIZZAZIONE TAB)
+// assets/js/main.js - COMPLETO E CORRETTO (RIFINITO PER INIZIALIZZAZIONE TAB E UPLOADER)
 
 import { loadComponent, initializeTabNavigation } from './ui.js';
 import { initializeFileUploader } from './uploader.js';
@@ -12,13 +12,13 @@ window.allShopifyProducts = null; // Inizialmente null, verrà popolato al primo
 window.currentShopifyPageProducts = []; // I prodotti della pagina corrente della tab Shopify
 
 // Funzione di inizializzazione specifica per la tab "Importa/Aggiorna Prodotti"
+// Questa funzione viene chiamata quando la tab "Importa/Aggiorna" è attiva (all'avvio o al click).
 async function initializeImportUpdateTab() {
     console.log("Inizializzazione tab 'Importa/Aggiorna Prodotti'...");
+    
     const fileUploaderSection = document.getElementById('file-uploader-section');
 
-    // Se l'uploader non è già stato appeso (prima esecuzione)
-    // Non è più necessario appendere qui se main.js gestisce l'append all'avvio
-    // Ci assicuriamo solo che i listener siano inizializzati, passando gli elementi correttamente.
+    // Ottieni i riferimenti agli elementi UI dell'uploader *dopo* che sono stati appesi.
     const dropArea = fileUploaderSection.querySelector('#drop-area');
     const fileInput = fileUploaderSection.querySelector('#fileInput');
     const selectFileBtn = fileUploaderSection.querySelector('#selectFileBtn');
@@ -29,6 +29,7 @@ async function initializeImportUpdateTab() {
     const fileNameSpan = fileUploaderSection.querySelector('#file-name');
 
     if (dropArea && fileInput && selectFileBtn && uploaderStatusDiv && progressBarContainer && progressBar && progressText && fileNameSpan) {
+        // Inizializza l'uploader passando tutti i riferimenti agli elementi
         initializeFileUploader({
             dropArea: dropArea,
             fileInput: fileInput,
@@ -44,6 +45,7 @@ async function initializeImportUpdateTab() {
                 renderComparisonTable(processedProducts, shopifyProducts);
             }
         });
+        console.log("Uploader inizializzato con successo in initializeImportUpdateTab.");
     } else {
         console.error("initializeImportUpdateTab: Impossibile trovare uno o più elementi UI dell'uploader. La funzionalità di upload potrebbe non essere attiva.", {
             dropArea, fileInput, selectFileBtn, uploaderStatusDiv, progressBarContainer, progressBar, progressText, fileNameSpan
@@ -113,11 +115,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 3. Inizializza la logica di navigazione a tab, registrando le callback
     initializeTabNavigation({
-        'import-update': initializeImportUpdateTab, // Funzione per inizializzare la tab di upload
-        'shopify-products': initializeShopifyProductsTab // Funzione per inizializzare la tab Prodotti Shopify
+        'import-update': initializeImportUpdateTab, // Registra la callback per la tab di upload
+        'shopify-products': initializeShopifyProductsTab // Registra la callback per la tab Prodotti Shopify
         // 'change-log': initializeChangeLogTab // Se avrai una callback per la tab Change Log
     });
 
-    // La callback iniziale per la tab "Importa/Aggiorna" verrà chiamata automaticamente da initializeTabNavigation
-    // dopo che tutti i componenti sono stati appesi, risolvendo il problema dell'uploader.
+    // La initializeTabNavigation ora gestisce l'attivazione della callback iniziale.
+    // Non abbiamo bisogno di chiamare initializeImportUpdateTab() qui direttamente.
 });

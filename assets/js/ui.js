@@ -1,4 +1,4 @@
-// assets/js/ui.js - COMPLETO E CORRETTO (REVISIONATO PER INIZIALIZZAZIONE TAB)
+// assets/js/ui.js - COMPLETO E CORRETTO (RIFINITO PER INIZIALIZZAZIONE TAB)
 
 /**
  * Mappa le funzioni di callback per l'inizializzazione delle tab.
@@ -55,6 +55,7 @@ export function initializeTabNavigation(callbacks = {}) {
         return;
     }
 
+    // Aggiungi listener ai bottoni delle tab
     tabButtons.forEach(button => {
         button.addEventListener('click', async () => {
             const targetTabId = button.dataset.tab;
@@ -79,8 +80,7 @@ export function initializeTabNavigation(callbacks = {}) {
                 if (tabInitCallbacks[targetTabId] && typeof tabInitCallbacks[targetTabId] === 'function') {
                     console.log(`Esecuzione callback per tab: ${targetTabId}`);
                     try {
-                        // Await la callback per assicurarsi che l'inizializzazione sia completa
-                        await tabInitCallbacks[targetTabId]();
+                        await tabInitCallbacks[targetTabId](); // Esegui la callback, attendendo se è async
                     } catch (e) {
                         console.error(`Errore nell'esecuzione della callback per la tab '${targetTabId}':`, e);
                     }
@@ -97,22 +97,30 @@ export function initializeTabNavigation(callbacks = {}) {
     const activeTabButton = document.querySelector('.tab-button.active');
     if (activeTabButton) {
         const initialTabId = activeTabButton.dataset.tab;
-        if (tabInitCallbacks[initialTabId] && typeof tabInitCallbacks[initialTabId] === 'function') {
-             console.log(`initializeTabNavigation: Esecuzione callback iniziale per tab: ${initialTabId}`);
-             try {
-                // Esegui la callback iniziale. Non la awaitamo qui per non bloccare il DOMContentLoaded,
-                // ma la callback stessa può essere async.
-                tabInitCallbacks[initialTabId]();
-            } catch (e) {
-                console.error(`initializeTabNavigation: Errore nell'inizializzazione iniziale della tab '${initialTabId}':`, e);
+        const initialTabContent = document.getElementById(`${initialTabId}-tab`);
+
+        if (initialTabContent) {
+            initialTabContent.classList.remove('hidden'); // Assicurati che la tab iniziale sia visibile
+            if (tabInitCallbacks[initialTabId] && typeof tabInitCallbacks[initialTabId] === 'function') {
+                 console.log(`initializeTabNavigation: Esecuzione callback iniziale per tab: ${initialTabId}`);
+                 try {
+                    // Chiamiamo la callback. Non la awaitamo qui per non bloccare il DOMContentLoaded,
+                    // ma la funzione stessa può gestire le sue operazioni asincrone.
+                    tabInitCallbacks[initialTabId]();
+                } catch (e) {
+                    console.error(`initializeTabNavigation: Errore nell'inizializzazione iniziale della tab '${initialTabId}':`, e);
+                }
+            } else {
+                console.warn(`initializeTabNavigation: Nessuna callback registrata per la tab iniziale '${initialTabId}'.`);
             }
         } else {
-            console.warn(`initializeTabNavigation: Nessuna callback registrata per la tab iniziale '${initialTabId}'.`);
+            console.warn("initializeTabNavigation: Contenuto della tab attiva iniziale non trovato.");
         }
     } else {
         console.warn("initializeTabNavigation: Nessuna tab attiva trovata all'avvio.");
     }
 }
+
 
 /**
  * Mostra un messaggio di stato in un div specifico dell'uploader.
