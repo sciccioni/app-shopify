@@ -1,4 +1,173 @@
-/* ... (codice CSS esistente) ... */
+/* File Uploader */
+.file-uploader-container {
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--background-light);
+    margin-bottom: 30px;
+}
+
+.drop-area {
+    border: 2px dashed var(--primary-color);
+    border-radius: var(--border-radius);
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    background-color: var(--background-color);
+}
+
+.drop-area.highlight {
+    background-color: var(--primary-color-light);
+}
+
+.drop-area p {
+    margin-bottom: 15px;
+    color: var(--text-color-secondary);
+}
+
+.progress-container {
+    margin-top: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.progress-container.hidden {
+    display: none;
+}
+
+.progress-bar-wrapper {
+    flex-grow: 1;
+    background-color: var(--gray-light);
+    border-radius: var(--border-radius);
+    height: 10px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    width: 0%;
+    background-color: var(--success-color);
+    border-radius: var(--border-radius);
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.upload-status {
+    margin-top: 15px;
+    padding: 10px;
+    border-radius: var(--border-radius);
+    background-color: var(--info-color-light);
+    color: var(--info-color-dark);
+    border: 1px solid var(--info-color);
+}
+
+.upload-status.error {
+    background-color: var(--error-color-light);
+    color: var(--error-color-dark);
+    border-color: var(--error-color);
+}
+
+.file-name {
+    font-style: italic;
+    color: var(--text-color-secondary);
+}
+
+/* Comparison Table */
+.comparison-table-container {
+    margin-top: 30px;
+}
+
+.table-responsive {
+    overflow-x: auto; /* Abilita lo scroll orizzontale se la tabella è troppo larga */
+    width: 100%; /* Assicura che il contenitore occupi tutta la larghezza disponibile */
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    box-shadow: var(--box-shadow);
+    border-radius: var(--border-radius);
+    overflow: hidden; /* Per rispettare il border-radius sui bordi della tabella */
+    min-width: 800px; /* Assicura una larghezza minima per la tabella sui piccoli schermi */
+}
+
+.data-table th,
+.data-table td {
+    padding: 12px 15px;
+    border: 1px solid var(--border-color);
+    text-align: left;
+    /* white-space: nowrap; */ /* Rimosso per permettere al testo di andare a capo */
+    vertical-align: top; /* Allinea il contenuto in alto */
+}
+
+.data-table th {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: bold;
+    text-transform: uppercase;
+    font-size: 0.85em;
+    position: sticky; /* Rende le intestazioni sticky */
+    top: 0; /* Rimangono in alto allo scroll */
+    z-index: 10; /* Assicura che siano sopra il contenuto della tabella */
+}
+
+.data-table tbody tr:nth-child(even) {
+    background-color: var(--background-color);
+}
+
+.data-table tbody tr:hover {
+    background-color: var(--primary-color-light);
+}
+
+/* Status Indicators in table */
+.status-indicator {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: bold;
+    text-transform: uppercase;
+    display: inline-block;
+    min-width: 70px; /* Larghezza minima per coerenza visiva */
+    text-align: center;
+}
+
+.status-indicator.sincronizzato {
+    background-color: var(--success-color-light);
+    color: var(--success-color);
+}
+
+.status-indicator.nuovo {
+    background-color: var(--info-color-light);
+    color: var(--info-color);
+}
+
+.status-indicator.modificato {
+    background-color: var(--warning-color-light);
+    color: var(--warning-color);
+}
+
+.status-indicator.shopify-only {
+    background-color: var(--error-color-light);
+    color: var(--error-color);
+}
+
+/* Table row specific styles */
+.row-new { background-color: var(--info-color-light); }
+.row-modified { background-color: var(--warning-color-light); }
+.row-shopify-only { background-color: var(--error-color-light); }
+
+
+/* Text colors for differences */
+.text-success { color: var(--success-color); font-weight: bold; }
+.text-danger { color: var(--error-color); font-weight: bold; }
+.text-warning { color: var(--warning-color); font-weight: bold; }
 
 /* Preview Modal Specific Styles */
 .preview-diff-table {
@@ -30,4 +199,9 @@
 .diff-new {
     color: var(--success-color);
     font-weight: bold;
+}
+
+.table-actions {
+    margin-top: 20px;
+    text-align: right; /* Allinea i bottoni a destra */
 }

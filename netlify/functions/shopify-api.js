@@ -12,10 +12,12 @@ const SHOPIFY_API_VERSION = '2024-07'; // Versione API di Shopify
  */
 async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
     if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN) {
-        throw new Error('Variabili d\'ambiente Shopify non configurate.');
+        throw new Error('Variabili d\'ambiente Shopify non configurate (SHOPIFY_STORE_NAME o SHOPIFY_ADMIN_API_TOKEN).');
     }
 
-    const url = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/${endpoint}`;
+    // Assicurati che l'endpoint non inizi con '/', Shopify API non lo vuole.
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+    const url = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/${cleanEndpoint}`;
     const options = {
         method: method,
         headers: {
@@ -36,7 +38,9 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
             console.error(`Shopify API Error (${response.status} ${response.statusText}): ${errorText}`);
             throw new Error(`Shopify API Error: ${response.status} - ${errorText}`);
         }
-        return await response.json();
+        // Il Shopify API Link header può essere un oggetto di tipo Headers, non un semplice oggetto.
+        // Lo restituiamo insieme al JSON per facilitare la paginazione in getShopifyProducts.
+        return { json: await response.json(), headers: response.headers };
     } catch (error) {
         console.error('Errore nella chiamata Shopify API:', error.message);
         throw error;
@@ -57,11 +61,12 @@ async function getShopifyProducts() {
     try {
         while (nextLink) {
             console.log(`Fetching Shopify products: ${nextLink}`);
+            // La risposta ora è un oggetto { json, headers }
             const responseData = await callShopifyAdminApi(nextLink);
-            allProducts = allProducts.concat(responseData.products);
+            allProducts = allProducts.concat(responseData.json.products);
 
             // Shopify usa l'header 'Link' per la paginazione
-            const linkHeader = responseData.headers?.get('Link') || responseData.headers?.link;
+            const linkHeader = responseData.headers.get('Link'); // Accedi direttamente con .get()
             if (linkHeader) {
                 const parts = linkHeader.split(',');
                 const nextPart = parts.find(p => p.includes('rel="next"'));
