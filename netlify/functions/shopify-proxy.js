@@ -12,7 +12,7 @@ async function callShopifyApi(query, variables = {}) {
     }
 
     try {
-        const response = await fetch(`https://${storeName}/admin/api/2024-04/graphql.json`, {
+        const response = await fetch(`https://${storeName}.shopify.com/admin/api/2024-04/graphql.json`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
