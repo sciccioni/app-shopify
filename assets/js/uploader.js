@@ -13,17 +13,13 @@ import { showUploaderStatus, updateUploaderProgress, toggleLoader } from './ui.j
  */
 export function initializeFileUploader({ dropArea, fileInput, selectFileBtn, onUploadSuccess }) {
 
-    // Non sono più necessari i getElementById qui, perché li riceviamo già
-    // Ma è utile lasciare i controlli per robustezza se qualcosa va storto a monte
-    if (!dropArea || !fileInput || !selectFileBtn) {
-        console.error("Errore (uploader.js): Riferimenti agli elementi UI dell'uploader mancanti. L'inizializzazione è fallita.");
-        return; // Esce dalla funzione se gli elementi non sono validi
-    }
+    // Ora non c'è bisogno di getElementById qui.
+    // I controlli sui parametri in ingresso sono stati fatti a monte in main.js.
+    // Questo rende la funzione più pulita e fiduciosa che gli elementi esistano.
 
     // Reset dello stato iniziale dell'uploader dopo che gli elementi sono disponibili
     showUploaderStatus('', false); // Nasconde eventuali messaggi precedenti
     updateUploaderProgress(0); // Resetta la progress bar
-
 
     // Gestione Drag & Drop
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {

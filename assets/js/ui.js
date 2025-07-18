@@ -10,7 +10,8 @@ export async function loadComponent(componentName, targetElementId) {
     try {
         const response = await fetch(`components/${componentName}.html`);
         if (!response.ok) {
-            throw new Error(`Impossibile caricare il componente: ${componentName}.html status: ${response.status}`);
+            console.error(`Errore HTTP durante il caricamento del componente ${componentName}.html: ${response.status} ${response.statusText}`);
+            return false;
         }
         const text = await response.text();
         const template = document.createElement('template');
@@ -36,6 +37,7 @@ export function initializeTabNavigation() {
     const tabContents = document.querySelectorAll('.tab-content');
 
     if (tabButtons.length === 0 || tabContents.length === 0) {
+        // Non è un errore critico se le tab non sono presenti, ma un warning utile.
         console.warn("Elementi per la navigazione a tab non trovati. La navigazione potrebbe non funzionare.");
         return;
     }
@@ -60,24 +62,24 @@ export function initializeTabNavigation() {
 
 /**
  * Mostra un messaggio di stato nell'uploader.
- * Ora cerca specificamente l'ID 'uploader-status' presente nel template.
  * @param {string} message - Il messaggio da visualizzare.
  * @param {boolean} isError - Vero se è un messaggio di errore, falso altrimenti.
  */
 export function showUploaderStatus(message, isError = false) {
-    const uploadStatusDiv = document.getElementById('uploader-status'); // ID aggiornato
+    const uploadStatusDiv = document.getElementById('uploader-status');
     if (uploadStatusDiv) {
         uploadStatusDiv.textContent = message;
         uploadStatusDiv.className = `upload-status ${isError ? 'error' : ''}`;
         uploadStatusDiv.classList.remove('hidden');
-        // Nasconde il messaggio dopo un po' se non è un errore permanente
         if (!isError) {
             setTimeout(() => {
                 uploadStatusDiv.classList.add('hidden');
             }, 5000);
         }
     } else {
-        console.warn('Elemento #uploader-status non trovato per visualizzare lo stato.');
+        // Questo warning è meno critico dato che l'errore precedente dovrebbe essere risolto
+        // ma è un buon indicatore se il div status non esiste per qualche motivo.
+        console.warn('Elemento #uploader-status non trovato per visualizzare lo stato. Messaggio: ' + message);
     }
 }
 
@@ -92,18 +94,17 @@ export function updateUploaderProgress(percentage, fileName = '') {
     const progressText = document.getElementById('progress-text');
     const fileNameSpan = document.getElementById('file-name');
 
-    // Controlla che tutti gli elementi necessari siano presenti
     if (progressBarContainer && progressBar && progressText && fileNameSpan) {
-        if (percentage === 0) { // Nasconde all'inizio o al reset
-            progressBarContainer.classList.add('hidden');
-            progressBar.style.width = '0%';
-            progressText.textContent = '0%';
-            fileNameSpan.textContent = '';
-        } else if (percentage === 100) { // Nasconde alla fine
+        if (percentage === 0) {
+             progressBarContainer.classList.add('hidden');
+             progressBar.style.width = '0%';
+             progressText.textContent = '0%';
+             fileNameSpan.textContent = '';
+        } else if (percentage === 100) {
             progressBar.style.width = '100%';
             progressText.textContent = '100%';
-            setTimeout(() => progressBarContainer.classList.add('hidden'), 500); // Lascia vedere 100% un attimo
-        } else { // Mostra e aggiorna durante il progresso
+            setTimeout(() => progressBarContainer.classList.add('hidden'), 500);
+        } else {
             progressBarContainer.classList.remove('hidden');
             progressBar.style.width = `${percentage}%`;
             progressText.textContent = `${percentage}%`;
@@ -117,28 +118,22 @@ export function updateUploaderProgress(percentage, fileName = '') {
 /**
  * Mostra o nasconde un spinner di caricamento globale.
  * @param {boolean} show - Vero per mostrare, falso per nascondere.
- * @param {string} [targetElementId='app-container'] - L'ID dell'elemento a cui aggiungere lo spinner.
  */
-export function toggleLoader(show, targetElementId = 'app-container') {
-    const target = document.getElementById(targetElementId);
-    if (!target) {
-        console.warn(`Target element '${targetElementId}' for loader not found.`);
-        return;
-    }
-
+export function toggleLoader(show) {
     let loader = document.getElementById('app-loader');
     if (show) {
         if (!loader) {
             loader = document.createElement('div');
             loader.id = 'app-loader';
-            loader.className = 'modal-overlay'; // Usa lo stesso stile overlay delle modal
+            loader.className = 'modal-overlay';
             loader.innerHTML = `
                 <div style="background: white; padding: 30px; border-radius: 8px; text-align: center; display: flex; flex-direction: column; align-items: center;">
                     <div class="spinner" style="width: 50px; height: 50px;"></div>
                     <p style="margin-top: 15px; font-weight: bold; color: var(--primary-color-dark);">Caricamento...</p>
                 </div>
             `;
-            document.body.appendChild(loader); // Aggiungi al body per essere globale
+            // Aggiungiamo al body per essere sicuri che sia sovrapposto a tutto
+            document.body.appendChild(loader);
         }
         loader.classList.remove('hidden');
     } else {
@@ -157,11 +152,14 @@ export function showModal(modalId) {
     if (modal) {
         modal.classList.remove('hidden');
         // Aggiungi un listener per chiudere la modal cliccando sull'overlay
-        modal.addEventListener('click', (e) => {
-            if (e.target.id === modalId) { // Se il click è sull'overlay stesso
+        // Questo listener è aggiunto solo una volta quando la modal viene mostrata
+        const clickHandler = (e) => {
+            if (e.target.id === modalId) {
                 hideModal(modalId);
+                modal.removeEventListener('click', clickHandler); // Rimuovi il listener dopo il click
             }
-        });
+        };
+        modal.addEventListener('click', clickHandler);
     }
 }
 
