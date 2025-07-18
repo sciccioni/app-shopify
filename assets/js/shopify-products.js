@@ -1,6 +1,6 @@
-// assets/js/shopify-products.js - NUOVO E COMPLETO
+// assets/js/shopify-products.js - AGGIORNATO E COMPLETO
 
-import { toggleLoader, showUploaderStatus } from './ui.js'; // showUploaderStatus sarà riutilizzato per messaggi di stato
+import { toggleLoader, showUploaderStatus } from './ui.js';
 
 /**
  * Funzione per inizializzare la logica della tab "Prodotti Shopify".
@@ -15,7 +15,7 @@ export async function initializeShopifyProductsTab() {
     const statusDiv = document.getElementById('shopifyProductsStatus');
 
     if (!searchInput || !refreshButton || !tablePlaceholder || !statusDiv) {
-        console.error("Elementi UI per la tab Prodotti Shopify non trovati.");
+        console.error("Elementi UI per la tab Prodotti Shopify non trovati. Assicurati che 'shopify-products-table.html' sia caricato correttamente.");
         return;
     }
 
@@ -34,11 +34,17 @@ export async function initializeShopifyProductsTab() {
     });
 
     // Carica i prodotti al primo caricamento della tab
-    if (!window.allShopifyProducts) { // Carica solo se non sono già stati caricati
-        await loadAndRenderShopifyProducts();
-    } else {
-        renderShopifyProductsTable(window.allShopifyProducts); // Renderizza con i dati già presenti
+    // Verifica anche se la tab è già attiva, per non caricare doppiamente all'avvio
+    const shopifyProductsTabElement = document.getElementById('shopify-products-tab');
+    if (shopifyProductsTabElement && shopifyProductsTabElement.classList.contains('active')) {
+        if (!window.allShopifyProducts) { // Carica solo se non sono già stati caricati
+            await loadAndRenderShopifyProducts();
+        } else {
+            renderShopifyProductsTable(window.allShopifyProducts); // Renderizza con i dati già presenti
+        }
     }
+    // Se la tab non è attiva all'avvio, il caricamento avverrà al click della tab,
+    // grazie alla callback registrata in ui.js e main.js
 }
 
 /**
@@ -48,6 +54,8 @@ export async function initializeShopifyProductsTab() {
 async function loadAndRenderShopifyProducts(forceRefresh = false) {
     const tablePlaceholder = document.getElementById('shopifyProductsTablePlaceholder');
     const statusDiv = document.getElementById('shopifyProductsStatus');
+
+    if (!tablePlaceholder || !statusDiv) return; // Doppia verifica
 
     tablePlaceholder.innerHTML = '<p>Caricamento prodotti Shopify...</p>'; // Messaggio di caricamento
     showUploaderStatus(statusDiv, '', false); // Pulisci status
@@ -60,8 +68,8 @@ async function loadAndRenderShopifyProducts(forceRefresh = false) {
             console.log("Utilizzando prodotti Shopify dalla cache.");
         } else {
             console.log("Recupero prodotti Shopify da API...");
-            // Chiama la Netlify Function per ottenere TUTTI i prodotti
-            const response = await fetch('/.netlify/functions/shopify-api?all=true', { method: 'GET' });
+            // *** MODIFICA QUI: CHIAMATA AL NUOVO ENDPOINT ***
+            const response = await fetch('/.netlify/functions/get-all-shopify-products', { method: 'GET' });
 
             if (!response.ok) {
                 const errorData = await response.json();
@@ -164,22 +172,25 @@ function renderShopifyProductsTable(products) {
 
     // Aggiungi listener per i bottoni "Dettagli" e "Modifica"
     // Usiamo la delegazione degli eventi sul placeholder per elementi generati dinamicamente
-    tablePlaceholder.addEventListener('click', (e) => {
-        if (e.target.classList.contains('btn-view-details')) {
-            const minsan = e.target.dataset.minsan;
-            console.log('Dettagli per prodotto Shopify Minsan:', minsan);
+    tablePlaceholder.removeEventListener('click', handleShopifyTableActions); // Rimuovi per evitare duplicati
+    tablePlaceholder.addEventListener('click', handleShopifyTableActions);
+}
+
+// Handler per i click sulla tabella dei prodotti Shopify
+function handleShopifyTableActions(e) {
+    if (e.target.classList.contains('btn-view-details')) {
+        const minsan = e.target.dataset.minsan;
+        console.log('Dettagli per prodotto Shopify Minsan:', minsan);
+        const productDetails = window.allShopifyProducts.find(p => String(p.minsan).trim() === minsan);
+        if (productDetails) {
             // Qui potresti aprire una modal con tutti i dettagli del prodotto Shopify
             // Reutilizzare showProductPreviewModal con un tipo specifico per Shopify solo visualizzazione.
-            const productDetails = window.allShopifyProducts.find(p => String(p.minsan).trim() === minsan);
-            if (productDetails) {
-                 // showProductPreviewModal(minsan, null, productDetails, 'shopify-details'); // Creare un tipo 'shopify-details'
-                 showUploaderStatus(document.getElementById('uploader-status'), `Dettagli per ${minsan} (da implementare)`, 'info');
-            }
-        } else if (e.target.classList.contains('btn-edit-shopify')) {
-            const minsan = e.target.dataset.minsan;
-            console.log('Modifica prodotto Shopify Minsan:', minsan);
-            // Qui potresti reindirizzare a una pagina di modifica o aprire una modal di modifica
-            showUploaderStatus(document.getElementById('uploader-status'), `Modifica per ${minsan} (da implementare)`, 'info');
+            // showProductPreviewModal(minsan, null, productDetails, 'shopify-details');
+            showUploaderStatus(document.getElementById('shopifyProductsStatus'), `Dettagli per ${minsan} (da implementare)`, 'info');
         }
-    });
+    } else if (e.target.classList.contains('btn-edit-shopify')) {
+        const minsan = e.target.dataset.minsan;
+        console.log('Modifica prodotto Shopify Minsan:', minsan);
+        showUploaderStatus(document.getElementById('shopifyProductsStatus'), `Modifica per ${minsan} (da implementare)`, 'info');
+    }
 }
