@@ -1,0 +1,22 @@
+[build]
+  publish = "." # Indica che la root del progetto è la directory di pubblicazione
+  functions = "netlify/functions" # Specifica la directory delle tue Netlify Functions
+
+[build.environment]
+  NODE_VERSION = "18" # Specifica la versione di Node.js
+
+[[headers]]
+  for = "/*" # Applica questi header a tutte le risorse
+  [headers.values]
+    X-Frame-Options = "DENY" # Previene clickjacking
+    X-Content-Type-Options = "nosniff" # Previene il MIME-sniffing
+    Referrer-Policy = "no-referrer-when-downgrade" # Controlla le informazioni dell'header Referer
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload" # Forza HTTPS
+
+# Configurazione per le variabili d'ambiente (saranno impostate direttamente su Netlify)
+# Esempio:
+# [context.production.environment]
+#   SHOPIFY_ADMIN_API_TOKEN = "il_tuo_token_api_shopify"
+#   SHOPIFY_STORE_NAME = "il_nome_del_tuo_store"
+#   SHOPIFY_LOCATION_ID = "il_tuo_location_id"
+#   # Altre variabili come APP_PASSWORD, JWT_SECRET
