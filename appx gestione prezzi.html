@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anteprima - Gestione Prezzi Shopify</title>
+    
+    <!-- Tailwind CSS per lo stile -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Libreria SheetJS (xlsx.js) per leggere i file Excel/CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .drop-zone {
+            border: 2px dashed #cbd5e1;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        .drop-zone.drag-over {
+            background-color: #e2e8f0;
+            border-color: #94a3b8;
+        }
+        .loader {
+            border-top-color: #4f46e5;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .price-calculated {
+            background-color: #e0e7ff;
+            font-weight: 600;
+            color: #3730a3;
+        }
+        .price-shopify {
+            background-color: #f3f4f6;
+        }
+        .status-success {
+            background-color: #dcfce7 !important;
+        }
+        .status-error {
+            background-color: #fee2e2 !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <!-- Contenitore Principale dell'App -->
+    <div id="app-container" class="container mx-auto p-4 md:p-8 max-w-full">
+        
+        <header class="mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">App Gestione Prezzi</h1>
+            <p class="text-gray-600 mt-2">Carica il file, imposta la ricarica, calcola e aggiorna i prezzi su Shopify.</p>
+        </header>
+
+        <main class="space-y-8">
+
+            <!-- Sezione Riepilogo Dati -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                 <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
+                    <p class="text-2xl font-bold text-indigo-600" id="unique-items-count">0</p>
+                    <p class="text-sm text-gray-600">Prodotti Unici Importati</p>
+                </div>
+                 <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
+                    <p class="text-2xl font-bold text-indigo-600" id="calculated-items-count">0</p>
+                    <p class="text-sm text-gray-600">Prodotti con Prezzo Calcolato</p>
+                </div>
+            </div>
+
+            <!-- Controlli Principali -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">1. Carica il File Dati</h2>
+                    <div id="drop-zone" class="drop-zone p-8 text-center rounded-lg cursor-pointer">
+                        <input type="file" id="file-input" class="hidden" accept=".xlsx, .xls, .csv">
+                        <div class="flex flex-col items-center">
+                            <svg class="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h10a4 4 0 014 4v6a4 4 0 01-4 4H7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 16v-4a4 4 0 00-4-4H8a4 4 0 00-4 4v4m16 0l-3-3m-13 3l3-3"></path></svg>
+                            <p class="text-gray-600">Trascina qui il file o <span class="font-semibold text-indigo-600">clicca per selezionarlo</span>.</p>
+                            <p id="file-name" class="text-sm text-gray-500 mt-2 font-medium"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">2. Imposta la Ricarica</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="markup-percentage" class="block text-sm font-medium text-gray-700">Percentuale di Ricarica (%)</label>
+                            <input type="number" id="markup-percentage" value="30" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <fieldset class="space-y-2">
+                             <legend class="text-sm font-medium text-gray-700">Applica calcolo a:</legend>
+                             <div class="flex items-center">
+                                 <input id="calc-all-filtered" name="calculation_scope" type="radio" value="all" class="h-4 w-4 text-indigo-600 border-gray-300" checked>
+                                 <label for="calc-all-filtered" class="ml-3 block text-sm text-gray-700">Tutti i prodotti filtrati</label>
+                             </div>
+                             <div class="flex items-center">
+                                 <input id="calc-only-selected" name="calculation_scope" type="radio" value="selected" class="h-4 w-4 text-indigo-600 border-gray-300">
+                                 <label for="calc-only-selected" class="ml-3 block text-sm text-gray-700">Solo i prodotti selezionati</label>
+                             </div>
+                        </fieldset>
+                        <button id="calculate-prices-button" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed transition-colors" disabled>
+                            Calcola Nuovi Prezzi
+                        </button>
+                        <button id="clear-prices-button" class="w-full bg-red-100 text-red-700 font-bold py-2 px-4 rounded-lg hover:bg-red-200 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors" disabled>
+                            Azzera Prezzi Calcolati
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">3. Aggiorna su Shopify</h2>
+                    <div class="space-y-4">
+                         <div class="flex items-start">
+                            <div class="flex items-center h-5">
+                                <input id="confirm-update-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" disabled>
+                            </div>
+                            <div class="ml-3 text-sm">
+                                <label for="confirm-update-checkbox" class="font-medium text-gray-700">Confermo di voler aggiornare i prezzi su Shopify per i prodotti selezionati.</label>
+                                <p class="text-gray-500">Questa azione è irreversibile.</p>
+                            </div>
+                        </div>
+                        <button id="update-shopify-button" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed transition-colors" disabled>
+                            Aggiorna Prezzi Selezionati
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sezione Tabella Dati -->
+            <div id="results-section" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hidden">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                    <h2 class="text-xl font-semibold text-gray-800">Elenco Prodotti</h2>
+                    <div class="flex items-center gap-4 w-full md:w-auto flex-wrap">
+                        <div class="w-full sm:w-auto md:w-56">
+                             <select id="ditta-filter" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-indigo-500 focus:border-indigo-500">
+                                 <option value="all">Tutte le Ditte</option>
+                             </select>
+                        </div>
+                        <div class="w-full sm:w-auto flex-grow">
+                            <input type="search" id="search-input" class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Cerca per Minsan, EAN, Descrizione...">
+                        </div>
+                        <div class="flex items-center">
+                            <input id="show-modified-filter" type="checkbox" class="h-4 w-4 text-indigo-600 rounded">
+                            <label for="show-modified-filter" class="ml-2 block text-sm font-medium">Mostra solo con prezzo calcolato</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="loader" class="text-center p-8 hidden">
+                    <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto"></div>
+                    <p id="loader-text" class="mt-4 text-gray-600">Elaborazione in corso...</p>
+                </div>
+
+                <div id="table-container" class="overflow-x-auto hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead id="results-table-head" class="bg-gray-50"></thead>
+                        <tbody id="results-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+                <div id="pagination-controls" class="mt-4 flex items-center justify-between hidden">
+                    <button id="prev-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed">&larr; Precedente</button>
+                    <span id="page-indicator" class="text-sm font-semibold"></span>
+                    <button id="next-page-button" class="bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed">Successivo &rarr;</button>
+                </div>
+                 <p id="no-results" class="text-center text-gray-500 mt-8 hidden">Nessun dato da visualizzare. Carica un file per iniziare.</p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- ELEMENTI DEL DOM ---
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const fileNameDisplay = document.getElementById('file-name');
+        const markupInput = document.getElementById('markup-percentage');
+        const calculatePricesButton = document.getElementById('calculate-prices-button');
+        const clearPricesButton = document.getElementById('clear-prices-button');
+        const confirmUpdateCheckbox = document.getElementById('confirm-update-checkbox');
+        const updateShopifyButton = document.getElementById('update-shopify-button');
+        const resultsSection = document.getElementById('results-section');
+        const searchInput = document.getElementById('search-input');
+        const dittaFilter = document.getElementById('ditta-filter');
+        const showModifiedFilter = document.getElementById('show-modified-filter');
+        const tableContainer = document.getElementById('table-container');
+        const tableHead = document.getElementById('results-table-head');
+        const tableBody = document.getElementById('results-table-body');
+        const noResults = document.getElementById('no-results');
+        const loader = document.getElementById('loader');
+        const loaderText = document.getElementById('loader-text');
+        const paginationControls = document.getElementById('pagination-controls');
+        const prevPageButton = document.getElementById('prev-page-button');
+        const nextPageButton = document.getElementById('next-page-button');
+        const pageIndicator = document.getElementById('page-indicator');
+        const uniqueItemsCount = document.getElementById('unique-items-count');
+        const calculatedItemsCount = document.getElementById('calculated-items-count');
+
+        // --- STATO DELL'APPLICAZIONE ---
+        let processedData = [];
+        let currentPage = 1;
+        const ROWS_PER_PAGE = 50;
+
+        // --- GESTIONE FILE ---
+        async function handleFile(file) {
+            if (!file) return;
+            fileNameDisplay.textContent = file.name;
+            loader.classList.remove('hidden');
+            loaderText.textContent = "Leggendo il file e importando dati unici...";
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const rawFileData = XLSX.utils.sheet_to_json(worksheet);
+
+                const uniqueProductsMap = new Map();
+                rawFileData.forEach(row => {
+                    const key = getValue(row, ['EAN', 'Minsan']);
+                    if (key && !uniqueProductsMap.has(key)) {
+                        uniqueProductsMap.set(key, row);
+                    }
+                });
+
+                const uniqueData = Array.from(uniqueProductsMap.values());
+                uniqueItemsCount.textContent = uniqueData.length;
+                calculatedItemsCount.textContent = 0;
+
+                loaderText.textContent = `Recuperando ${uniqueData.length} prezzi da Shopify...`;
+                const skus = uniqueData.map(row => getValue(row, ['EAN', 'Minsan']));
+                const shopifyPrices = await callBackend('get-prices', { skus });
+
+                processedData = uniqueData.map((row, index) => {
+                    const sku = getValue(row, ['EAN', 'Minsan']);
+                    const shopifyProduct = shopifyPrices.results.find(p => p.sku === sku);
+                    return {
+                        id: index,
+                        ditta: getValue(row, ['Ditta']),
+                        minsan: getValue(row, ['Minsan']),
+                        ean: getValue(row, ['EAN']),
+                        descrizione: getValue(row, ['Descrizione']),
+                        costoMedio: parseFloat(getValue(row, ['CostoMedio'])) || 0,
+                        iva: parseFloat(getValue(row, ['IVA'])) || 22,
+                        prezzoShopify: shopifyProduct ? shopifyProduct.price : null,
+                        prezzoVendita: null,
+                        selected: false,
+                        status: 'idle'
+                    };
+                });
+                
+                currentPage = 1;
+                populateDittaFilter();
+                resultsSection.classList.remove('hidden');
+                tableContainer.classList.remove('hidden');
+                paginationControls.classList.remove('hidden');
+                noResults.classList.add('hidden');
+                loader.classList.add('hidden');
+                renderTable();
+                calculatePricesButton.disabled = false;
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function populateDittaFilter() {
+            dittaFilter.innerHTML = '<option value="all">Tutte le Ditte</option>';
+            const ditte = [...new Set(processedData.map(item => item.ditta).filter(Boolean))];
+            ditte.sort();
+            ditte.forEach(ditta => {
+                const option = document.createElement('option');
+                option.value = ditta;
+                option.textContent = ditta;
+                dittaFilter.appendChild(option);
+            });
+        }
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+
+        // --- LOGICA DI CALCOLO E AGGIORNAMENTO ---
+        calculatePricesButton.addEventListener('click', () => {
+            const markup = parseFloat(markupInput.value);
+            if (isNaN(markup)) {
+                alert("Per favore, inserisci una percentuale di ricarica valida.");
+                return;
+            }
+            
+            const calculationScope = document.querySelector('input[name="calculation_scope"]:checked').value;
+            const filteredData = getFilteredData();
+
+            const dataToProcess = (calculationScope === 'all') ?
+                filteredData :
+                filteredData.filter(item => item.selected);
+
+            if (dataToProcess.length === 0) {
+                alert("Nessun prodotto da calcolare in base alla selezione corrente.");
+                return;
+            }
+
+            dataToProcess.forEach(row => {
+                if (row.costoMedio > 0) {
+                    const prezzoConRicarica = row.costoMedio * (1 + markup / 100);
+                    const prezzoFinale = prezzoConRicarica * (1 + row.iva / 100);
+                    processedData[row.id].prezzoVendita = parseFloat(prezzoFinale.toFixed(2));
+                }
+            });
+            
+            updateCalculatedCount();
+            renderTable();
+            updateConfirmButtonState();
+        });
+        
+        clearPricesButton.addEventListener('click', () => {
+            processedData.forEach(item => {
+                item.prezzoVendita = null;
+            });
+            updateCalculatedCount();
+            renderTable();
+            updateConfirmButtonState();
+        });
+
+        function updateCalculatedCount() {
+            const count = processedData.filter(p => p.prezzoVendita !== null).length;
+            calculatedItemsCount.textContent = count;
+            clearPricesButton.disabled = count === 0;
+        }
+
+        async function updateShopifyPrices() {
+            const selectedItems = processedData.filter(item => item.selected && item.prezzoVendita > 0);
+            if (selectedItems.length === 0) {
+                alert("Nessun prodotto valido selezionato per l'aggiornamento.");
+                return;
+            }
+
+            loader.classList.remove('hidden');
+            loaderText.textContent = `Sto aggiornando ${selectedItems.length} prodotti su Shopify...`;
+            updateShopifyButton.disabled = true;
+            confirmUpdateCheckbox.disabled = true;
+
+            try {
+                const payload = {
+                    items: selectedItems.map(item => ({
+                        sku: item.minsan || item.ean,
+                        price: item.prezzoVendita
+                    }))
+                };
+
+                const response = await callBackend('update-prices', payload);
+                
+                response.results.forEach(result => {
+                    const itemsInTable = processedData.filter(p => (p.minsan || p.ean) == result.sku);
+                    itemsInTable.forEach(itemToUpdate => {
+                        itemToUpdate.status = result.success ? 'success' : 'error';
+                        if(result.success) {
+                           itemToUpdate.prezzoShopify = itemToUpdate.prezzoVendita;
+                        }
+                    });
+                });
+
+                alert(`Aggiornamento completato! Successi: ${response.summary.success}, Fallimenti: ${response.summary.failure}.`);
+
+            } catch (error) {
+                console.error("Errore durante l'aggiornamento Shopify:", error);
+                alert(`Si è verificato un errore critico: ${error.message}`);
+            } finally {
+                loader.classList.add('hidden');
+                renderTable();
+                updateConfirmButtonState();
+            }
+        }
+        
+        updateShopifyButton.addEventListener('click', updateShopifyPrices);
+
+        // --- FUNZIONI DI UTILITY E RENDERING ---
+        function getValue(obj, keys) {
+            if (!obj) return undefined;
+            const key = keys.find(k => obj.hasOwnProperty(k));
+            return key ? obj[key] : undefined;
+        }
+        
+        function getFilteredData() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const selectedDitta = dittaFilter.value;
+            const showModified = showModifiedFilter.checked;
+
+            return processedData.filter(row => {
+                const dittaMatch = (selectedDitta === 'all' || row.ditta === selectedDitta);
+                const modifiedMatch = !showModified || row.prezzoVendita !== null;
+                const searchMatch = !searchTerm || (
+                    row.minsan?.toString().toLowerCase().includes(searchTerm) ||
+                    row.ean?.toString().toLowerCase().includes(searchTerm) ||
+                    row.descrizione?.toLowerCase().includes(searchTerm)
+                );
+                return dittaMatch && searchMatch && modifiedMatch;
+            });
+        }
+
+        function renderTable() {
+            const filteredData = getFilteredData();
+            const totalPages = Math.ceil(filteredData.length / ROWS_PER_PAGE);
+            currentPage = Math.min(currentPage, totalPages || 1);
+
+            const start = (currentPage - 1) * ROWS_PER_PAGE;
+            const end = start + ROWS_PER_PAGE;
+            const paginatedData = filteredData.slice(start, end);
+
+            tableHead.innerHTML = `
+                <tr>
+                    <th class="p-2"><input type="checkbox" id="select-all-checkbox"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Minsan/EAN</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrizione</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Costo Medio</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prezzo Shopify</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prezzo Calcolato</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Variazione</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stato</th>
+                </tr>
+            `;
+            tableBody.innerHTML = '';
+            paginatedData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.dataset.id = row.id;
+                
+                if (row.status === 'success') tr.classList.add('status-success');
+                if (row.status === 'error') tr.classList.add('status-error');
+
+                let variazioneHtml = '<td class="px-4 py-4 whitespace-nowrap text-sm"></td>';
+                if (row.prezzoVendita !== null && row.prezzoShopify !== null) {
+                    const diff = row.prezzoVendita - row.prezzoShopify;
+                    const percentageDiff = row.prezzoShopify > 0 ? (diff / row.prezzoShopify) * 100 : 0;
+                    const colorClass = diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-gray-500';
+                    const sign = diff > 0 ? '+' : '';
+
+                    variazioneHtml = `
+                        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium ${colorClass}">
+                            <span>${sign}${diff.toFixed(2)} €</span>
+                            <span class="text-xs">(${sign}${percentageDiff.toFixed(1)}%)</span>
+                        </td>
+                    `;
+                }
+
+                tr.innerHTML = `
+                    <td class="p-2 text-center"><input type="checkbox" class="row-checkbox" ${row.selected ? 'checked' : ''}></td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${row.minsan || row.ean}</td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">${row.descrizione || ''}</td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-600">€ ${row.costoMedio.toFixed(2)}</td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm price-shopify">
+                        ${row.prezzoShopify ? `€ ${row.prezzoShopify.toFixed(2)}` : 'N/D'}
+                    </td>
+                    <td class="px-4 py-4 whitespace-nowrap text-sm ${row.prezzoVendita ? 'price-calculated' : ''}">
+                        ${row.prezzoVendita ? `€ ${row.prezzoVendita.toFixed(2)}` : 'N/D'}
+                    </td>
+                    ${variazioneHtml}
+                    <td class="px-4 py-4 whitespace-nowrap text-sm text-center">
+                        ${row.status === 'success' ? '<span class="text-green-600 font-bold">✓</span>' : ''}
+                        ${row.status === 'error' ? '<span class="text-red-600 font-bold">✗</span>' : ''}
+                    </td>
+                `;
+                tableBody.appendChild(tr);
+            });
+            
+            updateSelectAllCheckboxState();
+            pageIndicator.textContent = `Pagina ${currentPage} di ${totalPages || 1}`;
+            prevPageButton.disabled = currentPage === 1;
+            nextPageButton.disabled = currentPage === totalPages || totalPages === 0;
+            paginationControls.style.display = totalPages > 1 ? 'flex' : 'none';
+        }
+
+        // --- GESTIONE EVENTI UI ---
+        const handleFilterChange = () => {
+            currentPage = 1;
+            renderTable();
+        };
+
+        searchInput.addEventListener('input', handleFilterChange);
+        dittaFilter.addEventListener('change', handleFilterChange);
+        showModifiedFilter.addEventListener('change', handleFilterChange);
+
+        tableBody.addEventListener('change', (e) => {
+            if (e.target.classList.contains('row-checkbox')) {
+                const rowId = parseInt(e.target.closest('tr').dataset.id);
+                const item = processedData.find(p => p.id === rowId);
+                if (item) {
+                    item.selected = e.target.checked;
+                }
+                updateConfirmButtonState();
+                updateSelectAllCheckboxState();
+            }
+        });
+
+        tableHead.addEventListener('change', (e) => {
+            if (e.target.id === 'select-all-checkbox') {
+                const isChecked = e.target.checked;
+                const filteredData = getFilteredData();
+                filteredData.forEach(item => processedData[item.id].selected = isChecked);
+                renderTable();
+                updateConfirmButtonState();
+            }
+        });
+        
+        function updateSelectAllCheckboxState() {
+            const selectAllCheckbox = document.getElementById('select-all-checkbox');
+            if (!selectAllCheckbox) return;
+
+            const filteredData = getFilteredData();
+            const allVisibleSelected = filteredData.length > 0 && filteredData.every(item => item.selected);
+            selectAllCheckbox.checked = allVisibleSelected;
+        }
+
+        prevPageButton.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                renderTable();
+            }
+        });
+
+        nextPageButton.addEventListener('click', () => {
+            const totalPages = Math.ceil(getFilteredData().length / ROWS_PER_PAGE);
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderTable();
+            }
+        });
+        
+        confirmUpdateCheckbox.addEventListener('change', updateConfirmButtonState);
+
+        function updateConfirmButtonState() {
+            const hasSelections = processedData.some(p => p.selected);
+            const hasCalculations = processedData.some(p => p.prezzoVendita !== null);
+            
+            confirmUpdateCheckbox.disabled = !hasSelections || !hasCalculations;
+            updateShopifyButton.disabled = !confirmUpdateCheckbox.checked || !hasSelections || !hasCalculations;
+        }
+
+        // --- SIMULAZIONE BACKEND ---
+        async function callBackend(action, payload) {
+            console.log(`Chiamata al backend simulata per l'azione: ${action}`);
+            console.log("Payload:", payload);
+
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            if (action === 'get-prices') {
+                const results = payload.skus.map(sku => ({
+                    sku: sku,
+                    price: parseFloat((Math.random() * 50 + 10).toFixed(2)) // Prezzo casuale tra 10 e 60
+                }));
+                return { results };
+            }
+
+            if (action === 'update-prices') {
+                const results = payload.items.map(item => {
+                    const success = Math.random() > 0.1; 
+                    return { sku: item.sku, success: success };
+                });
+                const successCount = results.filter(r => r.success).length;
+
+                return {
+                    message: "Operazione completata.",
+                    summary: {
+                        success: successCount,
+                        failure: results.length - successCount
+                    },
+                    results: results
+                };
+            }
+            return { error: "Azione non riconosciuta" };
+        }
+    });
+    </script>
+</body>
+</html>

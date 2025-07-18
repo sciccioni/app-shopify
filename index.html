@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App Sincronizzazione e Verifica Dati</title>
+    <title>App Sincronizzazione e Verifica Dati (DEBUG MODE)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -56,8 +56,6 @@
             overflow-x: auto;
         }
         /* Aggiungi questo per nascondere la colonna di debug */
-/* Removed for production, if you need it, uncomment */
-
 #results-table-head th:last-child,
 #results-table-body td:last-child {
     display: none;
@@ -68,7 +66,7 @@
 
     <div id="password-overlay" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50">
         <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm">
-            <h2 class="text-2xl font-bold mb-4 text-center">Accesso APP Giacenze</h2>
+            <h2 class="text-2xl font-bold mb-4 text-center">Accesso Richiesto</h2>
             <p class="text-center text-gray-600 mb-6">Inserisci la password per continuare.</p>
             <div class="space-y-4">
                 <div>
@@ -246,27 +244,13 @@
         });
 
         // --- LOGICA DI ACCESSO CON PASSWORD ---
-        async function checkPassword() {
-            const enteredPassword = passwordInput.value;
-            try {
-                const response = await fetch('/.netlify/functions/shopify-proxy', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: 'login', password: enteredPassword }),
-                });
-                const data = await response.json();
+        const CORRECT_PASSWORD = 'Ut0ph@2025!';
 
-                if (response.ok && data.success) {
-                    passwordOverlay.classList.add('hidden');
-                    appContainer.classList.remove('hidden');
-                    passwordError.classList.add('hidden'); // Hide error if it was previously shown
-                } else {
-                    passwordError.classList.remove('hidden');
-                    passwordInput.value = ''; // Clear password field
-                }
-            } catch (error) {
-                console.error("Errore durante l'autenticazione:", error);
-                passwordError.textContent = "Errore di connessione. Riprova più tardi.";
+        function checkPassword() {
+            if (passwordInput.value === CORRECT_PASSWORD) {
+                passwordOverlay.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+            } else {
                 passwordError.classList.remove('hidden');
             }
         }
@@ -740,7 +724,7 @@
                         resultsTableBody.appendChild(row);
                     });
                 } else {
-                    resultsTableHead.innerHTML = `<tr><th class="px-2 py-3"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 rounded"></th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minsan/SKU</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[200px]">Descrizione</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available (Shopify)</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Committed</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Available</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">On Hand</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giac. File</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. Shopify</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. File</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stato</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dettagli</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase text-red-600">DEBUG</th></tr>`;
+                    resultsTableHead.innerHTML = `<tr><th class="px-2 py-3"><input type="checkbox" id="select-all-checkbox" class="h-4 w-4 text-indigo-600 rounded"></th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minsan/SKU</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[200px]">Descrizione</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giac. Shopify</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giac. File</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. Shopify</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Scad. File</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stato</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dettagli</th><th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase text-red-600">DEBUG</th></tr>`;
                     items.forEach(res => {
                         const statusInfo = getStatusInfo(res.status);
                         const row = document.createElement('tr');
@@ -750,7 +734,7 @@
                             checkboxHTML = `<td class="px-2 py-4"><input type="checkbox" class="h-4 w-4 text-indigo-600 rounded row-checkbox" data-minsan="${res.minsan}" ${res.selected ? 'checked' : ''}></td>`;
                         }
                         const debugData = JSON.stringify(res._debug_source_row, null, 2);
-                        row.innerHTML = `${checkboxHTML}<td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${res.minsan}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.title || res.descrizione}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.inventory_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.committed_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.available_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.on_hand_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.giacenzaFile}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.expiry_date || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.scadenzaFile || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${statusInfo.badgeClass}">${statusInfo.icon} ${statusInfo.label}</span></td><td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.details || ''}</td><td class="p-2 debug-cell">${debugData}</td>`;
+                        row.innerHTML = `${checkboxHTML}<td class="px-3 py-4 whitespace-nowrap text-xs font-medium">${res.minsan}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.title || res.descrizione}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.inventory_quantity ?? 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.giacenzaFile}</td><td class="px-3 py-4 whitespace-nowrap text-xs">${res.expiry_date || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs font-semibold">${res.scadenzaFile || 'N/D'}</td><td class="px-3 py-4 whitespace-nowrap text-xs"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${statusInfo.badgeClass}">${statusInfo.icon} ${statusInfo.label}</span></td><td class="px-3 py-4 whitespace-nowrap text-xs text-gray-600">${res.details || ''}</td><td class="p-2 debug-cell">${debugData}</td>`;
                         resultsTableBody.appendChild(row);
                     });
                 }
