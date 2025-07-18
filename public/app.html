@@ -20,9 +20,9 @@
   
   <main class="container mx-auto px-4 py-6 flex-grow space-y-6">
     <nav class="flex space-x-4">
-      <button data-tab="upload"   class="tab-btn px-4 py-2 bg-blue-600 text-white rounded">Carica File</button>
-      <button data-tab="review"   class="tab-btn px-4 py-2 bg-gray-300 rounded">Revisione Modifiche</button>
-      <button data-tab="markup"   class="tab-btn px-4 py-2 bg-gray-300 rounded">Gestione Markup</button>
+      <button data-tab="upload"    class="tab-btn px-4 py-2 bg-blue-600 text-white rounded">Carica File</button>
+      <button data-tab="review"    class="tab-btn px-4 py-2 bg-gray-300 rounded">Revisione Modifiche</button>
+      <button data-tab="markup"    class="tab-btn px-4 py-2 bg-gray-300 rounded">Gestione Markup</button>
       <button data-tab="products" class="tab-btn px-4 py-2 bg-gray-300 rounded">Prodotti Shopify</button>
       <button data-tab="log"      class="tab-btn px-4 py-2 bg-gray-300 rounded">Log Aggiornamenti</button>
     </nav>
@@ -212,11 +212,17 @@
             });
             if (!put.ok) throw new Error(await put.text());
 
-            // 2. Recalculate prices for ALL imports of that company
+            // 2. Ricalcola i prezzi per tutti i prodotti della ditta
             const rc = await fetch('/.netlify/functions/recalcPrices', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                body: JSON.stringify({ ditta: name, import_id: null }) // import_id: null to affect all
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    ditta: name,             // nome della ditta
+                    import_id: null          // null per aggiornare tutti i prodotti della ditta
+                })
             });
             const rcJson = await rc.json();
             console.log('recalcPrices rows_updated:', rcJson.rows_updated);
