@@ -1,4 +1,4 @@
-// assets/js/main.js - AGGIORNATO (Con logica di Append e Inizializzazione Affidabile)
+// assets/js/main.js - COMPLETO E CORRETTO
 
 import { loadComponent, initializeTabNavigation } from './ui.js';
 import { initializeFileUploader } from './uploader.js';
@@ -9,7 +9,7 @@ window.currentFileProducts = [];
 window.currentShopifyProducts = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Ottieni i riferimenti ai contenitori principali
+    // 1. Ottieni i riferimenti ai contenitori principali (devono esistere in index.html)
     const fileUploaderSection = document.getElementById('file-uploader-section');
     const comparisonTableSection = document.getElementById('comparison-table-section');
     const modalContainer = document.getElementById('modal-container');
@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Carica il componente Uploader
     const uploaderFragment = await loadComponent('file-uploader');
     if (uploaderFragment) {
+        fileUploaderSection.innerHTML = ''; // Pulisci il contenitore prima di appendere
         fileUploaderSection.appendChild(uploaderFragment);
         console.log("Componente 'file-uploader' appeso con successo.");
     } else {
@@ -36,6 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Carica il componente Comparison Table
     const comparisonFragment = await loadComponent('comparison-table');
     if (comparisonFragment) {
+        comparisonTableSection.innerHTML = ''; // Pulisci
         comparisonTableSection.appendChild(comparisonFragment);
         console.log("Componente 'comparison-table' appeso con successo.");
     } else {
@@ -45,6 +47,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Carica il componente Preview Modal
     const previewModalFragment = await loadComponent('preview-modal');
     if (previewModalFragment) {
+        modalContainer.innerHTML = ''; // Pulisci
         modalContainer.appendChild(previewModalFragment);
         console.log("Componente 'preview-modal' appeso con successo.");
     } else {
@@ -54,7 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 3. Inizializza la logica di navigazione a tab
     initializeTabNavigation();
 
-    // 4. Ora che tutti i componenti sono stati appesi, recupera i riferimenti agli elementi UI.
+    // 4. Ora che tutti i componenti sono stati appesi e sono parte del DOM, recupera i riferimenti agli elementi UI.
     // Usiamo querySelector sul *contenitore padre specifico* per maggiore robustezza.
     const dropArea = fileUploaderSection.querySelector('#drop-area');
     const fileInput = fileUploaderSection.querySelector('#fileInput');

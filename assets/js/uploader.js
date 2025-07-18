@@ -1,4 +1,4 @@
-// assets/js/uploader.js - AGGIORNATO (Dipende da main.js che passa elementi validi)
+// assets/js/uploader.js - COMPLETO E CORRETTO
 
 import { showUploaderStatus, updateUploaderProgress, toggleLoader } from './ui.js';
 

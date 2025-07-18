@@ -1,13 +1,15 @@
-// assets/js/ui.js - AGGIORNATO PER RISOLVERE ERRORE NULL
+// assets/js/ui.js - COMPLETO E CORRETTO
 
 /**
  * Carica un componente HTML da un file template.
- * Non lo inietta direttamente, ma restituisce l'elemento root del componente.
- * Sarà responsabilità del chiamante (es. main.js) inserirlo nel DOM.
+ * Non lo inietta direttamente nel DOM, ma restituisce un DocumentFragment
+ * contenente una copia profonda del contenuto del template.
+ * Sarà responsabilità del chiamante (es. main.js) inserire questo frammento nel DOM
+ * e recuperare i riferimenti agli elementi desiderati.
  * @param {string} componentName - Il nome del file del componente (es. 'file-uploader').
- * @returns {Promise<HTMLElement|null>} L'elemento HTML root del componente caricato e clonato, o null in caso di errore.
+ * @returns {Promise<DocumentFragment|null>} Il DocumentFragment contenente il componente clonato, o null in caso di errore.
  */
-export async function loadComponent(componentName) { // Rimosso targetElementId qui
+export async function loadComponent(componentName) {
     try {
         const response = await fetch(`components/${componentName}.html`);
         if (!response.ok) {
@@ -15,18 +17,19 @@ export async function loadComponent(componentName) { // Rimosso targetElementId 
             return null;
         }
         const text = await response.text();
-        const template = document.createElement('template');
-        template.innerHTML = text;
+        const parser = new DOMParser();
+        // Parsa il testo HTML come un documento completo.
+        // Questo è il modo più robusto per gestire frammenti HTML potenzialmente complessi.
+        const doc = parser.parseFromString(text, 'text/html');
 
-        // Clona il contenuto del template e restituisci il primo elemento figlio.
-        // Questo sarà il div radice del tuo componente (es. .file-uploader-container o .comparison-table-container).
-        // Questo elemento è ora disconnesso dal DOM finché non viene append.
-        if (template.content.firstElementChild) {
-            return template.content.firstElementChild.cloneNode(true);
-        } else {
-            console.error(`Il template ${componentName}.html non contiene un elemento radice.`);
-            return null;
+        // Crea un DocumentFragment e sposta tutti i nodi figli dal <body> del documento parso a esso.
+        // Questo gestisce correttamente anche il caso in cui il componente non abbia un singolo elemento radice,
+        // o abbia commenti, spazi bianchi, ecc., garantendo che solo il markup visibile venga processato.
+        const fragment = document.createDocumentFragment();
+        while (doc.body.firstChild) {
+            fragment.appendChild(doc.body.firstChild);
         }
+        return fragment;
     } catch (error) {
         console.error(`Errore nel caricamento del componente ${componentName}:`, error);
         return null;
@@ -64,9 +67,8 @@ export function initializeTabNavigation() {
 }
 
 /**
- * Mostra un messaggio di stato nell'uploader.
- * Questa funzione ora opera su elementi passati, non cerca globalmente.
- * @param {HTMLElement} statusDiv - L'elemento div dove mostrare lo stato.
+ * Mostra un messaggio di stato in un div specifico dell'uploader.
+ * @param {HTMLElement} statusDiv - L'elemento div dove mostrare lo stato (passato come parametro).
  * @param {string} message - Il messaggio da visualizzare.
  * @param {boolean} isError - Vero se è un messaggio di errore, falso altrimenti.
  */
@@ -81,13 +83,12 @@ export function showUploaderStatus(statusDiv, message, isError = false) {
             }, 5000);
         }
     } else {
-        console.warn('Elemento statusDiv non fornito per showUploaderStatus. Messaggio: ' + message);
+        console.warn('showUploaderStatus: Elemento statusDiv non fornito o non trovato per visualizzare lo stato. Messaggio: ' + message);
     }
 }
 
 /**
  * Aggiorna lo stato della progress bar dell'uploader.
- * Questa funzione ora opera su elementi passati, non cerca globalmente.
  * @param {HTMLElement} progressBarContainer - Contenitore della progress bar.
  * @param {HTMLElement} progressBar - La barra di progresso.
  * @param {HTMLElement} progressText - Testo della percentuale.
@@ -113,7 +114,7 @@ export function updateUploaderProgress(progressBarContainer, progressBar, progre
             if (fileName) fileNameSpan.textContent = `(${fileName})`;
         }
     } else {
-        console.warn('Elementi della progress bar non forniti per updateUploaderProgress.');
+        console.warn('updateUploaderProgress: Uno o più elementi della progress bar non forniti o non trovati.');
     }
 }
 
@@ -152,15 +153,15 @@ export function showModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.classList.remove('hidden');
-        // Aggiungi un listener per chiudere la modal cliccando sull'overlay
-        // Questo listener è aggiunto solo una volta quando la modal viene mostrata
         const clickHandler = (e) => {
             if (e.target.id === modalId) {
                 hideModal(modalId);
-                modal.removeEventListener('click', clickHandler); // Rimuovi il listener dopo il click
+                modal.removeEventListener('click', clickHandler);
             }
         };
         modal.addEventListener('click', clickHandler);
+    } else {
+        console.warn(`showModal: Modal con ID '${modalId}' non trovata.`);
     }
 }
 
@@ -172,5 +173,7 @@ export function hideModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.classList.add('hidden');
+    } else {
+        console.warn(`hideModal: Modal con ID '${modalId}' non trovata.`);
     }
 }
