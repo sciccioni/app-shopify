@@ -16,7 +16,8 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
     }
 
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
-    const url = `https://${SHOPIFY_STORE_FRAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/${cleanEndpoint}`;
+    // CORREZIONE QUI: da SHOPIFY_STORE_FRAME a SHOPIFY_STORE_NAME
+    const url = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/${cleanEndpoint}`;
     const options = {
         method: method,
         headers: {
@@ -57,28 +58,8 @@ async function getShopifyProducts(skusToFetch = []) {
     let allProducts = [];
     let nextLink = `products.json?fields=id,title,handle,variants,metafields`;
 
-    // Se abbiamo SKUs da cercare, aggiungiamo il filtro.
-    // Nota: L'API Shopify non ha un filtro diretto 'sku_in'.
-    // Dobbiamo filtrare lato nostro oppure usare il campo 'query' (limitato).
-    // Per ora, l'approccio più comune è scaricare e filtrare,
-    // o fare chiamate per singolo SKU se gli SKU sono pochi.
-    // DATO IL TUO TIMEOUT, faremo un tentativo di recuperare tutti, ma con un limite più stretto
-    // E poi useremo un filtro lato nostro. Se ci sono TROPPI prodotti, questa non sarà sufficiente.
-    // Un metodo più avanzato implicherebbe una funzione per ogni SKU o una search API.
-
-    // Per mitigare il timeout, limitiamo le chiamate a 50 prodotti per pagina (default).
-    // E l'assunzione è che il numero di prodotti rilevanti non sia ENORME,
-    // altrimenti la funzione andrebbe sempre in timeout.
     // Aggiungiamo un limite esplicito, anche se è il default, per chiarezza.
     nextLink += `&limit=50`;
-
-    // Se skusToFetch è presente, proveremo a fare delle ricerche specifiche o a filtrare i risultati.
-    // Per un numero elevato di SKU, chiamate multiple per SKU sarebbero inefficienti.
-    // La strategia migliore è scaricare tutti i prodotti (paginati) e filtrare lato nostro.
-    // Se la quantità di prodotti supera il limite di tempo della funzione,
-    // l'unica soluzione è usare un'API di ricerca Shopify (che non supporta il filtro per SKUs di varianti)
-    // o un database esterno sincronizzato.
-    // PER ORA, cerchiamo di filtrare dopo aver scaricato, se il download completo è possibile entro 10-30s.
 
     try {
         while (nextLink) {
