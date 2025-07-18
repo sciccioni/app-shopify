@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione Inventario Shopify</title>
+    <link rel="stylesheet" href="assets/css/main.css">
+    <link rel="stylesheet" href="assets/css/components.css">
+</head>
+<body>
+    <header class="app-header">
+        <h1>Dashboard Inventario Shopify</h1>
+        <nav class="tab-navigation">
+            <button class="tab-button active" data-tab="import-update">Importa/Aggiorna Prodotti</button>
+            <button class="tab-button" data-tab="shopify-products">Prodotti Shopify</button>
+            <button class="tab-button" data-tab="company-manager">Gestione Ditte</button> <button class="tab-button" data-tab="change-log">Registro Modifiche</button>
+        </nav>
+    </header>
+
+    <main id="app-container" class="app-container">
+        <div id="import-update-tab" class="tab-content active">
+            <div id="file-uploader-section"></div>
+            <div id="comparison-table-section"></div>
+        </div>
+
+        <div id="shopify-products-tab" class="tab-content hidden">
+            <h2>Prodotti Shopify Attivi</h2>
+            <p>Caricamento in corso...</p>
+        </div>
+
+        <div id="company-manager-tab" class="tab-content hidden">
+            <h2>Gestione Ditte</h2>
+            <p>Caricamento in corso...</p>
+        </div>
+
+        <div id="change-log-tab" class="tab-content hidden">
+            <h2>Registro Modifiche e Approvazioni</h2>
+            <p>Qui sarà presente la cronologia delle modifiche.</p>
+        </div>
+    </main>
+
+    <div id="modal-container"></div>
+
+    <script type="module" src="assets/js/main.js"></script>
+</body>
+</html>

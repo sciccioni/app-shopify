@@ -1,24 +1,24 @@
-// assets/js/main.js - COMPLETO E CORRETTO
+// assets/js/main.js - COMPLETO E CORRETTO (AGGIORNATO PER NUOVA TAB DITTE)
 
 import { loadComponent, initializeTabNavigation } from './ui.js';
 import { initializeFileUploader } from './uploader.js';
 import { renderComparisonTable } from './comparison.js';
-import { initializeShopifyProductsTab } from './shopify-products.js'; // Importa il modulo per la tab Prodotti Shopify
+import { initializeShopifyProductsTab } from './shopify-products.js';
+// Importa il nuovo modulo per la gestione delle ditte
+import { initializeCompanyManagerTab } from './company-manager.js';
 
 // Variabili globali per i dati, usate tra i moduli
 window.currentFileProducts = [];
 window.currentShopifyProducts = [];
-window.allShopifyProducts = null; // Inizialmente null, verrà popolato al primo accesso alla tab Prodotti Shopify
-window.currentShopifyPageProducts = []; // I prodotti della pagina corrente della tab Shopify
+window.allShopifyProducts = null;
+window.currentShopifyPageProducts = [];
 
 // Funzione di inizializzazione specifica per la tab "Importa/Aggiorna Prodotti"
-// Questa funzione viene chiamata quando la tab "Importa/Aggiorna" è attiva (all'avvio o al click).
 async function initializeImportUpdateTab() {
     console.log("Inizializzazione tab 'Importa/Aggiorna Prodotti'...");
     
     const fileUploaderSection = document.getElementById('file-uploader-section');
 
-    // Ottieni i riferimenti agli elementi UI dell'uploader *dopo* che sono stati appesi.
     const dropArea = fileUploaderSection.querySelector('#drop-area');
     const fileInput = fileUploaderSection.querySelector('#fileInput');
     const selectFileBtn = fileUploaderSection.querySelector('#selectFileBtn');
@@ -29,7 +29,6 @@ async function initializeImportUpdateTab() {
     const fileNameSpan = fileUploaderSection.querySelector('#file-name');
 
     if (dropArea && fileInput && selectFileBtn && uploaderStatusDiv && progressBarContainer && progressBar && progressText && fileNameSpan) {
-        // Inizializza l'uploader passando tutti i riferimenti agli elementi
         initializeFileUploader({
             dropArea: dropArea,
             fileInput: fileInput,
@@ -40,7 +39,6 @@ async function initializeImportUpdateTab() {
             progressText: progressText,
             fileNameSpan: fileNameSpan,
             onUploadSuccess: async (processedProducts, shopifyProducts) => {
-                // *** MODIFICA QUI: shopifyProducts è già l'array grazie alla modifica in process-excel.js ***
                 window.currentFileProducts = processedProducts;
                 window.currentShopifyProducts = shopifyProducts;
                 renderComparisonTable(processedProducts, shopifyProducts);
@@ -60,33 +58,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     const fileUploaderSection = document.getElementById('file-uploader-section');
     const comparisonTableSection = document.getElementById('comparison-table-section');
     const modalContainer = document.getElementById('modal-container');
-    const shopifyProductsTabContent = document.getElementById('shopify-products-tab'); // Contenitore per la tab dei prodotti Shopify
+    const shopifyProductsTabContent = document.getElementById('shopify-products-tab');
+    // NUOVO: Riferimento al contenitore della tab Gestione Ditte
+    const companyManagerTabContent = document.getElementById('company-manager-tab');
 
 
     // Verifica che i contenitori esistano prima di procedere
-    if (!fileUploaderSection || !comparisonTableSection || !modalContainer || !shopifyProductsTabContent) {
+    if (!fileUploaderSection || !comparisonTableSection || !modalContainer || !shopifyProductsTabContent || !companyManagerTabContent) {
         console.error("ERRORE CRITICO: Uno o più sezioni principali dell'applicazione non sono state trovate in index.html. Assicurati che gli ID siano corretti.");
-        return; // Non possiamo continuare senza i contenitori base
+        return;
     }
 
     // 2. Carica i DocumentFragment dei componenti e appendili ai rispettivi contenitori.
-    // Effettua il append IMMEDIATAMENTE dopo il caricamento per garantire che siano nel DOM.
 
     // Carica il componente Uploader
     const uploaderFragment = await loadComponent('file-uploader');
     if (uploaderFragment) {
-        fileUploaderSection.innerHTML = ''; // Pulisci il contenitore prima di appendere
+        fileUploaderSection.innerHTML = '';
         fileUploaderSection.appendChild(uploaderFragment);
         console.log("Componente 'file-uploader' appeso con successo.");
     } else {
         console.error("ERRORE CRITICO: Impossibile caricare il DocumentFragment del componente 'file-uploader'. La funzionalità di upload non sarà disponibile.");
-        return; // Se l'uploader non carica, fermiamo qui
+        return;
     }
 
     // Carica il componente Comparison Table
     const comparisonFragment = await loadComponent('comparison-table');
     if (comparisonFragment) {
-        comparisonTableSection.innerHTML = ''; // Pulisci
+        comparisonTableSection.innerHTML = '';
         comparisonTableSection.appendChild(comparisonFragment);
         console.log("Componente 'comparison-table' appeso con successo.");
     } else {
@@ -96,31 +95,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Carica il componente Preview Modal
     const previewModalFragment = await loadComponent('preview-modal');
     if (previewModalFragment) {
-        modalContainer.innerHTML = ''; // Pulisci
+        modalContainer.innerHTML = '';
         modalContainer.appendChild(previewModalFragment);
         console.log("Componente 'preview-modal' appeso con successo.");
     } else {
         console.error("ERRORE: Impossibile caricare il DocumentFragment del componente 'preview-modal'.");
     }
 
-    // NUOVO: Carica il componente della tabella Prodotti Shopify (solo append, inizializzazione alla selezione tab)
+    // Carica il componente della tabella Prodotti Shopify
     const shopifyProductsTableFragment = await loadComponent('shopify-products-table');
     if (shopifyProductsTableFragment) {
-        shopifyProductsTabContent.innerHTML = ''; // Pulisci il contenitore della tab
+        shopifyProductsTabContent.innerHTML = '';
         shopifyProductsTabContent.appendChild(shopifyProductsTableFragment);
         console.log("Componente 'shopify-products-table' appeso con successo.");
     } else {
         console.error("ERRORE: Impossibile caricare il DocumentFragment del componente 'shopify-products-table'.");
     }
 
+    // NUOVO: Carica il componente della tab Gestione Ditte
+    const companyManagerFragment = await loadComponent('company-manager-tab');
+    if (companyManagerFragment) {
+        companyManagerTabContent.innerHTML = ''; // Pulisci il contenitore della tab
+        companyManagerTabContent.appendChild(companyManagerFragment);
+        console.log("Componente 'company-manager-tab' appeso con successo.");
+    } else {
+        console.error("ERRORE: Impossibile caricare il DocumentFragment del componente 'company-manager-tab'.");
+    }
+
 
     // 3. Inizializza la logica di navigazione a tab, registrando le callback
     initializeTabNavigation({
-        'import-update': initializeImportUpdateTab, // Registra la callback per la tab di upload
-        'shopify-products': initializeShopifyProductsTab // Registra la callback per la tab Prodotti Shopify
-        // 'change-log': initializeChangeLogTab // Se avrai una callback per la tab Change Log
+        'import-update': initializeImportUpdateTab,
+        'shopify-products': initializeShopifyProductsTab,
+        'company-manager': initializeCompanyManagerTab // REGISTRA LA NUOVA CALLBACK PER LA TAB DITTE
+        // 'change-log': initializeChangeLogTab
     });
 
     // La initializeTabNavigation ora gestisce l'attivazione della callback iniziale.
-    // Non abbiamo bisogno di chiamare initializeImportUpdateTab() qui direttamente.
 });
