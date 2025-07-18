@@ -14,7 +14,6 @@ exports.handler = async (event, context) => {
         }
 
         const boundary = multipart.getBoundary(contentType);
-        // Netlify Functions riceve il body già come base64 per POST/PUT, quindi Buffer.from è corretto.
         const parts = multipart.parse(Buffer.from(event.body, 'base64'), boundary);
 
         const filePart = parts.find(p => p.name === 'excelFile');
@@ -25,67 +24,69 @@ exports.handler = async (event, context) => {
         const workbook = XLSX.read(filePart.data, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0]; // Prende il primo foglio
         const sheet = workbook.Sheets[sheetName];
-        // sheet_to_json può prendere un'opzione raw:true per mantenere i numeri delle date come numeri,
-        // che è poi gestito dalla funzione di conversione. header:1 se la prima riga è l'header.
-        const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Legge la prima riga come header
 
-        // Mappa gli header dalla prima riga (rawData[0]) ai nomi delle colonne desiderati
-        const headers = rawData[0];
-        const dataRows = rawData.slice(1); // Tutte le righe tranne l'header
+        // *** MODIFICA QUI: Ritorna al metodo standard di sheet_to_json che gestisce gli header automaticamente ***
+        // 'header: 1' istruisce a usare la prima riga come header. 'raw: true' mantiene i valori non-stringa come numeri, ecc.
+        const rawData = XLSX.utils.sheet_to_json(sheet, { raw: true });
 
-        // Mappatura dinamica per tollerare piccole variazioni nel nome delle colonne
+        // Definisci la mappatura delle colonne. Le chiavi sono i nomi nel tuo JSON finale, i valori sono i possibili nomi delle colonne nel tuo Excel.
         const columnMapping = {
             'Ditta': ['Ditta', 'Azienda'],
-            'Minsan': ['Minsan', 'CodiceMinsan'],
-            'EAN': ['EAN', 'CodiceEAN'],
+            'Minsan': ['Minsan', 'CodiceMinsan', 'MINSAN'], // Aggiungi MINSAN se in maiuscolo
+            'EAN': ['EAN', 'CodiceEAN', 'CODICE_EAN'],
             'Descrizione': ['Descrizione', 'Descr', 'NomeProdotto'],
-            'Scadenza': ['Scadenza', 'DataScadenza'],
-            'Lotto': ['Lotto', 'NumLotto'],
+            'Scadenza': ['Scadenza', 'DataScadenza', 'SCADENZA'],
+            'Lotto': ['Lotto', 'NumLotto', 'LOTTO'],
             'Giacenza': ['Giacenza', 'Quantita', 'Disponibilita'],
-            'CostoBase': ['CostoBase', 'Costo'],
-            'CostoMedio': ['CostoMedio'],
-            'UltimoCostoDitta': ['UltimoCostoDitta', 'UltimoCosto'],
-            'DataUltimoCostoDitta': ['DataUltimoCostoDitta', 'DataCosto'],
-            'PrezzoBD': ['PrezzoBD', 'PrezzoVendita'],
+            'CostoBase': ['CostoBase', 'Costo', 'COSTO_BASE'],
+            'CostoMedio': ['CostoMedio', 'COSTO_MEDIO'],
+            'UltimoCostoDitta': ['UltimoCostoDitta', 'UltimoCosto', 'ULTIMO_COSTO_DITTA'],
+            'DataUltimoCostoDitta': ['DataUltimoCostoDitta', 'DataCosto', 'DATA_ULTIMO_COSTO_DITTA'],
+            'PrezzoBD': ['PrezzoBD', 'PrezzoVendita', 'PREZZO_BD'],
             'IVA': ['IVA', 'Imposta']
-        };
-
-        // Funzione helper per trovare il valore della colonna basandosi su più nomi possibili
-        const getColumnValue = (rowObj, possibleNames) => {
-            for (const name of possibleNames) {
-                if (rowObj[name] !== undefined && rowObj[name] !== null) {
-                    return rowObj[name];
-                }
-            }
-            return undefined; // Ritorna undefined se nessuna corrispondenza
         };
 
         const processedProductsMap = new Map();
 
-        for (const rowData of dataRows) {
-            // Crea un oggetto riga con header come chiavi e valori come valori
-            const rowObj = headers.reduce((acc, header, index) => {
-                acc[header] = rowData[index];
-                return acc;
-            }, {});
-
-            const minsan = String(getColumnValue(rowObj, columnMapping.Minsan) || '').trim();
-            if (!minsan || minsan.length < 9) {
-                console.warn(`Minsan non valido o troppo corto saltato (min 9 cifre): ${minsan}`);
-                continue; // Salta la riga
+        for (const rawRow of rawData) {
+            // Crea un oggetto riga normalizzato usando la mappatura
+            const row = {};
+            for (const key in columnMapping) {
+                const possibleNames = columnMapping[key];
+                for (const name of possibleNames) {
+                    if (rawRow[name] !== undefined) {
+                        row[key] = rawRow[name];
+                        break; // Trovato il valore, passa al prossimo campo
+                    }
+                    // Aggiungi un controllo per lowercase/uppercase se i nomi variano
+                    if (rawRow[name.toLowerCase()] !== undefined) {
+                        row[key] = rawRow[name.toLowerCase()];
+                        break;
+                    }
+                    if (rawRow[name.toUpperCase()] !== undefined) {
+                        row[key] = rawRow[name.toUpperCase()];
+                        break;
+                    }
+                }
             }
 
-            const giacenzaRaw = getColumnValue(rowObj, columnMapping.Giacenza);
+            const minsan = String(row.Minsan || '').trim();
+            if (!minsan || minsan.length < 9) {
+                console.warn(`Minsan non valido o troppo corto saltato (min 9 cifre): ${row.Minsan || rawRow['Minsan']}`);
+                continue;
+            }
+
+            const giacenzaRaw = row.Giacenza;
             const giacenza = parseFloat(giacenzaRaw || 0);
 
-            const lotto = String(getColumnValue(rowObj, columnMapping.Lotto) || '').trim();
-            let scadenza = getColumnValue(rowObj, columnMapping.Scadenza);
+            const lotto = String(row.Lotto || '').trim();
+            let scadenza = row.Scadenza;
 
             // Tentativo più robusto di conversione data Excel (numerico) a stringa YYYY-MM-DD
             if (typeof scadenza === 'number' && !isNaN(scadenza)) {
                 try {
                     const date = XLSX.SSF.parse_date_code(scadenza);
-                    if (date) {
+                    if (date && date.y && date.m && date.d) { // Assicurati che tutti i componenti della data siano validi
                         scadenza = `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
                     } else {
                         scadenza = String(scadenza).trim(); // Fallback
@@ -102,19 +103,19 @@ exports.handler = async (event, context) => {
             // Inizializza o recupera il prodotto nella mappa
             if (!processedProductsMap.has(minsan)) {
                 processedProductsMap.set(minsan, {
-                    Ditta: String(getColumnValue(rowObj, columnMapping.Ditta) || '').trim(),
+                    Ditta: String(row.Ditta || '').trim(),
                     Minsan: minsan,
-                    EAN: String(getColumnValue(rowObj, columnMapping.EAN) || '').trim(),
-                    Descrizione: String(getColumnValue(rowObj, columnMapping.Descrizione) || '').trim(),
+                    EAN: String(row.EAN || '').trim(),
+                    Descrizione: String(row.Descrizione || '').trim(),
                     Giacenza: 0, // Verrà sommata
                     Scadenza: null, // Verrà aggiornata con la più recente
                     Lotti: [], // Per tracciare i lotti originali (opzionale)
-                    CostoBase: parseFloat(getColumnValue(rowObj, columnMapping.CostoBase) || 0),
-                    CostoMedio: parseFloat(getColumnValue(rowObj, columnMapping.CostoMedio) || 0),
-                    UltimoCostoDitta: parseFloat(getColumnValue(rowObj, columnMapping.UltimoCostoDitta) || 0),
-                    DataUltimoCostoDitta: String(getColumnValue(rowObj, columnMapping.DataUltimoCostoDitta) || '').trim(), // Assumi come stringa o da convertire
-                    PrezzoBD: parseFloat(getColumnValue(rowObj, columnMapping.PrezzoBD) || 0),
-                    IVA: parseFloat(getColumnValue(rowObj, columnMapping.IVA) || 0)
+                    CostoBase: parseFloat(row.CostoBase || 0),
+                    CostoMedio: parseFloat(row.CostoMedio || 0),
+                    UltimoCostoDitta: parseFloat(row.UltimoCostoDitta || 0),
+                    DataUltimoCostoDitta: String(row.DataUltimoCostoDitta || '').trim(),
+                    PrezzoBD: parseFloat(row.PrezzoBD || 0),
+                    IVA: parseFloat(row.IVA || 0)
                 });
             }
 
