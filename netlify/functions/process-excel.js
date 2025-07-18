@@ -22,7 +22,7 @@ exports.handler = async (event, context) => {
         }
 
         const workbook = XLSX.read(filePart.data, { type: 'buffer' });
-        const sheetName = workbook.SheetNames[0];
+        const sheetName = workbook.SheetNames[0]; // Prende il primo foglio
         const sheet = workbook.Sheets[sheetName];
 
         const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
@@ -46,20 +46,15 @@ exports.handler = async (event, context) => {
             'IVA': ['IVA', 'Imposta']
         };
 
-        // Funzione helper per trovare il valore della colonna basandosi su più nomi possibili
-        // Ora prende 'rowObject' come parametro, non si aspetta 'rawRow' dall'esterno.
         const getColumnValue = (rowObject, possibleNames) => {
             for (const name of possibleNames) {
                 if (rowObject[name] !== undefined && rowObject[name] !== null) {
                     return rowObject[name];
                 }
-                // Prova anche versioni upper/lower case nel caso l'header non sia mappato esattamente
                 if (typeof name === 'string') {
                     const lowerName = name.toLowerCase();
-                    // Assicurati che 'rowObject' sia usato qui
                     if (rowObject[lowerName] !== undefined && rowObject[lowerName] !== null) return rowObject[lowerName];
                     const upperName = name.toUpperCase();
-                    // Assicurati che 'rowObject' sia usato qui
                     if (rowObject[upperName] !== undefined && rowObject[upperName] !== null) return rowObject[upperName];
                 }
             }
@@ -139,7 +134,10 @@ exports.handler = async (event, context) => {
         const processedProducts = Array.from(processedProductsMap.values());
         console.log(`Elaborati ${processedProducts.length} prodotti unici dal file Excel.`);
 
-        const shopifyProducts = await getShopifyProducts(Array.from(minsanListFromFile));
+        // *** MODIFICA QUI: Estrai l'array 'products' dall'oggetto restituito da getShopifyProducts ***
+        const shopifyApiResult = await getShopifyProducts(Array.from(minsanListFromFile));
+        const shopifyProducts = shopifyApiResult.products; // Estrai l'array di prodotti
+
         console.log(`Recuperati ${shopifyProducts.length} prodotti da Shopify (filtrati per Minsan del file).`);
 
         return {
@@ -148,7 +146,7 @@ exports.handler = async (event, context) => {
             body: JSON.stringify({
                 message: 'File elaborato e confrontato con successo!',
                 processedProducts: processedProducts,
-                shopifyProducts: shopifyProducts
+                shopifyProducts: shopifyProducts // Ora questo è un array
             }),
         };
 

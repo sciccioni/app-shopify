@@ -1,4 +1,4 @@
-// assets/js/main.js - COMPLETO E CORRETTO (RIFINITO PER INIZIALIZZAZIONE TAB E UPLOADER)
+// assets/js/main.js - COMPLETO E CORRETTO
 
 import { loadComponent, initializeTabNavigation } from './ui.js';
 import { initializeFileUploader } from './uploader.js';
@@ -40,6 +40,7 @@ async function initializeImportUpdateTab() {
             progressText: progressText,
             fileNameSpan: fileNameSpan,
             onUploadSuccess: async (processedProducts, shopifyProducts) => {
+                // *** MODIFICA QUI: shopifyProducts è già l'array grazie alla modifica in process-excel.js ***
                 window.currentFileProducts = processedProducts;
                 window.currentShopifyProducts = shopifyProducts;
                 renderComparisonTable(processedProducts, shopifyProducts);
