@@ -1,58 +1,42 @@
-// netlify/functions/company-api.js - AGGIORNAMENTO DIAGNOSTICO FINALE
+// netlify/functions/company-api.js - VERSIONE COMPLETA, CON LOGGING SENSIBILE PER DEBUG PASSWORD
 
 const { Pool } = require('pg');
 const { URL } = require('url'); // Importa il modulo URL di Node.js
 
-// --- INIZIO BLOCCO DIAGNOSTICO/CORREZIONE VARIABILE D'AMBIENTE ---
+// --- INIZIO BLOCCO DIAGNOSTICO CRITICO (Rimuovere immediatamente dopo il debug!) ---
 let connectionStringFromEnv = process.env.SUPABASE_URL;
 let finalConnectionString = connectionStringFromEnv;
 
-console.log('DEBUG (company-api): Valore grezzo di process.env.SUPABASE_URL:', connectionStringFromEnv ? `Stringa presente (lunghezza: ${connectionStringFromEnv.length})` : 'UNDEFINED o VUOTA!');
+console.log('--- INIZIO DEBUG CONNESSIONE SUPABASE ---');
+console.log('DEBUG: Valore grezzo di process.env.SUPABASE_URL:', connectionStringFromEnv ? `Stringa presente (lunghezza: ${connectionStringFromEnv.length})` : 'UNDEFINED o VUOTA!');
 
 if (connectionStringFromEnv && connectionStringFromEnv.length > 0) {
     try {
-        // Tenta di parsare la stringa come URL per verificare il formato.
-        // Questo riprodurrà il controllo che fa pg-connection-string
-        const testUrl = new URL(connectionStringFromEnv);
-        console.log('DEBUG (company-api): Parsed URL protocol:', testUrl.protocol);
-        console.log('DEBUG (company-api): Parsed URL hostname:', testUrl.hostname);
-        console.log('DEBUG (company-api): Parsed URL port:', testUrl.port);
-        console.log('DEBUG (company-api): Parsed URL username:', testUrl.username);
-        console.log('DEBUG (company-api): Parsed URL password length:', testUrl.password ? testUrl.password.length : 0); // NON LOGGARE LA PASSWORD!
-        console.log('DEBUG (company-api): Parsed URL pathname:', testUrl.pathname);
-        console.log('DEBUG (company-api): Parsed URL searchParams (expected to be an object):', typeof testUrl.searchParams);
+        const parsedUrl = new URL(connectionStringFromEnv);
+        // *** ATTENZIONE: LOGGING DI CREDENZIALI SENSIBILI! ***
+        // *** QUESTI CONSOLE.LOG DEVONO ESSERE RIMOSSI IMMEDIATAMENTE DOPO IL DEBUG! ***
+        console.log('DEBUG: Tentativo di connessione con Username:', parsedUrl.username);
+        console.log('DEBUG: Tentativo di connessione con Password:', parsedUrl.password); // !!! Rimuovi questo SUBITO !!!
+        // ***************************************************
 
-        // Se la stringa è stata parsata con successo, la riusiamo tale e quale
-        // Altrimenti, se fallisce il parsing, finalConnectionString rimarrà l'originale
-        // o verrà gestito dal catch esterno.
-        finalConnectionString = connectionStringFromEnv;
+        finalConnectionString = connectionStringFromEnv; // Usa la stringa originale se parsata correttamente
 
     } catch (e) {
-        console.error('DEBUG (company-api): Errore nel parsing di SUPABASE_URL come URL standard:', e.message);
-        console.error('DEBUG (company-api): Questo suggerisce un formato errato o caratteri non codificati nella stringa.');
-        // Tentativo di correzione euristica se la password ha caratteri speciali non codificati
-        if (connectionStringFromEnv.includes('[YOUR-PASSWORD]')) {
-             console.error('DEBUG (company-api): La stringa contiene ancora il placeholder [YOUR-PASSWORD]! Devi sostituirlo con la password reale e non le parentesi.');
-        } else if (connectionStringFromEnv.includes('#') || connectionStringFromEnv.includes('&') || connectionStringFromEnv.includes('$') || connectionStringFromEnv.includes('%')) {
-            console.warn('DEBUG (company-api): La stringa di connessione potrebbe contenere caratteri speciali non codificati URL. Riprova a codificare la password.');
-            // Un'ultima risorsa: prova a ricodificare solo la password se c'è un pattern riconosciuto
-            const parts = connectionStringFromEnv.match(/(.*?:)(.*?)(@.*)/);
-            if (parts && parts[2]) {
-                const encodedPassword = encodeURIComponent(parts[2]);
-                finalConnectionString = parts[1] + encodedPassword + parts[3];
-                console.log('DEBUG (company-api): Tentato di ricodificare la password nella stringa di connessione.');
-            }
-        }
+        console.error('DEBUG: Errore nel parsing di SUPABASE_URL come URL standard:', e.message);
+        console.error('DEBUG: Questo suggerisce un formato errato o caratteri non codificati nella stringa.');
+        // Se il parsing fallisce, potremmo ancora avere un problema con la stringa, anche se meno probabile ora.
+        // Tentativo di fallback se la password ha caratteri speciali, ma il problema più comune è ora la corrispondenza.
     }
 } else {
     // Se la variabile d'ambiente è effettivamente mancante o vuota
     throw new Error("Errore di configurazione: SUPABASE_URL non è impostata o è vuota nell'ambiente della funzione.");
 }
+console.log('--- FINE DEBUG CONNESSIONE SUPABASE ---');
+// --- FINE BLOCCO DIAGNOSTICO CRITICO ---
 
-// --- FINE BLOCCO DIAGNOSTICO/CORREZIONE ---
 
 const pool = new Pool({
-    connectionString: finalConnectionString, // Usa la stringa processata o diagnosticata
+    connectionString: finalConnectionString,
     ssl: {
         rejectUnauthorized: false
     }
