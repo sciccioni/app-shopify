@@ -1,6 +1,15 @@
-// assets/js/shopify-products.js - AGGIORNATO E COMPLETO
+// assets/js/shopify-products.js - AGGIORNATO E COMPLETO (Paginazione e UX)
 
 import { toggleLoader, showUploaderStatus } from './ui.js';
+
+// Variabili di stato per la paginazione
+let currentPage = 1;
+let totalShopifyProducts = 0; // Se Shopify API fornisse un conto totale, altrimenti stima
+let currentPageInfo = null; // Il page_info della pagina corrente
+let nextPageInfo = null;    // Il page_info per la prossima pagina
+let prevPageInfo = null;    // Il page_info per la pagina precedente
+const PRODUCTS_PER_PAGE = 20; // Numero di prodotti per pagina (deve corrispondere al limit del backend)
+
 
 /**
  * Funzione per inizializzare la logica della tab "Prodotti Shopify".
@@ -11,90 +20,126 @@ export async function initializeShopifyProductsTab() {
 
     const searchInput = document.getElementById('shopifyProductSearch');
     const refreshButton = document.getElementById('refreshShopifyProducts');
+    const prevPageBtn = document.getElementById('prevPageBtn');
+    const nextPageBtn = document.getElementById('nextPageBtn');
     const tablePlaceholder = document.getElementById('shopifyProductsTablePlaceholder');
     const statusDiv = document.getElementById('shopifyProductsStatus');
+    const pageInfoSpan = document.getElementById('pageInfo');
 
-    if (!searchInput || !refreshButton || !tablePlaceholder || !statusDiv) {
-        console.error("Elementi UI per la tab Prodotti Shopify non trovati. Assicurati che 'shopify-products-table.html' sia caricato correttamente.");
+    // Assicurati che gli elementi UI critici esistano
+    if (!searchInput || !refreshButton || !prevPageBtn || !nextPageBtn || !tablePlaceholder || !statusDiv || !pageInfoSpan) {
+        console.error("Elementi UI per la tab Prodotti Shopify non trovati. Assicurati che 'shopify-products-table.html' sia caricato correttamente e che tutti gli ID siano presenti.");
         return;
     }
 
     // Aggiungi listener per la ricerca
+    // La ricerca ora avverrà sui dati DELLA PAGINA CORRENTE per non richiedere troppi dati.
+    // Per una ricerca su TUTTI i prodotti, si richiederebbe un endpoint API Shopify di ricerca (o database).
     let searchTimeout;
     searchInput.addEventListener('input', () => {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
-            renderShopifyProductsTable(window.allShopifyProducts || []); // Filtra sui dati già caricati
-        }, 500); // Debounce di 500ms
+            // Se window.allShopifyProducts ha tutti i prodotti scaricati dalla pagina corrente, filtra.
+            // Altrimenti, ricarica la pagina corrente e poi filtra.
+            renderShopifyProductsTable(window.currentShopifyPageProducts || []); // Filtra sui dati della pagina corrente
+        }, 300); // Debounce per la ricerca
     });
 
     // Aggiungi listener per il bottone di refresh
     refreshButton.addEventListener('click', () => {
+        currentPage = 1; // Resetta alla prima pagina
+        currentPageInfo = null; // Resetta il cursore di paginazione
         loadAndRenderShopifyProducts(true); // Forza il refresh
     });
 
-    // Carica i prodotti al primo caricamento della tab
-    // Verifica anche se la tab è già attiva, per non caricare doppiamente all'avvio
-    const shopifyProductsTabElement = document.getElementById('shopify-products-tab');
-    if (shopifyProductsTabElement && shopifyProductsTabElement.classList.contains('active')) {
-        if (!window.allShopifyProducts) { // Carica solo se non sono già stati caricati
-            await loadAndRenderShopifyProducts();
-        } else {
-            renderShopifyProductsTable(window.allShopifyProducts); // Renderizza con i dati già presenti
+    // Listener per i bottoni di paginazione
+    prevPageBtn.addEventListener('click', () => {
+        if (prevPageInfo) {
+            currentPage--;
+            loadAndRenderShopifyProducts(false, prevPageInfo);
         }
-    }
-    // Se la tab non è attiva all'avvio, il caricamento avverrà al click della tab,
-    // grazie alla callback registrata in ui.js e main.js
+    });
+
+    nextPageBtn.addEventListener('click', () => {
+        if (nextPageInfo) {
+            currentPage++;
+            loadAndRenderShopifyProducts(false, nextPageInfo);
+        }
+    });
+
+    // Carica i prodotti al primo caricamento della tab
+    // Ora il caricamento iniziale avviene sempre tramite API per la paginazione
+    await loadAndRenderShopifyProducts();
 }
 
 /**
  * Carica i prodotti da Shopify e li renderizza nella tabella.
- * @param {boolean} forceRefresh - Forza il recupero dei dati da Shopify anche se già presenti in cache.
+ * @param {boolean} forceRefresh - Forza il recupero dei dati da Shopify anche se già presenti in cache (utile per refresh button).
+ * @param {string} [pageInfo=null] - Il parametro page_info per l'API Shopify (cursore di paginazione).
  */
-async function loadAndRenderShopifyProducts(forceRefresh = false) {
+async function loadAndRenderShopifyProducts(forceRefresh = false, pageInfo = null) {
     const tablePlaceholder = document.getElementById('shopifyProductsTablePlaceholder');
     const statusDiv = document.getElementById('shopifyProductsStatus');
+    const prevPageBtn = document.getElementById('prevPageBtn');
+    const nextPageBtn = document.getElementById('nextPageBtn');
+    const pageInfoSpan = document.getElementById('pageInfo');
+    const shopifyProductsLoader = document.getElementById('shopifyProductsLoader'); // Il loader specifico della tab
 
-    if (!tablePlaceholder || !statusDiv) return; // Doppia verifica
+    if (!tablePlaceholder || !statusDiv || !prevPageBtn || !nextPageBtn || !pageInfoSpan || !shopifyProductsLoader) {
+        console.error("Elementi UI per la tab Prodotti Shopify mancanti during loadAndRender.");
+        return;
+    }
 
-    tablePlaceholder.innerHTML = '<p>Caricamento prodotti Shopify...</p>'; // Messaggio di caricamento
+    // Mostra il loader e nascondi la tabella temporaneamente
+    tablePlaceholder.innerHTML = ''; // Pulisce il contenuto precedente
+    shopifyProductsLoader.classList.remove('hidden');
+    prevPageBtn.disabled = true;
+    nextPageBtn.disabled = true;
+    pageInfoSpan.textContent = 'Caricamento...';
     showUploaderStatus(statusDiv, '', false); // Pulisci status
 
-    toggleLoader(true); // Mostra loader globale
     try {
-        let shopifyProducts;
-        if (window.allShopifyProducts && !forceRefresh) {
-            shopifyProducts = window.allShopifyProducts; // Usa dati in cache
-            console.log("Utilizzando prodotti Shopify dalla cache.");
-        } else {
-            console.log("Recupero prodotti Shopify da API...");
-            // *** MODIFICA QUI: CHIAMATA AL NUOVO ENDPOINT ***
-            const response = await fetch('/.netlify/functions/get-all-shopify-products', { method: 'GET' });
+        console.log(`Recupero prodotti Shopify dalla pagina: ${pageInfo || 'prima pagina'}`);
+        // Chiama la Netlify Function per ottenere i prodotti della pagina corrente
+        const response = await fetch(`/.netlify/functions/get-all-shopify-products?limit=${PRODUCTS_PER_PAGE}&page_info=${pageInfo || ''}`, { method: 'GET' });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Errore durante il recupero dei prodotti Shopify.');
-            }
-            const data = await response.json();
-            shopifyProducts = data.shopifyProducts;
-            window.allShopifyProducts = shopifyProducts; // Cache dei prodotti
-            console.log(`Recuperati ${shopifyProducts.length} prodotti Shopify.`);
-            showUploaderStatus(statusDiv, `Prodotti Shopify caricati: ${shopifyProducts.length}`, false);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Errore durante il recupero dei prodotti Shopify dalla pagina.');
         }
+        const data = await response.json();
 
-        renderShopifyProductsTable(shopifyProducts); // Renderizza la tabella
+        // Aggiorna lo stato di paginazione globale
+        window.currentShopifyPageProducts = data.shopifyProducts; // Salva solo i prodotti della pagina corrente
+        nextPageInfo = data.nextPageInfo;
+        prevPageInfo = data.prevPageInfo;
+        currentPageInfo = pageInfo; // Aggiorna il cursore della pagina corrente
+
+        // Renderizza la tabella con i prodotti della pagina corrente
+        renderShopifyProductsTable(window.currentShopifyPageProducts);
+
+        // Aggiorna i controlli di paginazione
+        prevPageBtn.disabled = !prevPageInfo;
+        nextPageBtn.disabled = !nextPageInfo;
+        pageInfoSpan.textContent = `Pagina ${currentPage} (Prodotti: ${data.shopifyProducts.length})`; // Non abbiamo il totale, quindi mostriamo solo la pagina corrente e i prodotti caricati
+
+        showUploaderStatus(statusDiv, `Prodotti caricati per questa pagina: ${data.shopifyProducts.length}`, false);
+
     } catch (error) {
         console.error('Errore nel caricamento dei prodotti Shopify:', error);
-        tablePlaceholder.innerHTML = '<p class="text-danger">Errore durante il caricamento dei prodotti Shopify.</p>';
+        tablePlaceholder.innerHTML = '<p class="text-danger">Errore durante il caricamento dei prodotti Shopify. Prova ad aggiornare.</p>';
         showUploaderStatus(statusDiv, `Errore: ${error.message}`, true);
+        prevPageBtn.disabled = true;
+        nextPageBtn.disabled = true;
+        pageInfoSpan.textContent = 'Errore';
     } finally {
-        toggleLoader(false); // Nasconde loader globale
+        shopifyProductsLoader.classList.add('hidden'); // Nasconde il loader della tabella
     }
 }
 
 /**
  * Renderizza la tabella dei prodotti Shopify, applicando filtri di ricerca.
- * @param {Array<object>} products - Array di oggetti prodotto Shopify.
+ * @param {Array<object>} products - Array di oggetti prodotto Shopify (questa dovrebbe essere la singola pagina di prodotti).
  */
 function renderShopifyProductsTable(products) {
     const tablePlaceholder = document.getElementById('shopifyProductsTablePlaceholder');
@@ -103,6 +148,7 @@ function renderShopifyProductsTable(products) {
 
     const searchTerm = searchInput.value.toLowerCase();
 
+    // Filtra i prodotti solo sulla pagina attualmente caricata
     const filteredProducts = products.filter(p => {
         return (
             String(p.minsan || '').toLowerCase().includes(searchTerm) ||
@@ -112,10 +158,14 @@ function renderShopifyProductsTable(products) {
         );
     });
 
-    if (filteredProducts.length === 0) {
-        tablePlaceholder.innerHTML = '<p>Nessun prodotto trovato con i criteri di ricerca.</p>';
+    if (filteredProducts.length === 0 && searchTerm === '') {
+        tablePlaceholder.innerHTML = '<p>Nessun prodotto trovato su Shopify per questa pagina.</p>';
+        return;
+    } else if (filteredProducts.length === 0 && searchTerm !== '') {
+        tablePlaceholder.innerHTML = '<p>Nessun prodotto corrisponde alla ricerca su questa pagina.</p>';
         return;
     }
+
 
     let html = `
         <table class="data-table">
@@ -139,58 +189,3 @@ function renderShopifyProductsTable(products) {
         const price = parseFloat(variant.price ?? 0).toFixed(2);
         const minsan = product.minsan || variant.sku || product.id; // Il minsan normalizzato
         const barcode = variant.barcode || '-';
-
-        let statusClass = 'status-indicator';
-        let statusText = 'Attivo';
-        if (inventoryQuantity <= 0) {
-            statusClass += ' shopify-only'; // Riutilizziamo la classe per "esaurito"
-            statusText = 'Esaurito';
-        }
-
-        html += `
-            <tr>
-                <td>${minsan} <br><small>${barcode !== '-' ? 'EAN: ' + barcode : ''}</small></td>
-                <td>${product.title}</td>
-                <td>€ ${price}</td>
-                <td>${inventoryQuantity}</td>
-                <td>${product.Scadenza || '-'}</td>
-                <td><span class="${statusClass}">${statusText}</span></td>
-                <td>
-                    <button class="btn secondary btn-view-details" data-minsan="${minsan}">Dettagli</button>
-                    <button class="btn primary btn-edit-shopify" data-minsan="${minsan}">Modifica</button>
-                </td>
-            </tr>
-        `;
-    });
-
-    html += `
-            </tbody>
-        </table>
-    `;
-
-    tablePlaceholder.innerHTML = html;
-
-    // Aggiungi listener per i bottoni "Dettagli" e "Modifica"
-    // Usiamo la delegazione degli eventi sul placeholder per elementi generati dinamicamente
-    tablePlaceholder.removeEventListener('click', handleShopifyTableActions); // Rimuovi per evitare duplicati
-    tablePlaceholder.addEventListener('click', handleShopifyTableActions);
-}
-
-// Handler per i click sulla tabella dei prodotti Shopify
-function handleShopifyTableActions(e) {
-    if (e.target.classList.contains('btn-view-details')) {
-        const minsan = e.target.dataset.minsan;
-        console.log('Dettagli per prodotto Shopify Minsan:', minsan);
-        const productDetails = window.allShopifyProducts.find(p => String(p.minsan).trim() === minsan);
-        if (productDetails) {
-            // Qui potresti aprire una modal con tutti i dettagli del prodotto Shopify
-            // Reutilizzare showProductPreviewModal con un tipo specifico per Shopify solo visualizzazione.
-            // showProductPreviewModal(minsan, null, productDetails, 'shopify-details');
-            showUploaderStatus(document.getElementById('shopifyProductsStatus'), `Dettagli per ${minsan} (da implementare)`, 'info');
-        }
-    } else if (e.target.classList.contains('btn-edit-shopify')) {
-        const minsan = e.target.dataset.minsan;
-        console.log('Modifica prodotto Shopify Minsan:', minsan);
-        showUploaderStatus(document.getElementById('shopifyProductsStatus'), `Modifica per ${minsan} (da implementare)`, 'info');
-    }
-}

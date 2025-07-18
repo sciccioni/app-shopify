@@ -16,7 +16,7 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
     }
 
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
-    const url = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/${cleanEndpoint}`; // Correzione definitiva di SHOPIFY_STORE_FRAME
+    const url = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/${cleanEndpoint}`;
     const options = {
         method: method,
         headers: {
@@ -50,56 +50,51 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
  * Altrimenti, recupera tutti i prodotti. Implementa la paginazione.
  *
  * @param {Array<string>} [skusToFetch=[]] - Un array di stringhe SKU/Minsan da cercare. Se vuoto, recupera tutti i prodotti.
- * @returns {Promise<Array<object>>} Array di oggetti prodotto Shopify, normalizzati.
+ * @param {string} [pageInfo=null] - Il parametro 'page_info' per la paginazione di Shopify (next/previous page cursor).
+ * @param {number} [limit=20] - Il numero massimo di prodotti da recuperare per pagina.
+ * @returns {Promise<{products: Array<object>, nextPageInfo: string|null, prevPageInfo: string|null}>} Oggetto con prodotti, e info per la paginazione.
  * @throws {Error} Se il recupero fallisce.
  */
-async function getShopifyProducts(skusToFetch = []) {
-    let allProducts = [];
-    // Aggiungiamo un limite esplicito per pagina.
-    // Shopify API raccomanda di non superare 250 (max per API KEY). 50 è un buon compromesso.
-    let nextLink = `products.json?fields=id,title,handle,variants,metafields&limit=50`;
+async function getShopifyProducts(skusToFetch = [], pageInfo = null, limit = 20) {
+    let products = [];
+    let queryParams = `fields=id,title,handle,variants,metafields&limit=${limit}`;
 
-    // Se stiamo cercando SKUs specifici, possiamo aggiungere un filtro "query"
-    // MA L'API Shopify search (query) è limitata e non filtra bene per varianti SKU/barcode.
-    // La strategia più robusta è recuperare e filtrare lato nostro.
-    // Se skusToFetch è vuoto, recuperiamo tutto il possibile.
-    // Se non è vuoto, scarichiamo comunque paginando e poi filtriamo localmente.
-    // PER STORE MOLTO GRANDI (centinaia di migliaia di prodotti), questa strategia può ancora andare in timeout.
-    // In quel caso, si dovrebbe usare un database esterno per la sincronizzazione o un'API di ricerca custom.
+    if (pageInfo) {
+        queryParams += `&page_info=${pageInfo}`;
+    }
+
+    let endpoint = `products.json?${queryParams}`;
+
+    let nextPageInfo = null;
+    let prevPageInfo = null;
 
     try {
-        let fetchCount = 0; // Contatore per il debug del timeout
-        while (nextLink) {
-            console.log(`Fetching Shopify products: ${nextLink}`);
-            const responseData = await callShopifyAdminApi(nextLink);
-            allProducts = allProducts.concat(responseData.json.products);
+        console.log(`Fetching Shopify products with pagination: ${endpoint}`);
+        const responseData = await callShopifyAdminApi(endpoint);
+        products = responseData.json.products;
 
-            fetchCount++;
-            // Loggarlo per capire quante chiamate paginate avvengono
-            console.log(`Fetched page ${fetchCount}, total products so far: ${allProducts.length}`);
+        const linkHeader = responseData.headers.get('Link');
+        if (linkHeader) {
+            const parts = linkHeader.split(',');
+            const nextPart = parts.find(p => p.includes('rel="next"'));
+            const prevPart = parts.find(p => p.includes('rel="previous"'));
 
-            const linkHeader = responseData.headers.get('Link');
-            if (linkHeader) {
-                const parts = linkHeader.split(',');
-                const nextPart = parts.find(p => p.includes('rel="next"'));
-                if (nextPart) {
-                    const urlMatch = nextPart.match(/<(.*?)>/);
-                    if (urlMatch && urlMatch[1]) {
-                        const urlObj = new URL(urlMatch[1]);
-                        nextLink = `${urlObj.pathname.split('/').pop()}${urlObj.search}`;
-                    } else {
-                        nextLink = null;
-                    }
-                } else {
-                    nextLink = null;
+            if (nextPart) {
+                const urlMatch = nextPart.match(/page_info=(.*?)[&>]/);
+                if (urlMatch && urlMatch[1]) {
+                    nextPageInfo = urlMatch[1];
                 }
-            } else {
-                nextLink = null;
+            }
+            if (prevPart) {
+                const urlMatch = prevPart.match(/page_info=(.*?)[&>]/);
+                if (urlMatch && urlMatch[1]) {
+                    prevPageInfo = urlMatch[1];
+                }
             }
         }
 
         // Normalizza i prodotti Shopify
-        const normalizedProducts = allProducts.map(product => {
+        const normalizedProducts = products.map(product => {
             const variant = product.variants && product.variants.length > 0 ? product.variants[0] : {};
 
             const minsanMetafield = product.metafields?.find(m => m.key === 'minsan' && m.namespace === 'custom_fields');
@@ -124,10 +119,18 @@ async function getShopifyProducts(skusToFetch = []) {
             const skusSet = new Set(skusToFetch.map(s => String(s).trim()));
             const filtered = normalizedProducts.filter(p => skusSet.has(p.minsan));
             console.log(`Filtro applicato: da ${normalizedProducts.length} a ${filtered.length} prodotti per SKUs specifici.`);
-            return filtered;
+            return {
+                products: filtered,
+                nextPageInfo: null, // Per le query SKU, non gestiamo la paginazione in questo modo
+                prevPageInfo: null
+            };
         }
 
-        return normalizedProducts;
+        return {
+            products: normalizedProducts,
+            nextPageInfo: nextPageInfo,
+            prevPageInfo: prevPageInfo
+        };
 
     } catch (error) {
         console.error('Errore nel recupero prodotti Shopify:', error);

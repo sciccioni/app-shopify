@@ -1,4 +1,4 @@
-// netlify/functions/get-all-shopify-products.js - NUOVO ENDPOINT HTTP
+// netlify/functions/get-all-shopify-products.js - AGGIORNATO ENDPOINT HTTP
 
 // Importa la funzione getShopifyProducts dalla tua libreria API Shopify
 const { getShopifyProducts } = require('./shopify-api');
@@ -12,17 +12,26 @@ exports.handler = async (event, context) => {
     try {
         console.log("Invocazione della funzione get-all-shopify-products.");
 
-        // Chiama getShopifyProducts senza passare SKU per ottenere tutti i prodotti
-        const shopifyProducts = await getShopifyProducts();
+        // Recupera i parametri di paginazione dalla query string
+        const pageInfo = event.queryStringParameters.page_info || null;
+        const limit = parseInt(event.queryStringParameters.limit || '20', 10); // Default a 20 prodotti per pagina
 
-        console.log(`Recuperati ${shopifyProducts.length} prodotti totali da Shopify per la tab.`);
+        console.log(`Richiesta di prodotti Shopify: page_info=${pageInfo}, limit=${limit}`);
+
+        // Chiama getShopifyProducts con i parametri di paginazione
+        // skusToFetch rimane vuoto per questa funzione che deve recuperare tutti i prodotti
+        const result = await getShopifyProducts([], pageInfo, limit); // Ora getShopifyProducts restituisce un oggetto
+
+        console.log(`Recuperati ${result.products.length} prodotti per la pagina corrente.`);
 
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message: 'Prodotti Shopify recuperati con successo!',
-                shopifyProducts: shopifyProducts
+                shopifyProducts: result.products,
+                nextPageInfo: result.nextPageInfo,
+                prevPageInfo: result.prevPageInfo
             }),
         };
 
