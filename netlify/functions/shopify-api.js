@@ -1,6 +1,6 @@
 const SHOPIFY_STORE_NAME = process.env.SHOPIFY_STORE_NAME;
 const SHOPIFY_ADMIN_API_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
-const SHOPIFY_API_VERSION = '2024-07';
+const SHOPIFY_API_VERSION = '2024-07'; // Versione API di Shopify
 
 /**
  * Funzione per effettuare richieste all'Admin API di Shopify.
@@ -16,8 +16,7 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
     }
 
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
-    // CORREZIONE FINALE E DEFINITIVA QUI: da SHOPIFY_STORE_FRAME a SHOPIFY_STORE_NAME
-    const url = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/${cleanEndpoint}`;
+    const url = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/${cleanEndpoint}`; // Correzione definitiva di SHOPIFY_STORE_FRAME
     const options = {
         method: method,
         headers: {
@@ -50,22 +49,34 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
  * Se viene fornito un elenco di skus, cerca i prodotti che hanno queste SKUs nelle loro varianti.
  * Altrimenti, recupera tutti i prodotti. Implementa la paginazione.
  *
- * @param {Array<string>} [skusToFetch=[]] - Un array di stringhe SKU/Minsan da cercare.
+ * @param {Array<string>} [skusToFetch=[]] - Un array di stringhe SKU/Minsan da cercare. Se vuoto, recupera tutti i prodotti.
  * @returns {Promise<Array<object>>} Array di oggetti prodotto Shopify, normalizzati.
  * @throws {Error} Se il recupero fallisce.
  */
 async function getShopifyProducts(skusToFetch = []) {
     let allProducts = [];
-    let nextLink = `products.json?fields=id,title,handle,variants,metafields`;
+    // Aggiungiamo un limite esplicito per pagina.
+    // Shopify API raccomanda di non superare 250 (max per API KEY). 50 è un buon compromesso.
+    let nextLink = `products.json?fields=id,title,handle,variants,metafields&limit=50`;
 
-    // Aggiungiamo un limite esplicito, anche se è il default, per chiarezza.
-    nextLink += `&limit=50`;
+    // Se stiamo cercando SKUs specifici, possiamo aggiungere un filtro "query"
+    // MA L'API Shopify search (query) è limitata e non filtra bene per varianti SKU/barcode.
+    // La strategia più robusta è recuperare e filtrare lato nostro.
+    // Se skusToFetch è vuoto, recuperiamo tutto il possibile.
+    // Se non è vuoto, scarichiamo comunque paginando e poi filtriamo localmente.
+    // PER STORE MOLTO GRANDI (centinaia di migliaia di prodotti), questa strategia può ancora andare in timeout.
+    // In quel caso, si dovrebbe usare un database esterno per la sincronizzazione o un'API di ricerca custom.
 
     try {
+        let fetchCount = 0; // Contatore per il debug del timeout
         while (nextLink) {
             console.log(`Fetching Shopify products: ${nextLink}`);
             const responseData = await callShopifyAdminApi(nextLink);
             allProducts = allProducts.concat(responseData.json.products);
+
+            fetchCount++;
+            // Loggarlo per capire quante chiamate paginate avvengono
+            console.log(`Fetched page ${fetchCount}, total products so far: ${allProducts.length}`);
 
             const linkHeader = responseData.headers.get('Link');
             if (linkHeader) {
@@ -87,9 +98,10 @@ async function getShopifyProducts(skusToFetch = []) {
             }
         }
 
-        // Normalizza e filtra i prodotti Shopify
+        // Normalizza i prodotti Shopify
         const normalizedProducts = allProducts.map(product => {
             const variant = product.variants && product.variants.length > 0 ? product.variants[0] : {};
+
             const minsanMetafield = product.metafields?.find(m => m.key === 'minsan' && m.namespace === 'custom_fields');
             const scadenzaMetafield = product.metafields?.find(m => m.key === 'scadenza' && m.namespace === 'custom_fields');
 
@@ -106,10 +118,13 @@ async function getShopifyProducts(skusToFetch = []) {
             };
         });
 
-        // Se sono stati forniti degli SKU, filtriamo i prodotti recuperati
+        // Se sono stati forniti degli SKU (per la tab "Importa/Aggiorna"), filtriamo i prodotti recuperati.
+        // Se skusToFetch è vuoto (per la tab "Prodotti Shopify"), restituiamo tutti i prodotti normalizzati.
         if (skusToFetch.length > 0) {
             const skusSet = new Set(skusToFetch.map(s => String(s).trim()));
-            return normalizedProducts.filter(p => skusSet.has(p.minsan));
+            const filtered = normalizedProducts.filter(p => skusSet.has(p.minsan));
+            console.log(`Filtro applicato: da ${normalizedProducts.length} a ${filtered.length} prodotti per SKUs specifici.`);
+            return filtered;
         }
 
         return normalizedProducts;

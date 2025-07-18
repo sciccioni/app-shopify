@@ -1,4 +1,11 @@
-// assets/js/ui.js - COMPLETO E CORRETTO
+// assets/js/ui.js - COMPLETO E CORRETTO (AGGIORNATO PER CALLBACK TAB)
+
+/**
+ * Mappa le funzioni di callback per l'inizializzazione delle tab.
+ * La chiave è l'ID della tab, il valore è la funzione da chiamare.
+ * @type {Object.<string, Function>}
+ */
+const tabInitCallbacks = {};
 
 /**
  * Carica un componente HTML da un file template.
@@ -18,13 +25,8 @@ export async function loadComponent(componentName) {
         }
         const text = await response.text();
         const parser = new DOMParser();
-        // Parsa il testo HTML come un documento completo.
-        // Questo è il modo più robusto per gestire frammenti HTML potenzialmente complessi.
         const doc = parser.parseFromString(text, 'text/html');
 
-        // Crea un DocumentFragment e sposta tutti i nodi figli dal <body> del documento parso a esso.
-        // Questo gestisce correttamente anche il caso in cui il componente non abbia un singolo elemento radice,
-        // o abbia commenti, spazi bianchi, ecc., garantendo che solo il markup visibile venga processato.
         const fragment = document.createDocumentFragment();
         while (doc.body.firstChild) {
             fragment.appendChild(doc.body.firstChild);
@@ -38,8 +40,13 @@ export async function loadComponent(componentName) {
 
 /**
  * Inizializza la navigazione a tab dell'applicazione.
+ * Accetta un oggetto di callback per l'inizializzazione delle singole tab.
+ * @param {Object.<string, Function>} callbacks - Oggetto con ID della tab come chiave e funzione di inizializzazione come valore.
  */
-export function initializeTabNavigation() {
+export function initializeTabNavigation(callbacks = {}) {
+    // Unisci le callback passate con quelle interne, se ce ne fossero.
+    Object.assign(tabInitCallbacks, callbacks);
+
     const tabButtons = document.querySelectorAll('.tab-button');
     const tabContents = document.querySelectorAll('.tab-content');
 
@@ -49,21 +56,52 @@ export function initializeTabNavigation() {
     }
 
     tabButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const targetTab = button.dataset.tab;
+        button.addEventListener('click', async () => { // Reso async per le callback
+            const targetTabId = button.dataset.tab;
 
+            // Aggiorna classi attive per i bottoni
             tabButtons.forEach(btn => btn.classList.remove('active'));
             button.classList.add('active');
 
+            // Nascondi tutti i contenuti delle tab
             tabContents.forEach(content => {
-                if (content.id === `${targetTab}-tab`) {
-                    content.classList.remove('hidden');
-                } else {
-                    content.classList.add('hidden');
-                }
+                content.classList.add('hidden');
             });
+
+            // Mostra il contenuto della tab selezionata
+            const selectedTabContent = document.getElementById(`${targetTabId}-tab`);
+            if (selectedTabContent) {
+                selectedTabContent.classList.remove('hidden');
+
+                // Chiama la funzione di inizializzazione specifica per la tab, se esiste
+                if (tabInitCallbacks[targetTabId] && typeof tabInitCallbacks[targetTabId] === 'function') {
+                    console.log(`Attivazione callback per tab: ${targetTabId}`);
+                    try {
+                        await tabInitCallbacks[targetTabId](); // Esegui la callback, attendendo se è async
+                    } catch (e) {
+                        console.error(`Errore nell'inizializzazione della tab '${targetTabId}':`, e);
+                    }
+                }
+            } else {
+                console.warn(`Contenuto della tab con ID '${targetTabId}-tab' non trovato.`);
+            }
         });
     });
+
+    // Per la tab attiva all'avvio, esegui la sua callback
+    const activeTabButton = document.querySelector('.tab-button.active');
+    if (activeTabButton) {
+        const initialTabId = activeTabButton.dataset.tab;
+        if (tabInitCallbacks[initialTabId] && typeof tabInitCallbacks[initialTabId] === 'function') {
+             console.log(`Attivazione callback iniziale per tab: ${initialTabId}`);
+             try {
+                // Non await qui per non bloccare il DOMContentLoaded, ma la callback stessa può essere async
+                tabInitCallbacks[initialTabId]();
+            } catch (e) {
+                console.error(`Errore nell'inizializzazione iniziale della tab '${initialTabId}':`, e);
+            }
+        }
+    }
 }
 
 /**

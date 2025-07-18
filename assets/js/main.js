@@ -3,20 +3,27 @@
 import { loadComponent, initializeTabNavigation } from './ui.js';
 import { initializeFileUploader } from './uploader.js';
 import { renderComparisonTable } from './comparison.js';
+// Importa il nuovo modulo per la gestione della tab Prodotti Shopify
+import { initializeShopifyProductsTab } from './shopify-products.js';
 
 // Variabili globali per i dati, usate tra i moduli
 window.currentFileProducts = [];
 window.currentShopifyProducts = [];
+// Nuova variabile globale per memorizzare tutti i prodotti Shopify
+window.allShopifyProducts = null; // Inizialmente null, verrà popolato al primo accesso alla tab
 
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. Ottieni i riferimenti ai contenitori principali (devono esistere in index.html)
     const fileUploaderSection = document.getElementById('file-uploader-section');
     const comparisonTableSection = document.getElementById('comparison-table-section');
     const modalContainer = document.getElementById('modal-container');
+    // Riferimento al contenitore della tab Prodotti Shopify
+    const shopifyProductsTabContent = document.getElementById('shopify-products-tab');
+
 
     // Verifica che i contenitori esistano prima di procedere
-    if (!fileUploaderSection || !comparisonTableSection || !modalContainer) {
-        console.error("ERRORE CRITICO: Uno o più sezioni principali dell'applicazione (file-uploader-section, comparison-table-section, modal-container) non sono state trovate in index.html. Assicurati che gli ID siano corretti.");
+    if (!fileUploaderSection || !comparisonTableSection || !modalContainer || !shopifyProductsTabContent) {
+        console.error("ERRORE CRITICO: Uno o più sezioni principali dell'applicazione non sono state trovate in index.html. Assicurati che gli ID siano corretti.");
         return; // Non possiamo continuare senza i contenitori base
     }
 
@@ -54,8 +61,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error("ERRORE: Impossibile caricare il DocumentFragment del componente 'preview-modal'.");
     }
 
+    // NUOVO: Carica il componente della tabella Prodotti Shopify
+    const shopifyProductsTableFragment = await loadComponent('shopify-products-table');
+    if (shopifyProductsTableFragment) {
+        // Appendi al div della tab Prodotti Shopify, non al suo contenuto interno
+        shopifyProductsTabContent.innerHTML = ''; // Pulisci il contenitore della tab
+        shopifyProductsTabContent.appendChild(shopifyProductsTableFragment);
+        console.log("Componente 'shopify-products-table' appeso con successo.");
+    } else {
+        console.error("ERRORE: Impossibile caricare il DocumentFragment del componente 'shopify-products-table'.");
+    }
+
+
     // 3. Inizializza la logica di navigazione a tab
-    initializeTabNavigation();
+    // Passa la funzione di inizializzazione della nuova tab
+    initializeTabNavigation({
+        'shopify-products': initializeShopifyProductsTab // Associa la funzione alla tab ID
+    });
 
     // 4. Ora che tutti i componenti sono stati appesi e sono parte del DOM, recupera i riferimenti agli elementi UI.
     // Usiamo querySelector sul *contenitore padre specifico* per maggiore robustezza.
