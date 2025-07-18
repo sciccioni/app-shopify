@@ -1,10 +1,8 @@
-// assets/js/company-manager.js - NUOVO E COMPLETO
+// assets/js/company-manager.js - AGGIORNATO E COMPLETO (Integrazione Supabase API)
 
-import { showUploaderStatus } from './ui.js'; // Per mostrare messaggi di stato
+import { showUploaderStatus, toggleLoader } from './ui.js';
 
-const COMPANIES_STORAGE_KEY = 'pharmacy_app_companies'; // Chiave per localStorage
-
-let companies = []; // Array per memorizzare le ditte
+let companies = []; // Array per memorizzare le ditte caricate dal DB
 
 /**
  * Inizializza la logica per la tab "Gestione Ditte".
@@ -32,14 +30,13 @@ export function initializeCompanyManagerTab() {
         return;
     }
 
-    // Carica le ditte dal localStorage all'avvio
+    // Carica le ditte dal database all'avvio della tab
     loadCompanies();
-    renderCompaniesTable();
 
     // Listener per la sottomissione del form
-    companyForm.addEventListener('submit', (e) => {
-        e.preventDefault(); // Previeni il ricaricamento della pagina
-        saveCompany();
+    companyForm.addEventListener('submit', async (e) => { // Reso async
+        e.preventDefault();
+        await saveCompany(); // Attendi il salvataggio
     });
 
     // Listener per il bottone "Annulla Modifica"
@@ -47,99 +44,118 @@ export function initializeCompanyManagerTab() {
 
     // Listener per il bottone "Ricalcola Tutti i Prezzi"
     recalculateAllPricesBtn.addEventListener('click', () => {
-        showUploaderStatus(companyListStatus, "Funzionalità 'Ricalcola Tutti i Prezzi' da implementare.", 'info');
+        showUploaderStatus(companyListStatus, "Funzionalità 'Ricalcola Tutti i Prezzi' da implementare (con integrazione Shopify).", 'info');
         console.log("Ricalcola Tutti i Prezzi cliccato.");
         // Qui verrà la logica per ricalcolare i prezzi di tutti i prodotti Shopify
         // in base ai markup delle ditte, e poi aggiornare Shopify.
     });
 
     // Listener delegato per i bottoni Modifica ed Elimina nella tabella
-    companiesTableBody.addEventListener('click', (e) => {
+    companiesTableBody.addEventListener('click', async (e) => { // Reso async
         if (e.target.classList.contains('btn-edit-company')) {
             const idToEdit = e.target.dataset.id;
-            editCompany(idToEdit);
+            editCompany(idToEdit); // Modifica locale, poi salva via API
         } else if (e.target.classList.contains('btn-delete-company')) {
             const idToDelete = e.target.dataset.id;
-            deleteCompany(idToDelete);
+            await deleteCompany(idToDelete); // Attendi l'eliminazione
         }
     });
 
     /**
-     * Carica le ditte dal localStorage.
+     * Carica le ditte dal database tramite API.
      */
-    function loadCompanies() {
+    async function loadCompanies() {
+        toggleLoader(true); // Mostra loader
+        showUploaderStatus(companyListStatus, "Caricamento ditte...", false);
         try {
-            const storedCompanies = localStorage.getItem(COMPANIES_STORAGE_KEY);
-            if (storedCompanies) {
-                companies = JSON.parse(storedCompanies);
-                console.log("Ditte caricate da localStorage:", companies);
-            } else {
-                companies = [];
-                console.log("Nessuna ditta trovata in localStorage.");
+            const response = await fetch('/.netlify/functions/company-api', { method: 'GET' });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Errore durante il recupero delle ditte.');
             }
+            const data = await response.json();
+            companies = data.companies; // Aggiorna l'array di ditte
+            console.log("Ditte caricate da Supabase:", companies);
+            renderCompaniesTable(); // Renderizza la tabella
+            showUploaderStatus(companyListStatus, `Ditte caricate: ${companies.length}`, false);
         } catch (error) {
-            console.error("Errore nel caricamento delle ditte da localStorage:", error);
-            companies = []; // Resetta in caso di errore di parsing
-            showUploaderStatus(companyListStatus, "Errore nel caricamento delle ditte salvate.", true);
+            console.error("Errore nel caricamento delle ditte:", error);
+            companies = []; // Resetta in caso di errore
+            renderCompaniesTable(); // Renderizza tabella vuota
+            showUploaderStatus(companyListStatus, `Errore nel caricamento delle ditte: ${error.message}`, true);
+        } finally {
+            toggleLoader(false); // Nasconde loader
         }
     }
 
     /**
-     * Salva le ditte nel localStorage.
+     * Aggiunge una nuova ditta o aggiorna una esistente tramite API.
      */
-    function saveCompanies() {
-        try {
-            localStorage.setItem(COMPANIES_STORAGE_KEY, JSON.stringify(companies));
-            console.log("Ditte salvate in localStorage.");
-        } catch (error) {
-            console.error("Errore nel salvataggio delle ditte in localStorage:", error);
-            showUploaderStatus(companyListStatus, "Errore nel salvataggio delle ditte.", true);
-        }
-    }
-
-    /**
-     * Aggiunge una nuova ditta o aggiorna una esistente.
-     */
-    function saveCompany() {
+    async function saveCompany() {
         const name = companyNameInput.value.trim();
         const markup = parseFloat(companyMarkupInput.value);
-        const id = companyIdInput.value;
+        const id = companyIdInput.value; // Sarà vuoto per le nuove ditte
 
         if (!name || isNaN(markup)) {
             showUploaderStatus(companyListStatus, "Per favore, inserisci un nome ditta e un markup validi.", true);
             return;
         }
 
-        if (id) {
-            // Modifica ditta esistente
-            const index = companies.findIndex(c => c.id === id);
-            if (index !== -1) {
-                companies[index] = { ...companies[index], name, markup };
-                showUploaderStatus(companyListStatus, `Ditta "${name}" aggiornata con successo!`, false);
-            }
-        } else {
-            // Aggiungi nuova ditta
-            // Controlla se esiste già una ditta con lo stesso nome (case-insensitive)
-            if (companies.some(c => c.name.toLowerCase() === name.toLowerCase())) {
-                showUploaderStatus(companyListStatus, `Una ditta con il nome "${name}" esiste già.`, true);
-                return;
-            }
-            const newId = Date.now().toString(); // ID semplice basato sul timestamp
-            companies.push({ id: newId, name, markup });
-            showUploaderStatus(companyListStatus, `Ditta "${name}" aggiunta con successo!`, false);
-        }
+        toggleLoader(true);
+        try {
+            let response;
+            let method;
+            let url;
+            let message;
 
-        saveCompanies();
-        renderCompaniesTable();
-        resetForm();
+            if (id) {
+                // Modifica ditta esistente
+                method = 'PUT';
+                url = `/.netlify/functions/company-api/${id}`;
+                message = 'Ditta aggiornata con successo!';
+            } else {
+                // Aggiungi nuova ditta
+                // Controlla se esiste già una ditta con lo stesso nome (case-insensitive)
+                if (companies.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+                    showUploaderStatus(companyListStatus, `Una ditta con il nome "${name}" esiste già.`, true);
+                    toggleLoader(false);
+                    return;
+                }
+                method = 'POST';
+                url = '/.netlify/functions/company-api';
+                message = 'Ditta aggiunta con successo!';
+            }
+
+            response = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, markup })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || `Errore durante il salvataggio della ditta: ${response.statusText}`);
+            }
+
+            showUploaderStatus(companyListStatus, message, false);
+            await loadCompanies(); // Ricarica le ditte per aggiornare la tabella
+            resetForm();
+        } catch (error) {
+            console.error("Errore nel salvataggio della ditta:", error);
+            showUploaderStatus(companyListStatus, `Errore nel salvataggio della ditta: ${error.message}`, true);
+        } finally {
+            toggleLoader(false);
+        }
     }
 
     /**
      * Prepopola il form per la modifica di una ditta.
-     * @param {string} id - L'ID della ditta da modificare.
+     * @param {string} id - L'ID della ditta da modificare (stringa UUID).
      */
     function editCompany(id) {
-        const companyToEdit = companies.find(c => c.id === id);
+        // ID dal database è probabilmente un intero o UUID.
+        // Assicurati che il confronto sia corretto (stringa === stringa o numero === numero).
+        const companyToEdit = companies.find(c => String(c.id) === String(id)); 
         if (companyToEdit) {
             companyNameInput.value = companyToEdit.name;
             companyMarkupInput.value = companyToEdit.markup;
@@ -153,17 +169,28 @@ export function initializeCompanyManagerTab() {
     }
 
     /**
-     * Elimina una ditta.
-     * @param {string} id - L'ID della ditta da eliminare.
+     * Elimina una ditta tramite API.
+     * @param {string} id - L'ID della ditta da eliminare (stringa UUID).
      */
-    function deleteCompany(id) {
-        const companyToDelete = companies.find(c => c.id === id);
+    async function deleteCompany(id) {
+        const companyToDelete = companies.find(c => String(c.id) === String(id));
         if (companyToDelete && confirm(`Sei sicuro di voler eliminare la ditta "${companyToDelete.name}"?`)) {
-            companies = companies.filter(c => c.id !== id);
-            saveCompanies();
-            renderCompaniesTable();
-            showUploaderStatus(companyListStatus, `Ditta "${companyToDelete.name}" eliminata con successo.`, false);
-            resetForm(); // Resetta il form se stavi modificando la ditta eliminata
+            toggleLoader(true);
+            try {
+                const response = await fetch(`/.netlify/functions/company-api/${id}`, { method: 'DELETE' });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || `Errore durante l'eliminazione della ditta: ${response.statusText}`);
+                }
+                showUploaderStatus(companyListStatus, `Ditta "${companyToDelete.name}" eliminata con successo.`, false);
+                await loadCompanies(); // Ricarica le ditte
+                resetForm(); // Resetta il form se stavi modificando la ditta eliminata
+            } catch (error) {
+                console.error("Errore nell'eliminazione della ditta:", error);
+                showUploaderStatus(companyListStatus, `Errore nell'eliminazione della ditta: ${error.message}`, true);
+            } finally {
+                toggleLoader(false);
+            }
         }
     }
 
