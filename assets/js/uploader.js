@@ -1,4 +1,4 @@
-// uploader.js - Logica specifica per il caricamento file Excel
+// assets/js/uploader.js - Logica specifica per il caricamento file Excel
 
 import { showUploaderStatus, updateUploaderProgress, toggleLoader } from './ui.js';
 
@@ -11,7 +11,13 @@ export function initializeFileUploader(onUploadSuccess) {
     const fileInput = document.getElementById('fileInput');
     const selectFileBtn = document.getElementById('selectFileBtn');
 
-    // Reset dello stato iniziale dell'uploader
+    // **IMPORTANTE: Verifica che gli elementi siano stati trovati prima di aggiungere i listener**
+    if (!dropArea || !fileInput || !selectFileBtn) {
+        console.error("Errore: Elementi UI dell'uploader non trovati nel DOM. Assicurati che 'file-uploader.html' sia caricato correttamente nell'HTML prima di inizializzare uploader.js.");
+        return; // Esce dalla funzione se gli elementi non ci sono
+    }
+
+    // Reset dello stato iniziale dell'uploader dopo che gli elementi sono disponibili
     showUploaderStatus('', false); // Nasconde eventuali messaggi precedenti
     updateUploaderProgress(0); // Resetta la progress bar
 
@@ -30,20 +36,20 @@ export function initializeFileUploader(onUploadSuccess) {
 
     dropArea.addEventListener('drop', handleDrop, false);
 
+    // Gestione selezione file da input
+    selectFileBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
     function preventDefaults(e) {
         e.preventDefault();
         e.stopPropagation();
     }
 
-    function handleDrop(e) {
+    async function handleDrop(e) {
         const dt = e.dataTransfer;
         const files = dt.files;
-        handleFiles(files);
+        await handleFiles(files);
     }
-
-    // Gestione selezione file da input
-    selectFileBtn.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
 
     async function handleFiles(files) {
         if (files.length === 0) {
