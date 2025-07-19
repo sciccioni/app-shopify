@@ -39,14 +39,33 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
 }
 
 // Recupera prodotti Shopify per lista di Minsan in parallelo
+// Recupera prodotti Shopify per lista di Minsan in parallelo con throttling
 async function getShopifyProducts(minsans, limit = 20) {
   let products = [];
   let nextPageInfo;
   let endpoint = `products.json?fields=id,title,variants,metafields&limit=${limit}`;
   const skuSet = new Set(minsans.map(normalizeMinsan));
 
+  // Funzione sleep per throttling
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
   do {
-    const { data, headers } = await callShopifyAdminApi(endpoint);
+    // Effettuiamo massimo 1 chiamata ogni 600ms per non superare 2/sec
+    await sleep(600);
+    let response;
+    try {
+      response = await callShopifyAdminApi(endpoint);
+    } catch (err) {
+      if (/429/.test(err.message)) {
+        // Se rate limit, aspettiamo e ritentiamo
+        console.warn('Shopify rate limit exceeded, retrying after 1000ms');
+        await sleep(1000);
+        response = await callShopifyAdminApi(endpoint);
+      } else {
+        throw err;
+      }
+    }
+    const { data, headers } = response;
     products = products.concat(data.products || []);
     const link = headers.get('link') || headers.get('Link') || '';
     const match = link.match(/page_info=([^&>]+)/);
