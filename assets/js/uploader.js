@@ -1,4 +1,4 @@
-// assets/js/uploader.js - COMPLETO E CORRETTO
+// assets/js/uploader.js - COMPLETO E CORRETTO (Passaggio Metrice a onUploadSuccess)
 
 import { showUploaderStatus, updateUploaderProgress, toggleLoader } from './ui.js';
 
@@ -90,7 +90,8 @@ export function initializeFileUploader({
             showUploaderStatus(uploaderStatusDiv, 'File elaborato con successo! Dati caricati per il confronto.', false);
 
             if (onUploadSuccess) {
-                onUploadSuccess(data.processedProducts, data.shopifyProducts);
+                // *** MODIFICA QUI: Passa metrics alla callback ***
+                onUploadSuccess(data.processedProducts, data.shopifyProducts, data.metrics);
             }
 
         } catch (error) {

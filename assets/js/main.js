@@ -1,10 +1,9 @@
-// assets/js/main.js - COMPLETO E CORRETTO (AGGIORNATO PER NUOVA TAB DITTE)
+// assets/js/main.js - COMPLETO E CORRETTO (Passaggio Metrice a renderComparisonTable)
 
 import { loadComponent, initializeTabNavigation } from './ui.js';
 import { initializeFileUploader } from './uploader.js';
 import { renderComparisonTable } from './comparison.js';
 import { initializeShopifyProductsTab } from './shopify-products.js';
-// Importa il nuovo modulo per la gestione delle ditte
 import { initializeCompanyManagerTab } from './company-manager.js';
 
 // Variabili globali per i dati, usate tra i moduli
@@ -14,11 +13,17 @@ window.allShopifyProducts = null;
 window.currentShopifyPageProducts = [];
 
 // Funzione di inizializzazione specifica per la tab "Importa/Aggiorna Prodotti"
+// Questa funzione viene chiamata quando la tab "Importa/Aggiorna" è attiva (all'avvio o al click).
 async function initializeImportUpdateTab() {
-    console.log("Inizializzazione tab 'Importa/Aggiorna Prodotti'...");
+    console.log("[MAIN] Inizializzazione tab 'Importa/Aggiorna Prodotti'...");
     
     const fileUploaderSection = document.getElementById('file-uploader-section');
+    if (!fileUploaderSection) {
+        console.error("[MAIN] initializeImportUpdateTab: Sezione uploader (file-uploader-section) non trovata.");
+        return;
+    }
 
+    // Ottieni i riferimenti agli elementi UI dell'uploader *dopo* che sono stati appesi.
     const dropArea = fileUploaderSection.querySelector('#drop-area');
     const fileInput = fileUploaderSection.querySelector('#fileInput');
     const selectFileBtn = fileUploaderSection.querySelector('#selectFileBtn');
@@ -29,6 +34,7 @@ async function initializeImportUpdateTab() {
     const fileNameSpan = fileUploaderSection.querySelector('#file-name');
 
     if (dropArea && fileInput && selectFileBtn && uploaderStatusDiv && progressBarContainer && progressBar && progressText && fileNameSpan) {
+        // Inizializza l'uploader passando tutti i riferimenti agli elementi
         initializeFileUploader({
             dropArea: dropArea,
             fileInput: fileInput,
@@ -38,15 +44,17 @@ async function initializeImportUpdateTab() {
             progressBar: progressBar,
             progressText: progressText,
             fileNameSpan: fileNameSpan,
-            onUploadSuccess: async (processedProducts, shopifyProducts) => {
+            // *** MODIFICA QUI: Aggiungi metrics come argomento della callback ***
+            onUploadSuccess: async (processedProducts, shopifyProducts, metrics) => {
                 window.currentFileProducts = processedProducts;
                 window.currentShopifyProducts = shopifyProducts;
-                renderComparisonTable(processedProducts, shopifyProducts);
+                // *** MODIFICA QUI: Passa metrics a renderComparisonTable ***
+                renderComparisonTable(processedProducts, shopifyProducts, metrics); 
             }
         });
-        console.log("Uploader inizializzato con successo in initializeImportUpdateTab.");
+        console.log("[MAIN] Uploader inizializzato con successo in initializeImportUpdateTab.");
     } else {
-        console.error("initializeImportUpdateTab: Impossibile trovare uno o più elementi UI dell'uploader. La funzionalità di upload potrebbe non essere attiva.", {
+        console.error("[MAIN] initializeImportUpdateTab: Impossibile trovare uno o più elementi UI dell'uploader. La funzionalità di upload potrebbe non essere attiva.", {
             dropArea, fileInput, selectFileBtn, uploaderStatusDiv, progressBarContainer, progressBar, progressText, fileNameSpan
         });
     }
@@ -54,31 +62,35 @@ async function initializeImportUpdateTab() {
 
 
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log("[MAIN] DOMContentLoaded avviato.");
     // 1. Ottieni i riferimenti ai contenitori principali (devono esistere in index.html)
     const fileUploaderSection = document.getElementById('file-uploader-section');
     const comparisonTableSection = document.getElementById('comparison-table-section');
     const modalContainer = document.getElementById('modal-container');
     const shopifyProductsTabContent = document.getElementById('shopify-products-tab');
-    // NUOVO: Riferimento al contenitore della tab Gestione Ditte
     const companyManagerTabContent = document.getElementById('company-manager-tab');
 
 
     // Verifica che i contenitori esistano prima di procedere
     if (!fileUploaderSection || !comparisonTableSection || !modalContainer || !shopifyProductsTabContent || !companyManagerTabContent) {
-        console.error("ERRORE CRITICO: Uno o più sezioni principali dell'applicazione non sono state trovate in index.html. Assicurati che gli ID siano corretti.");
+        console.error("[MAIN] ERRORE CRITICO: Uno o più sezioni principali dell'applicazione non sono state trovate in index.html. Assicurati che gli ID siano corretti.", {
+            fileUploaderSection, comparisonTableSection, modalContainer, shopifyProductsTabContent, companyManagerTabContent
+        });
         return;
     }
+    console.log("[MAIN] Tutti i contenitori principali trovati.");
 
     // 2. Carica i DocumentFragment dei componenti e appendili ai rispettivi contenitori.
+    // Effettua il append IMMEDIATAMENTE dopo il caricamento per garantire che siano nel DOM.
 
     // Carica il componente Uploader
     const uploaderFragment = await loadComponent('file-uploader');
     if (uploaderFragment) {
-        fileUploaderSection.innerHTML = '';
+        fileUploaderSection.innerHTML = ''; // Pulisci il contenitore prima di appendere
         fileUploaderSection.appendChild(uploaderFragment);
-        console.log("Componente 'file-uploader' appeso con successo.");
+        console.log("[MAIN] Componente 'file-uploader' appeso con successo.");
     } else {
-        console.error("ERRORE CRITICO: Impossibile caricare il DocumentFragment del componente 'file-uploader'. La funzionalità di upload non sarà disponibile.");
+        console.error("[MAIN] ERRORE CRITICO: Impossibile caricare il DocumentFragment del componente 'file-uploader'. La funzionalità di upload non sarà disponibile.");
         return;
     }
 
@@ -87,9 +99,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (comparisonFragment) {
         comparisonTableSection.innerHTML = '';
         comparisonTableSection.appendChild(comparisonFragment);
-        console.log("Componente 'comparison-table' appeso con successo.");
+        console.log("[MAIN] Componente 'comparison-table' appeso con successo.");
     } else {
-        console.error("ERRORE: Impossibile caricare il DocumentFragment del componente 'comparison-table'.");
+        console.error("[MAIN] ERRORE: Impossibile caricare il DocumentFragment del componente 'comparison-table'.");
     }
 
     // Carica il componente Preview Modal
@@ -97,9 +109,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (previewModalFragment) {
         modalContainer.innerHTML = '';
         modalContainer.appendChild(previewModalFragment);
-        console.log("Componente 'preview-modal' appeso con successo.");
+        console.log("[MAIN] Componente 'preview-modal' appeso con successo.");
     } else {
-        console.error("ERRORE: Impossibile caricare il DocumentFragment del componente 'preview-modal'.");
+        console.error("[MAIN] ERRORE: Impossibile caricare il DocumentFragment del componente 'preview-modal'.");
     }
 
     // Carica il componente della tabella Prodotti Shopify
@@ -107,29 +119,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (shopifyProductsTableFragment) {
         shopifyProductsTabContent.innerHTML = '';
         shopifyProductsTabContent.appendChild(shopifyProductsTableFragment);
-        console.log("Componente 'shopify-products-table' appeso con successo.");
+        console.log("[MAIN] Componente 'shopify-products-table' appeso con successo.");
     } else {
         console.error("ERRORE: Impossibile caricare il DocumentFragment del componente 'shopify-products-table'.");
     }
 
-    // NUOVO: Carica il componente della tab Gestione Ditte
+    // Carica il componente della tab Gestione Ditte
     const companyManagerFragment = await loadComponent('company-manager-tab');
     if (companyManagerFragment) {
-        companyManagerTabContent.innerHTML = ''; // Pulisci il contenitore della tab
+        companyManagerTabContent.innerHTML = '';
         companyManagerTabContent.appendChild(companyManagerFragment);
-        console.log("Componente 'company-manager-tab' appeso con successo.");
+        console.log("[MAIN] Componente 'company-manager-tab' appeso con successo.");
     } else {
         console.error("ERRORE: Impossibile caricare il DocumentFragment del componente 'company-manager-tab'.");
     }
 
+    console.log("[MAIN] Tutti i componenti HTML appesi.");
 
     // 3. Inizializza la logica di navigazione a tab, registrando le callback
     initializeTabNavigation({
         'import-update': initializeImportUpdateTab,
         'shopify-products': initializeShopifyProductsTab,
-        'company-manager': initializeCompanyManagerTab // REGISTRA LA NUOVA CALLBACK PER LA TAB DITTE
-        // 'change-log': initializeChangeLogTab
+        'company-manager': initializeCompanyManagerTab
     });
+    console.log("[MAIN] Navigazione a tab inizializzata con callback registrate.");
 
-    // La initializeTabNavigation ora gestisce l'attivazione della callback iniziale.
+    // La initializeTabNavigation gestirà l'attivazione della callback iniziale.
 });
