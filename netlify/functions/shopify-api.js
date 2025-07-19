@@ -21,9 +21,7 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
     }
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
     const url = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/${cleanEndpoint}`;
-    const options = {
-        method,
-        headers: {
+    const options = { method, headers: {
             'Content-Type': 'application/json',
             'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN
         }
@@ -35,7 +33,8 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
         const text = await response.text();
         throw new Error(`Shopify API error: ${response.status} - ${text}`);
     }
-    return response.json();
+    // Restituisci sia JSON che headers per poter fare paginazione
+    return { json: await response.json(), headers: response.headers };
 }
 
 /**
@@ -47,34 +46,40 @@ async function getShopifyProducts(skusToFetch = [], limit = 20) {
     try {
         let products = [];
         let nextPageInfo = null;
-        let prevPageInfo = null;
         let endpoint = `products.json?fields=id,title,handle,vendor,variants,metafields&limit=${limit}`;
 
-        // Ciclo di paginazione
-        do {
-            const responseData = await callShopifyAdminApi(endpoint);
-            products = products.concat(responseData.products);
+        // Costruisci set SKU da cercare per matching varianti
+        const skusSet = new Set(skusToFetch.map(s => normalizeMinsan(s)));
 
-            const linkHeader = responseData.headers?.get('link');
+        // Ciclo di paginazione completo
+        do {
+            const { json: data, headers } = await callShopifyAdminApi(endpoint);
+            products = products.concat(data.products);
+            const linkHeader = headers.get('link') || headers.get('Link');
             if (linkHeader) {
-                const parts = linkHeader.split(',');
-                const nextPart = parts.find(p => p.includes('rel="next"'));
-                if (nextPart) {
-                    const match = nextPart.match(/page_info=(.*?)[&>]/);
-                    if (match) nextPageInfo = match[1];
+                const nextLink = linkHeader.split(',').find(p => p.includes('rel="next"'));
+                if (nextLink) {
+                    const match = nextLink.match(/page_info=(.*?)[&>]/);
+                    nextPageInfo = match ? match[1] : null;
                 }
             }
-
             endpoint = nextPageInfo
                 ? `products.json?fields=id,title,handle,vendor,variants,metafields&limit=${limit}&page_info=${nextPageInfo}`
                 : null;
         } while (endpoint);
 
-        // Normalizza i prodotti
+        // Normalizza i prodotti selezionando la variante corretta
         const normalizedProducts = products.map(product => {
-            const variant = (product.variants && product.variants[0]) || {};
-            const minsanField = product.metafields?.find(m => m.key === 'minsan' && m.namespace === 'custom_fields');
-            const normalizedMinsan = normalizeMinsan(minsanField?.value || variant.sku || String(product.id));
+            const metafield = product.metafields?.find(m => m.namespace === 'custom_fields' && m.key === 'minsan');
+            // Se esiste metafield usalo, altrimenti cerca variante con SKU matching
+            let matchedSku = metafield?.value || '';
+            if (!matchedSku) {
+                const variantMatch = product.variants.find(v => skusSet.has(normalizeMinsan(v.sku)));
+                matchedSku = variantMatch ? variantMatch.sku : product.variants[0]?.sku;
+            }
+            const normalizedMinsan = normalizeMinsan(matchedSku || product.id);
+            // Scegli variante dati: variante matching o prima
+            const variantData = product.variants.find(v => normalizeMinsan(v.sku) === normalizedMinsan) || product.variants[0] || {};
 
             return {
                 id: product.id,
@@ -83,33 +88,29 @@ async function getShopifyProducts(skusToFetch = [], limit = 20) {
                 vendor: product.vendor || '-',
                 minsan: normalizedMinsan,
                 variants: product.variants,
-                Giacenza: variant.inventory_quantity || 0,
-                PrezzoBD: parseFloat(variant.price || 0),
-                Scadenza: product.metafields?.find(m => m.key === 'scadenza')?.value || null,
-                CostoMedio: parseFloat(product.metafields?.find(m => m.key === 'costo_medio')?.value || 0),
-                IVA: parseFloat(product.metafields?.find(m => m.key === 'iva')?.value || 0),
+                Giacenza: variantData.inventory_quantity || 0,
+                PrezzoBD: parseFloat(variantData.price || 0),
+                Scadenza: product.metafields?.find(m => m.namespace === 'custom_fields' && m.key === 'scadenza')?.value || null,
+                CostoMedio: parseFloat(product.metafields?.find(m => m.namespace === 'custom_fields' && m.key === 'costo_medio')?.value || 0),
+                IVA: parseFloat(product.metafields?.find(m => m.namespace === 'custom_fields' && m.key === 'iva')?.value || 0),
                 metafields: product.metafields
             };
         });
 
         // Se richiesto, filtra i prodotti per Minsan
         if (skusToFetch.length > 0) {
-            const skusSet = new Set(skusToFetch.map(s => normalizeMinsan(s)));
             const filtered = normalizedProducts.filter(p => skusSet.has(p.minsan));
-
-            // Log solo prodotti filtrati
             filtered.forEach(p => console.log(
                 `[SHOPIFY_API] Prodotto Shopify filtrato: ${p.title} (ID: ${p.id}) -> Minsan: "${p.minsan}"`
             ));
             console.log(
                 `[SHOPIFY_API] Filtro applicato: da ${normalizedProducts.length} a ${filtered.length} prodotti per SKUs specifici.`
             );
-
             return { products: filtered, nextPageInfo: null, prevPageInfo: null };
         }
 
         // Nessun filtro, restituisci tutti
-        return { products: normalizedProducts, nextPageInfo, prevPageInfo };
+        return { products: normalizedProducts, nextPageInfo: nextPageInfo, prevPageInfo: null };
 
     } catch (error) {
         console.error('[SHOPIFY_API] Errore nel recupero prodotti Shopify:', error);
