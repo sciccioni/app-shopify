@@ -1,10 +1,71 @@
 <div id="comparison-table-container" class="comparison-table-container hidden">
-  <h3>Risultati Confronto con Shopify</h3>
-  <div id="table-content-placeholder">
-      <p>Carica un file Excel per visualizzare il confronto.</p>
-  </div>
-  <div class="table-actions">
-      <button id="approve-selected-btn" class="btn primary" disabled>Approva Selezionati</button>
-      <button id="approve-all-btn" class="btn primary" disabled>Approva Tutto</button>
-  </div>
+    <h3>Risultati Confronto con Shopify</h3>
+
+    <div class="metrics-summary">
+        <div class="metric-item">Righe Importate: <span id="metricTotalRowsImported" class="metric-value">0</span></div>
+        <div class="metric-item">Nuovi Prodotti: <span id="metricNewProducts" class="metric-value new">0</span></div>
+        <div class="metric-item">Prodotti Modificati: <span id="metricProductsToModify" class="metric-value modified">0</span></div>
+        <div class="metric-item">Solo Shopify (Azzera): <span id="metricShopifyOnly" class="metric-value shopify-only">0</span></div>
+        <div class="metric-item">Minsan Non Importabili: <span id="metricNonImportable" class="metric-value error">0</span></div>
+    </div>
+
+    <div class="controls-bar comparison-controls-bar">
+        <input type="text" id="comparisonProductSearch" placeholder="Cerca Minsan, Descrizione, Ditta..." class="search-input">
+        <select id="comparisonStatusFilter" class="filter-select">
+            <option value="all">Tutti gli stati</option>
+            <option value="new">Nuovi Prodotti</option>
+            <option value="modified">Prodotti Modificati</option>
+            <option value="shopify-only">Solo Shopify (Azzera)</option>
+            <option value="sincronizzato">Sincronizzati</option>
+            <option value="non-importable">Non Importabili (Minsan 0)</option>
+        </select>
+    </div>
+
+    <div id="table-content-placeholder" class="table-responsive">
+        <p>Carica un file Excel per visualizzare il confronto.</p>
+        </div>
+    <div class="table-actions">
+        <button id="approve-selected-btn" class="btn primary" disabled>Approva Selezionati</button>
+        <button id="approve-all-btn" class="btn primary" disabled>Approva Tutto</button>
+    </div>
 </div>
+
+<style>
+    /* Stili specifici per la tabella di confronto migliorata. Possono essere spostati in components.css */
+    .metrics-summary {
+        display: flex;
+        flex-wrap: wrap; /* Permette di andare a capo su schermi piccoli */
+        gap: 15px;
+        margin-bottom: 20px;
+        padding: 15px;
+        background-color: var(--background-color);
+        border-radius: var(--border-radius);
+        border: 1px solid var(--border-color);
+    }
+    .metric-item {
+        font-size: 0.95em;
+        font-weight: bold;
+        color: var(--text-color-secondary);
+    }
+    .metric-value {
+        font-size: 1.1em;
+        color: var(--primary-color-dark);
+        margin-left: 5px;
+    }
+    .metric-value.new { color: var(--info-color); }
+    .metric-value.modified { color: var(--warning-color); }
+    .metric-value.shopify-only { color: var(--error-color); }
+    .metric-value.error { color: var(--error-color-dark); } /* Per i non importabili */
+
+    .comparison-controls-bar {
+        margin-bottom: 20px;
+    }
+    .filter-select {
+        padding: 10px 15px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius);
+        background-color: white;
+        font-size: 0.9em;
+        cursor: pointer;
+    }
+</style>

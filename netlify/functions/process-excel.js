@@ -1,11 +1,19 @@
 const XLSX = require('xlsx');
 const multipart = require('parse-multipart-data');
-const { getShopifyProducts } = require('../functions/shopify-api');
+// Importa callShopifyAdminApi per le operazioni di creazione/aggiornamento prodotti
+const { getShopifyProducts, callShopifyAdminApi } = require('../functions/shopify-api');
 
 exports.handler = async (event, context) => {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
+
+    // --- Metriche di Riepilogo ---
+    let totalRowsImported = 0;
+    let productsToModifyCount = 0;
+    let newProductsCount = 0;
+    let nonImportableMinsanZeroCount = 0;
+    let shopifyOnlyCount = 0; // Prodotti Shopify non nel file, candidati per azzeramento
 
     try {
         const contentType = event.headers['content-type'];
@@ -22,13 +30,15 @@ exports.handler = async (event, context) => {
         }
 
         const workbook = XLSX.read(filePart.data, { type: 'buffer' });
-        const sheetName = workbook.SheetNames[0]; // Prende il primo foglio
+        const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
 
         const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
 
         const headers = rawData[0];
         const dataRows = rawData.slice(1);
+
+        totalRowsImported = dataRows.length; // Calcola il totale delle righe importate
 
         const columnMapping = {
             'Ditta': ['Ditta', 'Azienda'],
@@ -51,8 +61,13 @@ exports.handler = async (event, context) => {
                 if (rowObject[name] !== undefined && rowObject[name] !== null) {
                     return rowObject[name];
                 }
+                // Controlla anche versioni lower/upper case se l'header non è mappato esattamente
                 if (typeof name === 'string') {
                     const lowerName = name.toLowerCase();
+                    // Necessario accedere a rowObject con le chiavi attuali di rawData
+                    // che sheet_to_json genera dalla riga header.
+                    // Poiché rowObject è già un oggetto chiave-valore,
+                    // non c'è bisogno di rawRow[lowerName]. Accedi direttamente a rowObject[lowerName]
                     if (rowObject[lowerName] !== undefined && rowObject[lowerName] !== null) return rowObject[lowerName];
                     const upperName = name.toUpperCase();
                     if (rowObject[upperName] !== undefined && rowObject[upperName] !== null) return rowObject[upperName];
@@ -62,20 +77,39 @@ exports.handler = async (event, context) => {
         };
 
         const processedProductsMap = new Map();
-        const minsanListFromFile = new Set();
+        const minsanListFromFile = new Set(); // Per i minsan validi da usare nella query Shopify
 
         for (const rowData of dataRows) {
-            const rowObj = headers.reduce((acc, header, index) => {
-                acc[header] = rowData[index];
-                return acc;
-            }, {});
+            // Crea un oggetto riga con header come chiavi e valori come valori, normalizzando le chiavi
+            const rowObj = {};
+            headers.forEach((header, index) => {
+                const normalizedHeader = Object.keys(columnMapping).find(key => 
+                    columnMapping[key].includes(header) || 
+                    columnMapping[key].includes(header.toLowerCase()) || 
+                    columnMapping[key].includes(header.toUpperCase())
+                ) || header; // Se non mappa, usa l'header originale
+                rowObj[normalizedHeader] = rowData[index];
+            });
+
 
             const minsan = String(getColumnValue(rowObj, columnMapping.Minsan) || '').trim();
+
+            // --- NUOVA LOGICA DI FILTRO MINSAN ---
             if (!minsan || minsan.length < 9) {
+                // Non contiamo come "non importabile" solo i Minsan che iniziano per 0,
+                // ma qualsiasi Minsan non valido per la lunghezza.
+                // Non abbiamo una metrica esplicita per questo, quindi lo logghiamo.
                 console.warn(`Minsan non valido o troppo corto saltato (min 9 cifre): ${minsan}`);
-                continue;
+                continue; // Salta la riga
             }
-            minsanListFromFile.add(minsan);
+            if (minsan.startsWith('0')) {
+                nonImportableMinsanZeroCount++;
+                console.warn(`Prodotto non importabile: Minsan inizia per 0 (${minsan})`);
+                continue; // Salta la riga
+            }
+            // --- FINE NUOVA LOGICA DI FILTRO ---
+
+            minsanListFromFile.add(minsan); // Aggiungi il Minsan alla lista per la query Shopify (solo validi)
 
             const giacenzaRaw = getColumnValue(rowObj, columnMapping.Giacenza);
             const giacenza = parseFloat(giacenzaRaw || 0);
@@ -132,21 +166,108 @@ exports.handler = async (event, context) => {
         }
 
         const processedProducts = Array.from(processedProductsMap.values());
-        console.log(`Elaborati ${processedProducts.length} prodotti unici dal file Excel.`);
+        console.log(`Elaborati ${processedProducts.length} prodotti unici dal file Excel (Minsan validi).`);
 
-        // *** MODIFICA QUI: Estrai l'array 'products' dall'oggetto restituito da getShopifyProducts ***
         const shopifyApiResult = await getShopifyProducts(Array.from(minsanListFromFile));
-        const shopifyProducts = shopifyApiResult.products; // Estrai l'array di prodotti
+        const shopifyProducts = shopifyApiResult.products;
 
-        console.log(`Recuperati ${shopifyProducts.length} prodotti da Shopify (filtrati per Minsan del file).`);
+        const productsToUpdateOrCreate = [];
+        const shopifyProductsMap = new Map(shopifyProducts.map(p => [p.minsan, p]));
+
+        // --- Calcolo Metriche: Prodotti Nuovi e Da Modificare ---
+        for (const fileProd of processedProducts) {
+            const shopifyProd = shopifyProductsMap.get(fileProd.Minsan);
+            
+            // Prepara i metafields da salvare su Shopify (anche per nuovi prodotti)
+            const metafields = [
+                { namespace: 'custom_fields', key: 'minsan', value: fileProd.Minsan, type: 'single_line_text_field' },
+                { namespace: 'custom_fields', key: 'scadenza', value: fileProd.Scadenza || '', type: 'single_line_text_field' },
+                { namespace: 'custom_fields', key: 'costo_medio', value: String(fileProd.CostoMedio), type: 'number_decimal' },
+                { namespace: 'custom_fields', key: 'iva', value: String(fileProd.IVA), type: 'number_decimal' }
+            ];
+
+            if (shopifyProd) {
+                // Prodotto esistente: confronta per vedere se è da modificare
+                const currentGiacenza = shopifyProd.variants[0]?.inventory_quantity ?? 0;
+                const currentPrice = parseFloat(shopifyProd.variants[0]?.price ?? 0); // Prezzo numerico per confronto
+                const currentScadenza = shopifyProd.Scadenza || '';
+                const currentVendor = shopifyProd.vendor || '';
+                const currentCostoMedio = shopifyProd.CostoMedio || 0;
+                const currentIVA = shopifyProd.IVA || 0;
+
+                const hasChanges = (fileProd.Giacenza !== currentGiacenza ||
+                                    Math.abs(fileProd.PrezzoBD - currentPrice) > 0.001 ||
+                                    (fileProd.Scadenza || '') !== currentScadenza ||
+                                    (fileProd.Ditta || '') !== currentVendor ||
+                                    Math.abs(fileProd.CostoMedio - currentCostoMedio) > 0.001 ||
+                                    Math.abs(fileProd.IVA - currentIVA) > 0.001);
+
+                if (hasChanges) {
+                    productsToModifyCount++;
+                }
+
+                const updatedProduct = {
+                    id: shopifyProd.id,
+                    vendor: fileProd.Ditta,
+                    variants: [{
+                        id: shopifyProd.variants[0].id,
+                        price: String(fileProd.PrezzoBD),
+                        inventory_quantity: fileProd.Giacenza,
+                        sku: fileProd.Minsan,
+                        barcode: fileProd.EAN || ''
+                    }],
+                    metafields: metafields
+                };
+                productsToUpdateOrCreate.push({ type: 'update', product: updatedProduct, status: hasChanges ? 'modified' : 'sincronizzato' });
+
+            } else {
+                // Nuovo prodotto
+                newProductsCount++;
+                const newProduct = {
+                    title: fileProd.Descrizione,
+                    product_type: "Farmaco",
+                    vendor: fileProd.Ditta,
+                    variants: [{
+                        price: String(fileProd.PrezzoBD),
+                        sku: fileProd.Minsan,
+                        barcode: fileProd.EAN || '',
+                        inventory_quantity: fileProd.Giacenza,
+                    }],
+                    metafields: metafields
+                };
+                productsToUpdateOrCreate.push({ type: 'create', product: newProduct, status: 'new' });
+            }
+        }
+
+        // --- Calcolo Metriche: Prodotti Solo su Shopify ---
+        // Identifica i prodotti Shopify che non sono presenti nel file Excel
+        // e che hanno una giacenza > 0 (candidati per azzeramento)
+        shopifyProducts.forEach(shopifyProd => {
+            const minsanFoundInFile = processedProducts.some(p => String(p.Minsan).trim() === String(shopifyProd.minsan).trim());
+            if (!minsanFoundInFile && (shopifyProd.variants[0]?.inventory_quantity ?? 0) > 0) {
+                shopifyOnlyCount++;
+                // Questi prodotti andranno mostrati in tabella con stato 'Solo Shopify' e azione 'Azzera'
+                // Non li includiamo direttamente in productsToUpdateOrCreate per ora, ma li tracciamo per le metriche
+            }
+        });
+
 
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message: 'File elaborato e confrontato con successo!',
-                processedProducts: processedProducts,
-                shopifyProducts: shopifyProducts // Ora questo è un array
+                processedProducts: processedProducts, // Prodotti dal file (validi Minsan)
+                shopifyProducts: shopifyProducts,     // Prodotti da Shopify (filtrati per Minsan del file + altri)
+                productsToUpdateOrCreate: productsToUpdateOrCreate, // Prodotti preparati per l'API Shopify (CREATE/UPDATE)
+                // --- NUOVE METRICHE ---
+                metrics: {
+                    totalRowsImported: totalRowsImported,
+                    productsToModify: productsToModifyCount,
+                    newProducts: newProductsCount,
+                    nonImportableMinsanZero: nonImportableMinsanZeroCount,
+                    shopifyOnly: shopifyOnlyCount
+                }
             }),
         };
 

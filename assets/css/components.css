@@ -78,10 +78,62 @@
     color: var(--text-color-secondary);
 }
 
-/* Comparison Table */
+/* Comparison Table & Metrics */
 .comparison-table-container {
     margin-top: 30px;
 }
+
+.metrics-summary {
+    display: flex;
+    flex-wrap: wrap; /* Permette di andare a capo su schermi piccoli */
+    gap: 15px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: var(--background-color);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+}
+.metric-item {
+    font-size: 0.95em;
+    font-weight: bold;
+    color: var(--text-color-secondary);
+}
+.metric-value {
+    font-size: 1.1em;
+    color: var(--primary-color-dark);
+    margin-left: 5px;
+}
+.metric-value.new { color: var(--info-color); }
+.metric-value.modified { color: var(--warning-color); }
+.metric-value.shopify-only { color: var(--error-color); }
+.metric-value.error { color: var(--error-color-dark); } /* Per i non importabili */
+
+
+.controls-bar {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+.controls-bar.comparison-controls-bar { /* Stili specifici per la barra di ricerca/filtro della tabella di confronto */
+    flex-wrap: wrap; /* Permette ai controlli di andare a capo */
+}
+.controls-bar .search-input {
+    flex-grow: 1;
+    padding: 10px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 0.9em;
+}
+.filter-select {
+    padding: 10px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: white;
+    font-size: 0.9em;
+    cursor: pointer;
+}
+
 
 .table-responsive {
     overflow-x: auto; /* Abilita lo scroll orizzontale se la tabella è troppo larga */
@@ -162,6 +214,7 @@
 .row-new { background-color: var(--info-color-light); }
 .row-modified { background-color: var(--warning-color-light); }
 .row-shopify-only { background-color: var(--error-color-light); }
+.row-non-importable { background-color: var(--error-color-light); opacity: 0.7; } /* Per Minsan non importabili */
 
 
 /* Text colors for differences */
@@ -205,4 +258,49 @@
 .modal-actions {
     margin-top: 20px;
     text-align: right; /* Allinea i bottoni a destra */
+}
+
+/* Stili specifici per la gestione ditte. Possono essere spostati in components.css */
+.company-manager-container {
+    padding: 20px;
+    background-color: var(--background-light);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+}
+.company-form-section, .company-list-section {
+    margin-bottom: 30px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 20px;
+}
+.company-list-section {
+    border-bottom: none;
+}
+.form-group {
+    margin-bottom: 15px;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: var(--text-color);
+}
+.form-group input[type="text"],
+.form-group input[type="number"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 1em;
+    box-sizing: border-box; /* Include padding e border nella larghezza */
+}
+.form-actions {
+    margin-top: 20px;
+    text-align: right;
+}
+.company-actions-summary {
+    margin-top: 20px;
+    text-align: right;
+}
+.company-actions-summary button {
+    margin-right: 10px;
 }
