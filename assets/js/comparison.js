@@ -1,13 +1,15 @@
 import { showModal, hideModal, showUploaderStatus } from './ui.js';
 
-// Dati globali
+// Variabili globali per i dati originali e filtrati/cercati della tabella
 let allComparisonProducts = [];
 let filteredComparisonProducts = [];
+
+// Stato di paginazione per la tabella di confronto
 let currentPage = 1;
 const ITEMS_PER_PAGE = 20;
 let totalPages = 1;
 
-// Riferimenti UI
+// Riferimenti agli elementi UI per i filtri e la paginazione
 let comparisonProductSearch;
 let comparisonStatusFilter;
 let comparisonPrevPageBtn;
@@ -21,280 +23,337 @@ let metricNonImportable;
 let comparisonTableContainer;
 
 /**
- * Normalizza un codice Minsan.
+ * Normalizza un codice Minsan rimuovendo caratteri non alfanumerici e convertendo a maiuscolo.
  */
 function normalizeMinsan(minsan) {
-  return minsan ? String(minsan).replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim() : '';
+    if (!minsan) return '';
+    return String(minsan).replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim();
 }
 
 /**
- * Inizializza elementi e listener.
+ * Inizializza i riferimenti agli elementi UI e i listener per la tabella di confronto.
  */
 function setupComparisonTableUI() {
-  comparisonProductSearch = document.getElementById('comparisonProductSearch');
-  comparisonStatusFilter = document.getElementById('comparisonStatusFilter');
-  comparisonPrevPageBtn = document.getElementById('comparisonPrevPageBtn');
-  comparisonNextPageBtn = document.getElementById('comparisonNextPageBtn');
-  comparisonPageInfo = document.getElementById('comparisonPageInfo');
-  metricTotalRowsImported = document.getElementById('metricTotalRowsImported');
-  metricNewProducts = document.getElementById('metricNewProducts');
-  metricProductsToModify = document.getElementById('metricProductsToModify');
-  metricShopifyOnly = document.getElementById('metricShopifyOnly');
-  metricNonImportable = document.getElementById('metricNonImportable');
-  comparisonTableContainer = document.getElementById('comparison-table-container');
+    comparisonProductSearch = document.getElementById('comparisonProductSearch');
+    comparisonStatusFilter = document.getElementById('comparisonStatusFilter');
+    comparisonPrevPageBtn = document.getElementById('comparisonPrevPageBtn');
+    comparisonNextPageBtn = document.getElementById('comparisonNextPageBtn');
+    comparisonPageInfo = document.getElementById('comparisonPageInfo');
+    metricTotalRowsImported = document.getElementById('metricTotalRowsImported');
+    metricNewProducts = document.getElementById('metricNewProducts');
+    metricProductsToModify = document.getElementById('metricProductsToModify');
+    metricShopifyOnly = document.getElementById('metricShopifyOnly');
+    metricNonImportable = document.getElementById('metricNonImportable');
+    comparisonTableContainer = document.getElementById('comparison-table-container');
 
-  if (!comparisonProductSearch || !comparisonStatusFilter || !comparisonPrevPageBtn || !comparisonNextPageBtn ||
-      !comparisonPageInfo || !metricTotalRowsImported || !metricNewProducts || !metricProductsToModify ||
-      !metricShopifyOnly || !metricNonImportable || !comparisonTableContainer) {
-    console.error('[COMPARE] Elementi UI mancanti.');
-    return false;
-  }
-
-  comparisonProductSearch.addEventListener('input', () => { currentPage = 1; applyFiltersAndSearch(); });
-  comparisonStatusFilter.addEventListener('change', () => { currentPage = 1; applyFiltersAndSearch(); });
-
-  comparisonPrevPageBtn.addEventListener('click', () => {
-    if (currentPage > 1) { currentPage--; renderFilteredComparisonTable(); updatePaginationControls(); }
-  });
-  comparisonNextPageBtn.addEventListener('click', () => {
-    if (currentPage < totalPages) { currentPage++; renderFilteredComparisonTable(); updatePaginationControls(); }
-  });
-
-  // Delegazione
-  comparisonTableContainer.removeEventListener('click', handleTableActions);
-  comparisonTableContainer.addEventListener('click', handleTableActions);
-
-  // Pulsanti bulk
-  ['approve-selected-btn', 'approve-all-btn'].forEach(id => {
-    const btn = document.getElementById(id);
-    if (btn) {
-      btn.removeEventListener('click', id === 'approve-selected-btn' ? handleApproveSelected : handleApproveAll);
-      btn.addEventListener('click', id === 'approve-selected-btn' ? handleApproveSelected : handleApproveAll);
+    if (!comparisonProductSearch || !comparisonStatusFilter || !comparisonPrevPageBtn || !comparisonNextPageBtn ||
+        !comparisonPageInfo || !metricTotalRowsImported || !metricNewProducts || !metricProductsToModify ||
+        !metricShopifyOnly || !metricNonImportable || !comparisonTableContainer) {
+        console.error("[COMPARE] Alcuni elementi UI della tabella di confronto non sono stati trovati.");
+        return false;
     }
-  });
 
-  return true;
+    comparisonProductSearch.addEventListener('input', () => {
+        currentPage = 1;
+        applyFiltersAndSearch();
+    });
+    comparisonStatusFilter.addEventListener('change', () => {
+        currentPage = 1;
+        applyFiltersAndSearch();
+    });
+
+    comparisonPrevPageBtn.addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage--;
+            renderFilteredComparisonTable();
+            updatePaginationControls();
+        }
+    });
+    comparisonNextPageBtn.addEventListener('click', () => {
+        if (currentPage < totalPages) {
+            currentPage++;
+            renderFilteredComparisonTable();
+            updatePaginationControls();
+        }
+    });
+
+    comparisonTableContainer.removeEventListener('click', handleTableActions);
+    comparisonTableContainer.addEventListener('click', handleTableActions);
+
+    const approveSelectedBtn = document.getElementById('approve-selected-btn');
+    const approveAllBtn = document.getElementById('approve-all-btn');
+    if (approveSelectedBtn && approveAllBtn) {
+        approveSelectedBtn.removeEventListener('click', handleApproveSelected);
+        approveSelectedBtn.addEventListener('click', handleApproveSelected);
+        approveAllBtn.removeEventListener('click', handleApproveAll);
+        approveAllBtn.addEventListener('click', handleApproveAll);
+    }
+    
+    return true;
 }
 
 /**
- * Funzione principale di rendering.
+ * Renderizza la tabella di confronto tra prodotti File Excel e Shopify.
  */
-export function renderComparisonTable(fileProducts, shopifyProducts, metrics) {
-  if (!comparisonTableContainer) {
-    if (!setupComparisonTableUI()) return;
-  }
-  comparisonTableContainer.classList.remove('hidden');
+export function renderComparisonTable(fileProducts = [], shopifyProducts = [], metrics = {}) {
+    // Debug
+    console.log('[COMPARE] renderComparisonTable parameters:', { fileProducts, shopifyProducts, metrics });
 
-  // Aggiorna metriche
-  if (metrics) {
-    metricTotalRowsImported.textContent = metrics.totalRowsImported;
-    metricNewProducts.textContent = metrics.newProducts;
-    metricProductsToModify.textContent = metrics.productsToModify;
-    metricShopifyOnly.textContent = metrics.shopifyOnly;
-    metricNonImportable.textContent = metrics.nonImportableMinsanZero;
-  }
+    if (!Array.isArray(fileProducts)) fileProducts = [];
+    if (!Array.isArray(shopifyProducts)) shopifyProducts = [];
+    if (typeof metrics !== 'object' || metrics === null) metrics = {};
 
-  // Prepara dati unificati
-  allComparisonProducts = [];
-  const shopifyMap = new Map(
-    (Array.isArray(shopifyProducts) ? shopifyProducts : []).map(p => [normalizeMinsan(p.minsan), p])
-  );
+    if (!comparisonTableContainer || !comparisonProductSearch) {
+        if (!setupComparisonTableUI()) {
+            console.error("[COMPARE] Impossibile inizializzare la tabella di confronto.");
+            return;
+        }
+    }
+    comparisonTableContainer.classList.remove('hidden');
 
-  fileProducts.forEach(fp => {
-    const minsan = normalizeMinsan(fp.Minsan);
-    const sp = shopifyMap.get(minsan);
-    let status = sp ? 'sincronizzato' : 'nuovo';
-    let hasChanges = false;
+    // Aggiorna metriche
+    metricTotalRowsImported.textContent = metrics.totalRowsImported || 0;
+    metricNewProducts.textContent = metrics.newProducts || 0;
+    metricProductsToModify.textContent = metrics.productsToModify || 0;
+    metricShopifyOnly.textContent = metrics.shopifyOnly || 0;
+    metricNonImportable.textContent = metrics.nonImportableMinsanZero || 0;
 
-    if (sp) {
-      // Confronti giacenza, prezzo, scadenza, ditta, costo, iva
-      const diffG = fp.Giacenza !== (sp.variants[0]?.inventory_quantity || 0);
-      const diffP = Math.abs(fp.PrezzoBD - parseFloat(sp.variants[0]?.price || 0)) > 0.001;
-      const diffS = (fp.Scadenza || '') !== (sp.Scadenza || '');
-      const diffD = (fp.Ditta || '') !== (sp.vendor || '');
-      const diffC = Math.abs(fp.CostoMedio - (sp.CostoMedio || 0)) > 0.001;
-      const diffI = Math.abs(fp.IVA - (sp.IVA || 0)) > 0.001;
-      hasChanges = diffG || diffP || diffS || diffD || diffC || diffI;
-      if (hasChanges) status = 'modificato';
-      shopifyMap.delete(minsan);
+    // Prepara dati unificati
+    allComparisonProducts = [];
+    const shopifyProductsMap = new Map(
+        shopifyProducts.map(p => [normalizeMinsan(p.minsan), p])
+    );
+
+    // Aggiungi prodotti dal file
+    fileProducts.forEach(fileProd => {
+        const minsan = normalizeMinsan(fileProd.Minsan);
+        const shopifyProd = shopifyProductsMap.get(minsan);
+        let status = shopifyProd ? 'sincronizzato' : 'nuovo';
+        let hasChanges = false;
+
+        if (shopifyProd) {
+            const currG = shopifyProd.variants[0]?.inventory_quantity ?? 0;
+            const currP = parseFloat(shopifyProd.variants[0]?.price ?? 0);
+            const currS = shopifyProd.Scadenza || '';
+            const currV = shopifyProd.vendor || '';
+            const currC = shopifyProd.CostoMedio || 0;
+            const currI = shopifyProd.IVA || 0;
+
+            hasChanges = (
+                fileProd.Giacenza !== currG ||
+                Math.abs(fileProd.PrezzoBD - currP) > 0.001 ||
+                (fileProd.Scadenza || '') !== currS ||
+                (fileProd.Ditta || '') !== currV ||
+                Math.abs(fileProd.CostoMedio - currC) > 0.001 ||
+                Math.abs(fileProd.IVA - currI) > 0.001
+            );
+            if (hasChanges) status = 'modificato';
+            shopifyProductsMap.delete(minsan);
+        }
+
+        // Minsan che inizia per 0
+        if (fileProd.isMinsanStartingWithZero) {
+            status = 'non-importabile';
+            hasChanges = false;
+        }
+
+        allComparisonProducts.push({ type: 'product', fileData: fileProd, shopifyData: shopifyProd, status, hasChanges });
+    });
+
+    // Aggiungi prodotti solo su Shopify
+    shopifyProductsMap.forEach(shopifyProd => {
+        const qty = shopifyProd.variants[0]?.inventory_quantity ?? 0;
+        if (qty > 0) {
+            allComparisonProducts.push({ type: 'product', fileData: null, shopifyData: shopifyProd, status: 'shopify-only', hasChanges: true });
+        } else {
+            allComparisonProducts.push({ type: 'product', fileData: null, shopifyData: shopifyProd, status: 'sincronizzato (giacenza 0)', hasChanges: false });
+        }
+    });
+
+    // Riepilogo non-importabile
+    if ((metrics.nonImportableMinsanZero || 0) > 0) {
+        allComparisonProducts.push({ type: 'non-importable-summary', status: 'non-importabile', hasChanges: false, count: metrics.nonImportableMinsanZero });
     }
 
-    if (fp.isMinsanStartingWithZero) {
-      status = 'non-importabile';
-      hasChanges = false;
-    }
-
-    allComparisonProducts.push({ type: 'product', fileData: fp, shopifyData: sp || null, status, hasChanges });
-  });
-
-  // Solo Shopify
-  shopifyMap.forEach(sp => {
-    const qty = sp.variants[0]?.inventory_quantity || 0;
-    if (qty > 0) {
-      allComparisonProducts.push({ type: 'product', fileData: null, shopifyData: sp, status: 'shopify-only', hasChanges: true });
-    } else {
-      allComparisonProducts.push({ type: 'product', fileData: null, shopifyData: sp, status: 'sincronizzato', hasChanges: false });
-    }
-  });
-
-  // Summary non-importabile
-  if (metrics.nonImportableMinsanZero > 0) {
-    allComparisonProducts.push({ type: 'non-importable-summary', status: 'non-importabile', hasChanges: false, count: metrics.nonImportableMinsanZero });
-  }
-
-  currentPage = 1;
-  applyFiltersAndSearch();
+    currentPage = 1;
+    applyFiltersAndSearch();
 }
 
-/** Filtra e cerca */
+/**
+ * Applica filtri e ricerca e aggiorna la lista filtrata.
+ */
 function applyFiltersAndSearch() {
-  const term = comparisonProductSearch.value.toLowerCase();
-  const filter = comparisonStatusFilter.value;
-  let temp = allComparisonProducts.filter(item => {
-    if (filter !== 'all' && item.status !== filter && item.type !== 'non-importable-summary') return false;
-    if (item.type === 'product') {
-      const minsan = normalizeMinsan(item.fileData?.Minsan || item.shopifyData.minsan);
-      const desc = (item.fileData?.Descrizione || item.shopifyData.title || '').toLowerCase();
-      const ditta = (item.fileData?.Ditta || item.shopifyData.vendor || '').toLowerCase();
-      const ean = (item.fileData?.EAN || item.shopifyData.variants[0]?.barcode || '').toLowerCase();
-      const iva = String(item.fileData?.IVA || item.shopifyData.IVA || '').toLowerCase();
-      return minsan.includes(term) || desc.includes(term) || ditta.includes(term) || ean.includes(term) || iva.includes(term);
+    const term = comparisonProductSearch.value.toLowerCase();
+    const filter = comparisonStatusFilter.value;
+    let temp = allComparisonProducts.filter(item => {
+        if (filter !== 'all' && item.status !== filter && item.type !== 'non-importable-summary') return false;
+        if (item.type === 'non-importable-summary') return true;
+        const minsan = normalizeMinsan(item.fileData?.Minsan || item.shopifyData?.minsan);
+        const desc = (item.fileData?.Descrizione || item.shopifyData?.title || '').toLowerCase();
+        const ditta = (item.fileData?.Ditta || item.shopifyData?.vendor || '').toLowerCase();
+        const ean = (item.fileData?.EAN || item.shopifyData?.variants[0]?.barcode || '').toLowerCase();
+        const iva = String(item.fileData?.IVA || item.shopifyData?.IVA || '').toLowerCase();
+        return minsan.includes(term) || desc.includes(term) || ditta.includes(term) || ean.includes(term) || iva.includes(term);
+    });
+    // Gestione summary
+    const summary = allComparisonProducts.find(i => i.type === 'non-importable-summary');
+    if (summary) {
+        const shouldInclude = (filter === 'all' || filter === 'non-importabile');
+        if (shouldInclude && !temp.includes(summary)) temp.push(summary);
+        if (!shouldInclude) temp = temp.filter(i => i.type !== 'non-importable-summary');
     }
-    return true;
-  });
-
-  // Gestione summary
-  const summary = allComparisonProducts.find(i => i.type === 'non-importable-summary');
-  if (summary) {
-    if ((filter === 'all' || filter === 'non-importabile') && !temp.includes(summary)) temp.push(summary);
-    if (filter !== 'all' && filter !== 'non-importabile') temp = temp.filter(i => i.type !== 'non-importable-summary');
-  }
-
-  // Ordina summary in fondo
-  temp.sort((a, b) => a.type === 'non-importable-summary' ? 1 : b.type === 'non-importable-summary' ? -1 : 0);
-
-  filteredComparisonProducts = temp;
-  totalPages = Math.max(1, Math.ceil(filteredComparisonProducts.length / ITEMS_PER_PAGE));
-  updatePaginationControls();
-  renderFilteredComparisonTable();
+    temp.sort((a,b) => a.type==='non-importable-summary'?1:b.type==='non-importable-summary'?-1:0);
+    filteredComparisonProducts = temp;
+    totalPages = Math.max(1, Math.ceil(filteredComparisonProducts.length / ITEMS_PER_PAGE));
+    updatePaginationControls();
+    renderFilteredComparisonTable();
 }
 
-/** Aggiorna controlli paginazione */
+/**
+ * Aggiorna lo stato dei controlli di paginazione.
+ */
 function updatePaginationControls() {
-  comparisonPageInfo.textContent = `Pagina ${currentPage} di ${totalPages} (Totale: ${filteredComparisonProducts.length})`;
-  comparisonPrevPageBtn.disabled = currentPage <= 1;
-  comparisonNextPageBtn.disabled = currentPage >= totalPages;
+    comparisonPageInfo.textContent = `Pagina ${currentPage} di ${totalPages} (Totale: ${filteredComparisonProducts.length})`;
+    comparisonPrevPageBtn.disabled = currentPage <= 1;
+    comparisonNextPageBtn.disabled = currentPage >= totalPages;
 }
 
-/** Render della tabella paginata */
+/**
+ * Renderizza i prodotti filtrati per la pagina corrente.
+ */
 function renderFilteredComparisonTable() {
-  const placeholder = document.getElementById('table-content-placeholder');
-  const approveSel = document.getElementById('approve-selected-btn');
-  const approveAll = document.getElementById('approve-all-btn');
-  if (!placeholder || !approveSel || !approveAll) return;
-
-  const start = (currentPage - 1) * ITEMS_PER_PAGE;
-  const end = start + ITEMS_PER_PAGE;
-  const summary = filteredComparisonProducts.find(i => i.type === 'non-importable-summary');
-  let pageItems = filteredComparisonProducts.slice(start, end);
-  if (summary && currentPage === totalPages && !pageItems.includes(summary)) {
-    pageItems.push(summary);
-  }
-
-  if (pageItems.length === 0) {
-    placeholder.innerHTML = '<p>Nessun prodotto...</p>';
-    approveSel.disabled = approveAll.disabled = true;
-    return;
-  }
-
-  let html = `<table class="data-table"><thead>...INTES HEAD HTML...</thead><tbody>`;
-  let pendingCount = 0;
-  pageItems.forEach(item => {
-    if (item.type === 'non-importable-summary') {
-      html += `<tr class="summary"><td colspan="13">${item.count} prodotti non importabili</td></tr>`;
-      return;
+    const placeholder = document.getElementById('table-content-placeholder');
+    const approveSel = document.getElementById('approve-selected-btn');
+    const approveAll = document.getElementById('approve-all-btn');
+    if (!placeholder || !approveSel || !approveAll) return;
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    const summary = filteredComparisonProducts.find(i => i.type==='non-importable-summary');
+    let items = filteredComparisonProducts.slice(start, end);
+    if (summary && currentPage===totalPages && !items.includes(summary)) items.push(summary);
+    if (items.length===0) {
+        placeholder.innerHTML = '<p>Nessun prodotto corrisponde ai criteri.</p>';
+        approveSel.disabled = approveAll.disabled = true;
+        return;
     }
-    const file = item.fileData || {};
-    const shop = item.shopifyData || {};
-    const id = normalizeMinsan(file.Minsan || shop.minsan || '');
-    const needs = item.hasChanges;
-    if (needs) pendingCount++;
-    html += `<tr data-minsan="${id}" data-status="${item.status}">` +
-            `<td><input type="checkbox" class="product-checkbox" ${needs ? '' : 'disabled'}></td>` +
-            `<td>${file.Minsan||shop.minsan||'-'}</td>` +
-            `<td>${file.Descrizione||shop.title||'-'}</td>` +
-            `<td>${file.Ditta||shop.vendor||'-'}</td>` +
-            `<td>${file.IVA||shop.IVA||'-'}</td>` +
-            `<td>${file.Giacenza||'-'}</td>` +
-            `<td>${shop.variants?.[0]?.inventory_quantity||'-'}</td>` +
-            `<td>${file.PrezzoBD||'-'}</td>` +
-            `<td>${parseFloat(shop.variants?.[0]?.price||0).toFixed(2)||'-'}</td>` +
-            `<td>${file.Scadenza||'-'}</td>` +
-            `<td>${shop.Scadenza||'-'}</td>` +
-            `<td>${item.status}</td>` +
-            `<td>${needs?`<button class="btn-preview" data-minsan="${id}">Anteprima</button><button class="btn-approve-single" data-minsan="${id}">` +
-            `${item.status==='nuovo'?'Aggiungi':item.status==='shopify-only'?'Azzera':'Approva'}</button>`:''}</td>` +
-            `</tr>`;
-  });
-  html += '</tbody></table>';
-  placeholder.innerHTML = html;
-  approveSel.disabled = approveAll.disabled = pendingCount === 0;
-
-  const selectAll = document.getElementById('selectAllProducts');
-  if (selectAll) {
-    selectAll.checked = false;
-    selectAll.removeEventListener('change', handleSelectAll);
-    selectAll.addEventListener('change', handleSelectAll);
-  }
+    let html = `<table class="data-table"><thead>
+<tr><th><input type="checkbox" id="selectAllProducts"></th><th>Minsan</th><th>Descrizione</th><th>Ditta</th><th>IVA</th><th>Giacenza (File)</th><th>Giacenza (Shopify)</th><th>Prezzo BD (File)</th><th>Prezzo BD (Shopify)</th><th>Scadenza (File)</th><th>Scadenza (Shopify)</th><th>Stato</th><th>Azioni</th></tr>
+</thead><tbody>`;
+    let pending=0;
+    items.forEach(item=>{
+        if (item.type==='non-importable-summary') {
+            html+=`<tr class="summary"><td></td><td colspan="10" style="text-align:center;font-style:italic;">${item.count} prodotti non importabili</td><td><span class="status-indicator error">Non Importabile</span></td><td></td></tr>`;
+            return;
+        }
+        const fp=item.fileData||{}; const sp=item.shopifyData||{};
+        const id=normalizeMinsan(fp.Minsan||sp.minsan||'');
+        const needs=item.hasChanges;
+        if(needs) pending++;
+        const gFile=fp.Giacenza||'-'; const gShop=sp.variants?.[0]?.inventory_quantity||'-';
+        const pFile=fp.PrezzoBD||'-'; const pShop=sp.variants?.[0]?.price?parseFloat(sp.variants[0].price).toFixed(2):'-';
+        const sFile=fp.Scadenza||'-'; const sShop=sp.Scadenza||'-';
+        html+=`<tr data-minsan="${id}" data-status="${item.status}">`+
+              `<td><input type="checkbox" class="product-checkbox" ${needs?'':'disabled'}></td>`+
+              `<td>${fp.Minsan||sp.minsan||'-'}</td>`+
+              `<td>${fp.Descrizione||sp.title||'-'}</td>`+
+              `<td>${fp.Ditta||sp.vendor||'-'}</td>`+
+              `<td>${fp.IVA||sp.IVA||'-'}</td>`+
+              `<td>${gFile}</td><td>${gShop}</td>`+
+              `<td>${pFile}</td><td>${pShop}</td>`+
+              `<td>${sFile}</td><td>${sShop}</td>`+
+              `<td><span class="status-indicator ${item.status}">${item.status.replace(/-/g,' ')}</span></td>`+
+              `<td>${needs?`<button class="btn secondary btn-preview" data-minsan="${id}" data-type="${item.status}">Anteprima</button>`+
+              `<button class="btn primary btn-approve-single" data-minsan="${id}" data-action="${item.status==='nuovo'?'add':item.status==='shopify-only'?'zero-inventory':'update'}">`+
+              `${item.status==='nuovo'?'Aggiungi':item.status==='shopify-only'?'Azzera':'Approva'}</button>`:''}</td>`+
+              `</tr>`;
+    });
+    html+=`</tbody></table>`;
+    placeholder.innerHTML=html;
+    approveSel.disabled=approveAll.disabled=pending===0;
+    const selAll=document.getElementById('selectAllProducts');
+    if(selAll){ selAll.checked=false; selAll.removeEventListener('change',handleSelectAll); selAll.addEventListener('change',handleSelectAll);}    
 }
 
-/** Seleziona tutto */
+/** Seleziona/deseleziona tutti */
 function handleSelectAll(e) {
-  document.querySelectorAll('.product-checkbox').forEach(cb => { if (!cb.disabled) cb.checked = e.target.checked; });
+    document.querySelectorAll('.product-checkbox').forEach(cb=>{ if(!cb.disabled) cb.checked=e.target.checked; });
 }
 
-/** Delegazione azioni */
+/** Gestione click su Anteprima/Approva singolo */
 function handleTableActions(e) {
-  const target = e.target;
-  if (target.classList.contains('btn-preview')) {
-    const id = normalizeMinsan(target.dataset.minsan);
-    const item = allComparisonProducts.find(p => normalizeMinsan(p.fileData?.Minsan||p.shopifyData?.minsan)===id);
-    if (item) showProductPreviewModal(id, item.fileData, item.shopifyData, item.status);
-  } else if (target.classList.contains('btn-approve-single')) {
-    const id = normalizeMinsan(target.dataset.minsan);
-    showUploaderStatus(document.getElementById('uploader-status'), `Approvo ${id}`, 'info');
-  }
+    const target=e.target;
+    if(target.classList.contains('btn-preview')){
+        const id=normalizeMinsan(target.dataset.minsan);
+        const item=allComparisonProducts.find(p=>normalizeMinsan(p.fileData?.Minsan||p.shopifyData?.minsan)===id);
+        if(item) showProductPreviewModal(id,item.fileData,item.shopifyData,item.status);
+    } else if(target.classList.contains('btn-approve-single')){
+        const id=normalizeMinsan(target.dataset.minsan);
+        const action=target.dataset.action;
+        showUploaderStatus(document.getElementById('uploader-status'),`Richiesta approvazione per ${id} (Azione: ${action})`, 'info');
+    }
 }
 
-/** Bulk approve selezionati */
-function handleApproveSelected() {
-  const selected = Array.from(document.querySelectorAll('.product-checkbox:checked')).map(cb=>normalizeMinsan(cb.closest('tr').dataset.minsan));
-  if (selected.length) showUploaderStatus(document.getElementById('uploader-status'), `Approvo selezionati: ${selected.join(', ')}`, 'info');
-  else showUploaderStatus(document.getElementById('uploader-status'), 'Nessun prodotto selezionato', true);
+/** Approva prodotti selezionati */
+function handleApproveSelected(){
+    const selected=Array.from(document.querySelectorAll('.product-checkbox:checked'))
+        .map(cb=>normalizeMinsan(cb.closest('tr').dataset.minsan));
+    if(selected.length){ showUploaderStatus(document.getElementById('uploader-status'),`Approvo selezionati (${selected.length})`, 'info'); }
+    else{ showUploaderStatus(document.getElementById('uploader-status'),'Nessun prodotto selezionato.',true); }
 }
 
-/** Bulk approve tutti */
-function handleApproveAll() {
-  const allPending = filteredComparisonProducts.filter(i=>i.hasChanges&&i.type==='product').map(i=>normalizeMinsan(i.fileData?.Minsan||i.shopifyData.minsan));
-  showUploaderStatus(document.getElementById('uploader-status'), allPending.length?`Approvo tutti: ${allPending.join(', ')}`:'Nessun prodotto in sospeso', 'info');
+/** Approva tutti i prodotti in sospeso */
+function handleApproveAll(){
+    const allPending=filteredComparisonProducts.filter(i=>i.hasChanges&&i.type==='product')
+        .map(i=>normalizeMinsan(i.fileData?.Minsan||i.shopifyData?.minsan));
+    if(allPending.length){ showUploaderStatus(document.getElementById('uploader-status'),`Approvo tutti (${allPending.length})`, 'info'); }
+    else{ showUploaderStatus(document.getElementById('uploader-status'),'Nessun prodotto in attesa.',true); }
 }
 
-/** Modal di anteprima */
-export function showProductPreviewModal(minsan, fileProd, shopifyProd, status) {
-  const title = document.getElementById('preview-modal-title');
-  const tbody = document.getElementById('preview-diff-tbody');
-  let btn = document.getElementById('preview-modal-approve-btn');
-  if (!title||!tbody||!btn) return console.error('Elementi modal mancanti');
-
-  title.textContent = `Anteprima ${minsan}`;
-  tbody.innerHTML = '';
-
-  // Costruisci righe diff...
-  // [Implementazione simile a prima con differenze evidenziate]
-
-  btn.textContent = status==='shopify-only'?'Azzera':'Approva';
-  btn.onclick = () => { showUploaderStatus(document.getElementById('uploader-status'), `Azione ${btn.textContent} per ${minsan}`, 'info'); hideModal('preview-modal-overlay'); };
-
-  document.getElementById('preview-modal-close-btn')?.addEventListener('click', ()=>hideModal('preview-modal-overlay'));
-  showModal('preview-modal-overlay');
+/** Mostra modal di anteprima con differenze */
+export function showProductPreviewModal(minsan,fileProd,shopifyProd,status){
+    const titleEl=document.getElementById('preview-modal-title');
+    const diffBody=document.getElementById('preview-diff-tbody');
+    let btn=document.getElementById('preview-modal-approve-btn');
+    if(!titleEl||!diffBody||!btn||!document.getElementById('preview-modal-overlay')){
+        console.error('Elementi modal mancanti'); return;
+    }
+    // Clona bottone per rimuovere listener precedenti
+    const newBtn=btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn,btn);
+    titleEl.textContent=`Anteprima Modifiche per ${minsan}`;
+    diffBody.innerHTML='';
+    
+    if(status==='shopify-only'){
+        const currG=shopifyProd.variants[0]?.inventory_quantity||0;
+        const currP=parseFloat(shopifyProd.variants[0]?.price||0).toFixed(2);
+        const currS=shopifyProd.Scadenza||'-';
+        const currV=shopifyProd.vendor||'-';
+        const currI=shopifyProd.IVA||'-';
+        diffBody.innerHTML=`
+            <tr><td>Giacenza</td><td><span class="diff-original">${currG}</span></td><td><span class="diff-new">0</span></td></tr>
+            <tr><td colspan="3" style="font-style:italic;">Questo prodotto non è nel file; si propone di azzerare la giacenza.</td></tr>
+        `;
+        newBtn.textContent='Azzera Giacenza';
+        newBtn.dataset.action='zero-inventory';
+    } else {
+        // Costruisci righe per nuovi o modificati
+        const fields=['Descrizione','Ditta','IVA','Giacenza','PrezzoBD','Scadenza'];
+        fields.forEach(field=>{
+            const fileVal=fileProd[field]||'-';
+            const shopVal=(field==='PrezzoBD'?parseFloat(shopifyProd.variants[0]?.price||0).toFixed(2):shopifyProd[field])||'-';
+            const same=fileVal.toString()===shopVal.toString();
+            if(same){ diffBody.innerHTML+=`<tr><td>${field}</td><td colspan="2">${fileVal}</td></tr>`; }
+            else{ diffBody.innerHTML+=`<tr><td>${field}</td><td><span class="diff-original">${shopVal}</span></td><td><span class="diff-new">${fileVal}</span></td></tr>`; }
+        });
+        newBtn.textContent=(status==='nuovo'?'Crea Prodotto':'Approva Aggiornamento');
+        newBtn.dataset.action=(status==='nuovo'?'add':'update');
+    }
+    newBtn.dataset.minsan=minsan;
+    newBtn.addEventListener('click',e=>{
+        const action=e.target.dataset.action;
+        showUploaderStatus(document.getElementById('uploader-status'),`Approvazione ${action} per ${minsan}`, 'info');
+        hideModal('preview-modal-overlay');
+    });
+    document.getElementById('preview-modal-close-btn')?.addEventListener('click',()=>hideModal('preview-modal-overlay'));
+    showModal('preview-modal-overlay');
 }
