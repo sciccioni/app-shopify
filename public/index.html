@@ -190,44 +190,29 @@
 
             // --- GESTIONE NAVIGAZIONE A TAB ---
             function switchTab(activeTabId) {
-                // Rimuove la classe attiva da tutte le tab e le imposta come inattive
                 $('nav a').removeClass('tab-active').addClass('tab-inactive');
-                // Attiva la tab cliccata
                 $(activeTabId).removeClass('tab-inactive').addClass('tab-active');
-                
-                // Nasconde tutti i pannelli
                 $('#panel-upload, #panel-reviews, #panel-markups, #panel-logs').hide();
-                // Mostra solo il pannello corrispondente alla tab attiva
                 const panelId = activeTabId.replace('tab-', 'panel-');
                 $(panelId).show();
-
-                // Qui si potrebbero caricare i dati per le altre tab quando vengono aperte
-                // if (panelId === '#panel-markups' && !$(panelId).data('loaded')) loadMarkups();
-                // if (panelId === '#panel-logs' && !$(panelId).data('loaded')) loadSyncLogs();
             }
 
             // --- INIZIALIZZAZIONE AL CARICAMENTO DELLA PAGINA ---
             if (importId) {
-                // Se c'è un import_id nell'URL, va direttamente alla tab di revisione
                 switchTab('#tab-reviews');
-                loadPendingUpdates(importId);
-                loadImportStats(importId);
-                // Abilita tutte le tab
+                // MODIFICA: La chiamata a loadPendingUpdates è stata rimossa.
+                loadDataAndStats(importId);
                 $('nav a').removeClass('opacity-50 pointer-events-none');
             } else {
-                // Altrimenti, parte dalla tab di upload
                 switchTab('#tab-upload');
-                // Disabilita le altre tab finché non c'è un'importazione
                 $('#tab-reviews, #tab-markups, #tab-logs').addClass('opacity-50 pointer-events-none');
             }
             
             // Event listener per il click sulle tab
             $('nav a').on('click', function(e) {
                 e.preventDefault();
-                if ($(this).hasClass('opacity-50')) return; // Non fa nulla se la tab è disabilitata
-                
+                if ($(this).hasClass('opacity-50')) return;
                 if (this.id === 'tab-upload') {
-                    // Se torna alla tab di upload, pulisce l'URL e resetta lo stato
                     window.history.pushState({}, '', '/');
                     importId = null;
                     switchTab('#tab-upload');
@@ -240,8 +225,6 @@
             // --- LOGICA UPLOAD FILE E ANALISI ---
             $('#uploadForm').on('submit', async (event) => {
                 event.preventDefault();
-                
-                // Seleziona elementi UI
                 const submitButton = $('#submitButton');
                 const statusMessage = $('#uploadStatusMessage');
                 const progressContainer = $('#progress-container');
@@ -249,14 +232,12 @@
                 const progressText = $('#progress-text');
                 const progressPercent = $('#progress-percent');
 
-                // Funzione per aggiornare la UI del progresso
                 function updateProgress(percent, text) {
                     progressBar.css('width', `${percent}%`);
                     progressPercent.text(`${percent}%`);
                     progressText.text(text);
                 }
 
-                // Resetta la UI prima di iniziare
                 submitButton.prop('disabled', true);
                 statusMessage.html('');
                 progressContainer.removeClass('hidden');
@@ -268,11 +249,7 @@
                 let newImportId;
 
                 try {
-                    // Simula una sequenza di chiamate API come descritto nella tua logica
-                    // NOTA: Questi endpoint ('/api/...') devono essere creati e pubblicati.
-                    
                     updateProgress(10, '1/3: Caricamento del file in corso...');
-                    // Questa chiamata dovrebbe restituire un ID per l'importazione
                     const importResponse = await fetch('/api/import-excel', { method: 'POST', body: formData });
                     const importResult = await importResponse.json();
                     if (!importResponse.ok) throw new Error(importResult.error || "Errore durante l'upload del file.");
@@ -288,13 +265,11 @@
 
                     updateProgress(100, 'Analisi completata con successo!');
                     
-                    // Reindirizza alla pagina di revisione dopo un breve ritardo
                     window.setTimeout(() => {
                         window.location.href = `/?import_id=${newImportId}`;
                     }, 1000);
 
                 } catch (error) {
-                    // Gestione errori
                     statusMessage.html(`<div class="p-4 mt-4 bg-red-100 text-red-800 rounded-md"><p class="font-bold">Errore:</p><p>${error.message}</p></div>`);
                     progressContainer.addClass('hidden');
                     submitButton.prop('disabled', false);
@@ -303,106 +278,93 @@
 
             // --- LOGICA PANNELLO REVISIONE MODIFICHE ---
             
-            // Funzione per renderizzare una cella di modifica
             function renderChange(changeData) {
                 if (changeData === undefined || changeData === null) return '<span class="no-change">-</span>';
                 const oldVal = changeData.old ?? '';
                 const newVal = changeData.new ?? '';
-                // Se vecchio e nuovo valore sono uguali, mostra solo il valore
                 if (String(oldVal) === String(newVal)) {
                     return `<span class="no-change">${newVal || oldVal}</span>`;
                 }
-                // Altrimenti mostra vecchio barrato -> nuovo
                 return `<div class="change-cell"><span class="old">${oldVal}</span><span class="arrow">→</span><span class="new">${newVal}</span></div>`;
             }
 
-            // Funzione per caricare le modifiche pendenti dal backend
-            function loadPendingUpdates(id) {
-                const loader = $('#loader-reviews');
+            // MODIFICA: Funzione unificata per caricare statistiche e dati della tabella
+            function loadDataAndStats(id) {
+                const statsLoader = $('#stats-loader');
+                const statsContainer = $('#stats-container');
+                const reviewsLoader = $('#loader-reviews');
                 const tableElem = $('#updatesTable');
-                loader.show().text('Caricamento delle modifiche proposte...');
-                
-                // Distrugge la tabella DataTables se esiste già per ricrearla
-                if ($.fn.DataTable.isDataTable(tableElem)) {
-                    updatesTable.destroy();
-                    tableElem.find('tbody').empty();
-                }
 
-                // Chiamata AJAX per ottenere i dati
-                $.ajax({
-                    url: `/api/get-pending-updates?import_id=${id}`, // Endpoint da creare
-                    method: 'GET',
-                    success: function(data) {
-                        loader.hide();
-                        
-                        if (!data.updates || data.updates.length === 0) {
-                            loader.show().html('<p class="text-gray-600">Nessuna differenza trovata. Tutto sembra essere già sincronizzato!</p>');
-                            $('#confirmButton').prop('disabled', true);
-                            return;
-                        }
-
-                        $('#confirmButton').prop('disabled', false);
-
-                        // Inizializza DataTables con i dati ricevuti
-                        updatesTable = tableElem.show().DataTable({
-                            data: data.updates,
-                            responsive: true,
-                            columns: [
-                                { data: 'id', orderable: false, className: 'text-center', render: (d) => `<input type="checkbox" class="update-checkbox rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" value="${d}" checked>` },
-                                { data: 'product_title' },
-                                { data: 'minsan' },
-                                { data: 'ditta' },
-                                { data: 'changes.quantity', render: renderChange },
-                                { data: 'changes.price', render: renderChange },
-                                { data: 'changes.compare_at_price', render: renderChange },
-                                { data: 'changes.cost', render: renderChange },
-                                { data: 'changes.expiry_date', render: (d) => d ? `<span class="new">${d.new}</span>` : '<span class="no-change">-</span>' }
-                            ],
-                            language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/it-IT.json' } // Traduzione in italiano
-                        });
-
-                        // Logica per il checkbox "seleziona tutto"
-                        $('#selectAll').off('click').on('click', function() {
-                            updatesTable.rows({ 'search': 'applied' }).nodes().to$().find('input[type="checkbox"]').prop('checked', this.checked);
-                        });
-                    },
-                    error: (xhr) => loader.html(`<p class="text-red-500">Errore nel caricamento delle modifiche: ${xhr.responseJSON?.error || "Errore sconosciuto."}</p>`)
-                });
-            }
-
-            // Funzione per caricare le statistiche dell'importazione
-            function loadImportStats(id) {
-                const loader = $('#stats-loader');
-                const container = $('#stats-container');
-                loader.show();
-                container.hide();
+                statsLoader.show();
+                reviewsLoader.show().text('Caricamento delle modifiche proposte...');
+                statsContainer.hide();
 
                 $.ajax({
                     url: `/api/get-import-stats?import_id=${id}`,
                     method: 'GET',
                     success: function(data) {
-                        loader.hide();
+                        statsLoader.hide();
+                        reviewsLoader.hide();
                         
-                        // Aggiungo un controllo di sicurezza sulla risposta dell'API
-                        if (data && data.stats) {
-                            container.show();
+                        if (data && data.stats && data.updates) {
+                            // Popola il pannello delle statistiche
+                            statsContainer.show();
                             $('#stats-total-rows').text(data.stats.totalRows);
                             $('#stats-unique-products').text(data.stats.uniqueProductCount);
                             $('#stats-products-to-update').text(data.stats.productsToUpdate);
                             $('#stats-new-companies').text(data.stats.newCompanies.length);
+
+                            // Popola la tabella delle modifiche
+                            const updates = data.updates;
+                            if (updates.length === 0) {
+                                reviewsLoader.show().html('<p class="text-gray-600">Nessuna differenza trovata. Tutto sembra essere già sincronizzato!</p>');
+                                $('#confirmButton').prop('disabled', true);
+                                return;
+                            }
+
+                            $('#confirmButton').prop('disabled', false);
+
+                            if ($.fn.DataTable.isDataTable(tableElem)) {
+                                updatesTable.destroy();
+                                tableElem.find('tbody').empty();
+                            }
+
+                            updatesTable = tableElem.show().DataTable({
+                                data: updates,
+                                responsive: true,
+                                columns: [
+                                    { data: 'id', orderable: false, className: 'text-center', render: (d) => `<input type="checkbox" class="update-checkbox rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" value="${d}" checked>` },
+                                    { data: 'product_title' },
+                                    { data: 'minsan' },
+                                    { data: 'ditta' },
+                                    { data: 'changes.quantity', render: renderChange },
+                                    { data: 'changes.price', render: renderChange },
+                                    { data: 'changes.compare_at_price', render: renderChange },
+                                    { data: 'changes.cost', render: renderChange },
+                                    { data: 'changes.expiry_date', render: (d) => d ? `<span class="new">${d.new}</span>` : '<span class="no-change">-</span>' }
+                                ],
+                                language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/it-IT.json' }
+                            });
+
+                            $('#selectAll').off('click').on('click', function() {
+                                updatesTable.rows({ 'search': 'applied' }).nodes().to$().find('input[type="checkbox"]').prop('checked', this.checked);
+                            });
+
                         } else {
-                            // Se i dati non sono nel formato atteso, mostro un errore
-                            loader.show().html(`<p class="text-red-500">Errore: La risposta dall'API per le statistiche non è valida.</p>`);
-                            console.error("Dati statistici ricevuti non validi:", data);
+                            statsLoader.show().html(`<p class="text-red-500">Errore: La risposta dall'API non è valida.</p>`);
+                            reviewsLoader.show().html(`<p class="text-red-500">Impossibile caricare le modifiche.</p>`);
+                            console.error("Dati ricevuti non validi:", data);
                         }
                     },
-                    error: (xhr) => loader.html(`<p class="text-red-500">Errore caricamento statistiche.</p>`)
+                    error: (xhr) => {
+                        statsLoader.html(`<p class="text-red-500">Errore caricamento statistiche.</p>`);
+                        reviewsLoader.html(`<p class="text-red-500">Errore caricamento modifiche.</p>`);
+                    }
                 });
             }
             
             // --- GESTIONE CONFERMA MODIFICHE ---
             $('#confirmButton').on('click', function() {
-                // Raccoglie gli ID delle righe selezionate
                 const selectedUpdates = updatesTable.rows({ search: 'applied' }).nodes().to$().find('.update-checkbox:checked').map(function() { return $(this).val(); }).get();
                 
                 if (selectedUpdates.length === 0) {
@@ -418,17 +380,16 @@
                 const originalText = btn.text();
                 btn.prop('disabled', true).text('Applicazione in corso...');
 
-                // Chiamata per applicare gli aggiornamenti
                 $.ajax({
-                    url: '/api/apply-updates', // Endpoint da creare
+                    url: '/api/apply-updates',
                     method: 'POST',
                     contentType: 'application/json',
                     data: JSON.stringify({ import_id: importId, update_ids: selectedUpdates }),
                     success: function(data) {
                         alert(`Processo completato!\nSuccessi: ${data.success}\nErrori: ${data.errors}`);
                         btn.prop('disabled', false).text(originalText);
-                        // Ricarica la lista delle modifiche per mostrare solo quelle rimaste
-                        loadPendingUpdates(importId); 
+                        // Ricarica i dati per aggiornare la vista
+                        loadDataAndStats(importId); 
                     },
                     error: function(xhr) {
                         alert(`Errore critico durante l'applicazione delle modifiche: ${xhr.responseJSON?.error || "Errore sconosciuto"}`);

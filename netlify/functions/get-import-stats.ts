@@ -40,8 +40,8 @@ const handler: Handler = async (event) => {
         ] = await Promise.all([
             supabase.from('raw_products').select('*', { count: 'exact', head: true }).eq('import_id', importId),
             supabase.from('products').select('*', { count: 'exact', head: true }).eq('import_id', importId),
-            // Query modificata: invece di contare, recuperiamo gli ID per essere sicuri.
-            supabase.from('pending_updates').select('id').eq('import_id', importId),
+            // MODIFICA: Ora recuperiamo tutti i dati delle modifiche, non solo il conteggio.
+            supabase.from('pending_updates').select('*').eq('import_id', importId),
             supabase.from('products').select('ditta').eq('import_id', importId),
             supabase.from('company_markups').select('ditta')
         ]);
@@ -55,13 +55,13 @@ const handler: Handler = async (event) => {
         // Estrae i dati in modo più sicuro
         const totalRows = rawProductsResult.count ?? 0;
         const uniqueProductCount = productsResult.count ?? 0;
-        const productsToUpdate = pendingUpdatesResult.data?.length ?? 0; // Calcola il numero dalla lunghezza dell'array
+        const updates = pendingUpdatesResult.data ?? [];
+        const productsToUpdate = updates.length; // Il conteggio è ora basato sui dati reali recuperati.
         const importedProducts = importedProductsResult.data;
         const markups = markupsResult.data;
 
-
-        // Calcola le ditte nuove (presenti nell'import ma non nei markup)
-        const importedDitte = new Set(importedProducts?.map(p => p.ditta).filter(d => d)); // Aggiunto .filter(d => d) per escludere ditte vuote
+        // Calcola le ditte nuove
+        const importedDitte = new Set(importedProducts?.map(p => p.ditta).filter(d => d));
         const markupDitte = new Set(markups?.map(m => m.ditta));
         const newCompanies = [...importedDitte].filter(ditta => !markupDitte.has(ditta as string));
 
@@ -77,7 +77,8 @@ const handler: Handler = async (event) => {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ stats }),
+            // MODIFICA: La risposta ora include sia le statistiche che l'elenco delle modifiche.
+            body: JSON.stringify({ stats, updates }),
         };
 
     } catch (error: any) {
