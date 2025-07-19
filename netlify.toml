@@ -1,0 +1,20 @@
+# Questo è il file di configurazione principale per Netlify.
+# Definisce come il tuo sito deve essere costruito e distribuito.
+
+[build]
+  # Comando da eseguire per costruire il sito.
+  # 'npm run build' eseguirà lo script definito nel package.json per compilare i file TypeScript.
+  command = "npm run build"
+  
+  # Directory che contiene le funzioni serverless.
+  # Netlify cercherà qui i tuoi file .ts e li distribuirà come API.
+  functions = "netlify/functions/"
+  
+  # Directory che contiene i file del frontend (il tuo app.html).
+  # Questa è la cartella che verrà pubblicata e resa accessibile agli utenti.
+  publish = "public/"
+
+[functions]
+  # Specifica che le funzioni sono scritte in TypeScript e devono essere compilate.
+  # L'opzione 'esbuild' è un bundler molto veloce.
+  node_bundler = "esbuild"

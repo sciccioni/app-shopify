@@ -1,0 +1,26 @@
+{
+  "name": "shopify-inventory-sync",
+  "version": "1.0.0",
+  "description": "Applicazione per sincronizzare l'inventario da un file Excel a Shopify.",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "busboy": "^1.6.0",
+    "node-fetch": "^2.7.0",
+    "uuid": "^9.0.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@netlify/functions": "^2.4.0",
+    "@types/busboy": "^1.5.3",
+    "@types/node": "^20.10.4",
+    "@types/node-fetch": "^2.6.9",
+    "@types/uuid": "^9.0.7",
+    "typescript": "^5.3.3"
+  }
+}

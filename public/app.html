@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopify Sync - Pannello di Controllo</title>
+    
+    <!-- Tailwind CSS per lo stile -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- DataTables per tabelle avanzate e stili per Tailwind -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.tailwindcss.min.css">
+    
+    <!-- Font di Google -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Stile di base del corpo */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #f9fafb; /* Grigio molto chiaro */
+        }
+        
+        /* Stili personalizzati per forzare il tema chiaro di DataTables */
+        .dataTables_wrapper .dataTables_length, 
+        .dataTables_wrapper .dataTables_filter, 
+        .dataTables_wrapper .dataTables_info, 
+        .dataTables_wrapper .dataTables_processing,
+        .dataTables_wrapper .dataTables_paginate {
+            color: #374151 !important;
+            padding: 1rem;
+        }
+        .dataTables_wrapper .dataTables_filter input,
+        .dataTables_wrapper .dataTables_length select {
+            background-color: white !important;
+            color: #374151 !important;
+            border: 1px solid #d1d5db !important;
+            border-radius: 0.375rem;
+            padding: 0.5rem 0.75rem;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button {
+            background: white !important;
+            color: #374151 !important;
+            border: 1px solid #d1d5db !important;
+            padding: 0.5rem 1rem;
+            margin: 0 0.125rem;
+            border-radius: 0.375rem;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current, 
+        .dataTables_wrapper .dataTables_paginate .paginate_button:not(.current):hover {
+            background: #4f46e5 !important; /* Colore primario (indigo) */
+            color: white !important;
+            border-color: #4f46e5 !important;
+        }
+        table.dataTable {
+            border-collapse: collapse !important;
+            width: 100% !important;
+        }
+        table.dataTable td, table.dataTable th {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            background-color: transparent !important;
+            color: #374151 !important;
+        }
+        table.dataTable thead th {
+            background-color: #f9fafb !important;
+            color: #374151 !important;
+            font-weight: 600;
+        }
+        table.dataTable tbody tr {
+            background-color: white !important;
+        }
+        table.dataTable tbody tr:hover {
+            background-color: #f3f4f6 !important;
+        }
+        
+        /* Stili per le celle che mostrano le modifiche */
+        .change-cell { white-space: nowrap; }
+        .change-cell .old { text-decoration: line-through; color: #ef4444; } /* Rosso */
+        .change-cell .arrow { color: #2563eb; margin: 0 0.25rem; } /* Blu */
+        .change-cell .new { font-weight: 600; color: #16a34a; } /* Verde */
+        .no-change { color: #6b7280; } /* Grigio */
+        
+        /* Stili per le tab di navigazione */
+        .tab-active { border-color: #4f46e5; color: #4f46e5; }
+        .tab-inactive { border-color: transparent; color: #6b7280; }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+    <div class="max-w-screen-xl mx-auto">
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Pannello di Sincronizzazione Inventario</h1>
+            <p class="mt-1 text-gray-600">Carica il file di giacenza, revisiona le modifiche e sincronizza con Shopify.</p>
+        </header>
+
+        <!-- Navigazione a Tab -->
+        <div class="border-b border-gray-200">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                <a href="#" id="tab-upload" class="tab-inactive hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">1. Carica File</a>
+                <a href="#" id="tab-reviews" class="tab-inactive hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">2. Revisione Modifiche</a>
+                <a href="#" id="tab-markups" class="tab-inactive hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Gestione Markup</a>
+                <a href="#" id="tab-logs" class="tab-inactive hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Log Sincronizzazioni</a>
+            </nav>
+        </div>
+
+        <div class="mt-8">
+            <!-- Pannello 1: Upload File -->
+            <div id="panel-upload" class="hidden">
+                 <div class="bg-white p-8 rounded-lg shadow-sm border border-gray-200 max-w-3xl mx-auto">
+                    <form id="uploadForm">
+                        <div>
+                            <label for="excelFile" class="block text-sm font-medium text-gray-700 mb-2">Seleziona il file di inventario (.xlsx)</label>
+                            <input type="file" id="excelFile" name="excelFile" accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 cursor-pointer">
+                        </div>
+                        <div class="mt-6">
+                            <button type="submit" id="submitButton" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400">
+                                Carica e Analizza Differenze
+                            </button>
+                        </div>
+                    </form>
+                    <!-- Contenitore per la barra di progresso -->
+                    <div id="progress-container" class="mt-8 hidden">
+                        <div class="flex justify-between mb-1">
+                            <span id="progress-text" class="text-base font-medium text-indigo-700"></span>
+                            <span id="progress-percent" class="text-sm font-medium text-indigo-700"></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5"><div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div></div>
+                    </div>
+                    <div id="uploadStatusMessage" class="mt-6 text-center text-sm"></div>
+                </div>
+            </div>
+
+            <!-- Pannello 2: Revisione Modifiche -->
+            <div id="panel-reviews" class="hidden">
+                <!-- Sezione Statistiche -->
+                <div class="mb-8 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Riepilogo Importazione</h2>
+                    <div id="stats-loader" class="text-center"><p>Caricamento statistiche...</p></div>
+                    <div id="stats-container" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                        <div><p class="text-2xl font-bold text-indigo-600" id="stats-total-rows">0</p><p class="text-sm text-gray-500">Righe nel File</p></div>
+                        <div><p class="text-2xl font-bold text-indigo-600" id="stats-unique-products">0</p><p class="text-sm text-gray-500">Prodotti Unici</p></div>
+                        <div><p class="text-2xl font-bold text-green-600" id="stats-products-to-update">0</p><p class="text-sm text-gray-500">Prodotti da Aggiornare</p></div>
+                        <div><p class="text-2xl font-bold text-yellow-600" id="stats-new-companies">0</p><p class="text-sm text-gray-500">Ditte Nuove</p></div>
+                    </div>
+                </div>
+                <!-- Tabella Modifiche -->
+                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                    <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+                        <h2 class="text-xl font-semibold text-gray-800">Proposte di Aggiornamento</h2>
+                        <div class="flex items-center space-x-2">
+                            <button id="confirmButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm flex items-center disabled:bg-gray-400" disabled>
+                                Applica Modifiche Selezionate
+                            </button>
+                        </div>
+                    </div>
+                    <div id="loader-reviews" class="text-center p-8"><p class="text-gray-600">In attesa di un file da analizzare...</p></div>
+                    <div class="overflow-x-auto">
+                        <table id="updatesTable" class="display w-full hidden">
+                            <thead><tr><th><input type="checkbox" id="selectAll"></th><th>Prodotto</th><th>Minsan</th><th>Ditta</th><th>Giacenza</th><th>Prezzo (€)</th><th>Prezzo Barrato (€)</th><th>Costo (€)</th><th>Scadenza</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pannello 3: Gestione Markup -->
+            <div id="panel-markups" class="hidden">
+                 <p class="text-center text-gray-600">Sezione in costruzione.</p>
+            </div>
+
+            <!-- Pannello 4: Log -->
+            <div id="panel-logs" class="hidden">
+                 <p class="text-center text-gray-600">Sezione in costruzione.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Librerie JavaScript -->
+    <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.tailwindcss.min.js"></script>
+
+    <script>
+        // Eseguito quando il documento è pronto
+        $(document).ready(function() {
+            // Variabili globali
+            let urlParams = new URLSearchParams(window.location.search);
+            let importId = urlParams.get('import_id');
+            let updatesTable;
+
+            // --- GESTIONE NAVIGAZIONE A TAB ---
+            function switchTab(activeTabId) {
+                // Rimuove la classe attiva da tutte le tab e le imposta come inattive
+                $('nav a').removeClass('tab-active').addClass('tab-inactive');
+                // Attiva la tab cliccata
+                $(activeTabId).removeClass('tab-inactive').addClass('tab-active');
+                
+                // Nasconde tutti i pannelli
+                $('#panel-upload, #panel-reviews, #panel-markups, #panel-logs').hide();
+                // Mostra solo il pannello corrispondente alla tab attiva
+                const panelId = activeTabId.replace('tab-', 'panel-');
+                $(panelId).show();
+
+                // Qui si potrebbero caricare i dati per le altre tab quando vengono aperte
+                // if (panelId === '#panel-markups' && !$(panelId).data('loaded')) loadMarkups();
+                // if (panelId === '#panel-logs' && !$(panelId).data('loaded')) loadSyncLogs();
+            }
+
+            // --- INIZIALIZZAZIONE AL CARICAMENTO DELLA PAGINA ---
+            if (importId) {
+                // Se c'è un import_id nell'URL, va direttamente alla tab di revisione
+                switchTab('#tab-reviews');
+                loadPendingUpdates(importId);
+                loadImportStats(importId);
+                // Abilita tutte le tab
+                $('nav a').removeClass('opacity-50 pointer-events-none');
+            } else {
+                // Altrimenti, parte dalla tab di upload
+                switchTab('#tab-upload');
+                // Disabilita le altre tab finché non c'è un'importazione
+                $('#tab-reviews, #tab-markups, #tab-logs').addClass('opacity-50 pointer-events-none');
+            }
+            
+            // Event listener per il click sulle tab
+            $('nav a').on('click', function(e) {
+                e.preventDefault();
+                if ($(this).hasClass('opacity-50')) return; // Non fa nulla se la tab è disabilitata
+                
+                if (this.id === 'tab-upload') {
+                    // Se torna alla tab di upload, pulisce l'URL e resetta lo stato
+                    window.history.pushState({}, '', '/app.html');
+                    importId = null;
+                    switchTab('#tab-upload');
+                    $('#tab-reviews, #tab-markups, #tab-logs').addClass('opacity-50 pointer-events-none');
+                } else {
+                    switchTab('#' + this.id);
+                }
+            });
+
+            // --- LOGICA UPLOAD FILE E ANALISI ---
+            $('#uploadForm').on('submit', async (event) => {
+                event.preventDefault();
+                
+                // Seleziona elementi UI
+                const submitButton = $('#submitButton');
+                const statusMessage = $('#uploadStatusMessage');
+                const progressContainer = $('#progress-container');
+                const progressBar = $('#progress-bar');
+                const progressText = $('#progress-text');
+                const progressPercent = $('#progress-percent');
+
+                // Funzione per aggiornare la UI del progresso
+                function updateProgress(percent, text) {
+                    progressBar.css('width', `${percent}%`);
+                    progressPercent.text(`${percent}%`);
+                    progressText.text(text);
+                }
+
+                // Resetta la UI prima di iniziare
+                submitButton.prop('disabled', true);
+                statusMessage.html('');
+                progressContainer.removeClass('hidden');
+                updateProgress(0, 'Avvio del processo...');
+
+                const formData = new FormData();
+                formData.append('excelFile', $('#excelFile')[0].files[0]);
+
+                let newImportId;
+
+                try {
+                    // Simula una sequenza di chiamate API come descritto nella tua logica
+                    // NOTA: Questi endpoint ('/api/...') devono essere creati e pubblicati.
+                    
+                    updateProgress(10, '1/3: Caricamento del file in corso...');
+                    // Questa chiamata dovrebbe restituire un ID per l'importazione
+                    const importResponse = await fetch('/api/import-excel', { method: 'POST', body: formData });
+                    const importResult = await importResponse.json();
+                    if (!importResponse.ok) throw new Error(importResult.error || "Errore durante l'upload del file.");
+                    newImportId = importResult.importId;
+
+                    updateProgress(40, '2/3: Normalizzazione dei dati...');
+                    const normalizeResponse = await fetch('/api/normalize-products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ importId: newImportId }) });
+                    if (!normalizeResponse.ok) throw new Error((await normalizeResponse.json()).error || "Errore durante la normalizzazione.");
+
+                    updateProgress(70, '3/3: Confronto con Shopify e calcolo differenze...');
+                    const diffResponse = await fetch('/api/compute-diffs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ importId: newImportId }) });
+                    if (!diffResponse.ok) throw new Error((await diffResponse.json()).error || "Errore nel calcolo delle differenze.");
+
+                    updateProgress(100, 'Analisi completata con successo!');
+                    
+                    // Reindirizza alla pagina di revisione dopo un breve ritardo
+                    window.setTimeout(() => {
+                        window.location.href = `?import_id=${newImportId}`;
+                    }, 1000);
+
+                } catch (error) {
+                    // Gestione errori
+                    statusMessage.html(`<div class="p-4 mt-4 bg-red-100 text-red-800 rounded-md"><p class="font-bold">Errore:</p><p>${error.message}</p></div>`);
+                    progressContainer.addClass('hidden');
+                    submitButton.prop('disabled', false);
+                }
+            });
+
+            // --- LOGICA PANNELLO REVISIONE MODIFICHE ---
+            
+            // Funzione per renderizzare una cella di modifica
+            function renderChange(changeData) {
+                if (changeData === undefined || changeData === null) return '<span class="no-change">-</span>';
+                const oldVal = changeData.old ?? '';
+                const newVal = changeData.new ?? '';
+                // Se vecchio e nuovo valore sono uguali, mostra solo il valore
+                if (String(oldVal) === String(newVal)) {
+                    return `<span class="no-change">${newVal || oldVal}</span>`;
+                }
+                // Altrimenti mostra vecchio barrato -> nuovo
+                return `<div class="change-cell"><span class="old">${oldVal}</span><span class="arrow">→</span><span class="new">${newVal}</span></div>`;
+            }
+
+            // Funzione per caricare le modifiche pendenti dal backend
+            function loadPendingUpdates(id) {
+                const loader = $('#loader-reviews');
+                const tableElem = $('#updatesTable');
+                loader.show().text('Caricamento delle modifiche proposte...');
+                
+                // Distrugge la tabella DataTables se esiste già per ricrearla
+                if ($.fn.DataTable.isDataTable(tableElem)) {
+                    updatesTable.destroy();
+                    tableElem.find('tbody').empty();
+                }
+
+                // Chiamata AJAX per ottenere i dati
+                $.ajax({
+                    url: `/api/get-pending-updates?import_id=${id}`, // Endpoint da creare
+                    method: 'GET',
+                    success: function(data) {
+                        loader.hide();
+                        
+                        if (!data.updates || data.updates.length === 0) {
+                            loader.show().html('<p class="text-gray-600">Nessuna differenza trovata. Tutto sembra essere già sincronizzato!</p>');
+                            $('#confirmButton').prop('disabled', true);
+                            return;
+                        }
+
+                        $('#confirmButton').prop('disabled', false);
+
+                        // Inizializza DataTables con i dati ricevuti
+                        updatesTable = tableElem.show().DataTable({
+                            data: data.updates,
+                            responsive: true,
+                            columns: [
+                                { data: 'id', orderable: false, className: 'text-center', render: (d) => `<input type="checkbox" class="update-checkbox rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" value="${d}" checked>` },
+                                { data: 'product_title' },
+                                { data: 'minsan' },
+                                { data: 'ditta' },
+                                { data: 'changes.quantity', render: renderChange },
+                                { data: 'changes.price', render: renderChange },
+                                { data: 'changes.compare_at_price', render: renderChange },
+                                { data: 'changes.cost', render: renderChange },
+                                { data: 'changes.expiry_date', render: (d) => d ? `<span class="new">${d.new}</span>` : '<span class="no-change">-</span>' }
+                            ],
+                            language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/it-IT.json' } // Traduzione in italiano
+                        });
+
+                        // Logica per il checkbox "seleziona tutto"
+                        $('#selectAll').off('click').on('click', function() {
+                            updatesTable.rows({ 'search': 'applied' }).nodes().to$().find('input[type="checkbox"]').prop('checked', this.checked);
+                        });
+                    },
+                    error: (xhr) => loader.html(`<p class="text-red-500">Errore nel caricamento delle modifiche: ${xhr.responseJSON?.error || "Errore sconosciuto."}</p>`)
+                });
+            }
+
+            // Funzione per caricare le statistiche dell'importazione
+            function loadImportStats(id) {
+                const loader = $('#stats-loader');
+                const container = $('#stats-container');
+                loader.show();
+                container.hide();
+
+                $.ajax({
+                    url: `/api/get-import-stats?import_id=${id}`, // Endpoint da creare
+                    method: 'GET',
+                    success: function(data) {
+                        loader.hide();
+                        container.show();
+                        $('#stats-total-rows').text(data.stats.totalRows);
+                        $('#stats-unique-products').text(data.stats.uniqueProductCount);
+                        $('#stats-products-to-update').text(data.stats.productsToUpdate);
+                        $('#stats-new-companies').text(data.stats.newCompanies.length);
+                    },
+                    error: (xhr) => loader.html(`<p class="text-red-500">Errore caricamento statistiche.</p>`)
+                });
+            }
+            
+            // --- GESTIONE CONFERMA MODIFICHE ---
+            $('#confirmButton').on('click', function() {
+                // Raccoglie gli ID delle righe selezionate
+                const selectedUpdates = updatesTable.rows({ search: 'applied' }).nodes().to$().find('.update-checkbox:checked').map(function() { return $(this).val(); }).get();
+                
+                if (selectedUpdates.length === 0) {
+                    alert("Nessuna modifica selezionata.");
+                    return;
+                }
+
+                if (!confirm(`Sei sicuro di voler applicare ${selectedUpdates.length} modifiche su Shopify? L'operazione non è reversibile.`)) {
+                    return;
+                }
+                
+                const btn = $(this);
+                const originalText = btn.text();
+                btn.prop('disabled', true).text('Applicazione in corso...');
+
+                // Chiamata per applicare gli aggiornamenti
+                $.ajax({
+                    url: '/api/apply-updates', // Endpoint da creare
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ import_id: importId, update_ids: selectedUpdates }),
+                    success: function(data) {
+                        alert(`Processo completato!\nSuccessi: ${data.success}\nErrori: ${data.errors}`);
+                        btn.prop('disabled', false).text(originalText);
+                        // Ricarica la lista delle modifiche per mostrare solo quelle rimaste
+                        loadPendingUpdates(importId); 
+                    },
+                    error: function(xhr) {
+                        alert(`Errore critico durante l'applicazione delle modifiche: ${xhr.responseJSON?.error || "Errore sconosciuto"}`);
+                        btn.prop('disabled', false).text(originalText);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
