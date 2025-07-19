@@ -1,7 +1,7 @@
 import { showUploaderStatus, updateUploaderProgress, toggleLoader } from './ui.js';
 
 /**
- * Upload multi-stage con robusta gestione degli errori.
+ * Upload del file Excel ed elaborazione via endpoint singolo '/process-excel'.
  */
 export function initializeFileUploader({
   dropArea,
@@ -22,7 +22,7 @@ export function initializeFileUploader({
   showUploaderStatus(uploaderStatusDiv, '', false);
   updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 0);
 
-  // Eventi drag & drop
+  // Drag & Drop
   ['dragenter','dragover','dragleave','drop'].forEach(evt => {
     dropArea.addEventListener(evt, e => {
       e.preventDefault(); e.stopPropagation();
@@ -30,7 +30,7 @@ export function initializeFileUploader({
     });
   });
 
-  // Eventi file input e pulsante
+  // Selezione file
   selectFileBtn.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', e => handleFiles(e.target.files));
 
@@ -51,56 +51,36 @@ export function initializeFileUploader({
   async function processFile(file) {
     toggleLoader(true);
     try {
-      // Step 1: upload
-      showUploaderStatus(uploaderStatusDiv, 'Caricamento file...', false);
-      updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 10, file.name);
+      // Avvia elaborazione
+      showUploaderStatus(uploaderStatusDiv, 'Elaborazione file in corso...', false);
+      updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 0, file.name);
+
       const formData = new FormData();
       formData.append('excelFile', file);
-      const importRes = await fetch('/api/import-excel', { method: 'POST', body: formData });
-      if (!importRes.ok) {
-        const text = await importRes.text();
-        throw new Error(`Importazione fallita (${importRes.status}): ${text || importRes.statusText}`);
-      }
-      const importJson = await importRes.json().catch(() => { throw new Error('Risposta import-json non valida'); });
-      const importId = importJson.importId;
 
-      // Step 2: normalize
-      showUploaderStatus(uploaderStatusDiv, 'Normalizzazione dati...', false);
-      updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 40, file.name);
-      const normRes = await fetch('/api/normalize-products', {
+      const response = await fetch('/process-excel', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ importId })
+        body: formData
       });
-      if (!normRes.ok) {
-        const text = await normRes.text();
-        throw new Error(`Normalizzazione fallita (${normRes.status}): ${text || normRes.statusText}`);
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => response.statusText);
+        throw new Error(`Elaborazione fallita (${response.status}): ${text}`);
       }
 
-      // Step 3: compute diffs
-      showUploaderStatus(uploaderStatusDiv, 'Confronto con Shopify...', false);
-      updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 70, file.name);
-      const diffRes = await fetch('/api/compute-diffs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ importId })
-      });
-      if (!diffRes.ok) {
-        const text = await diffRes.text();
-        throw new Error(`Computazione differenze fallita (${diffRes.status}): ${text || diffRes.statusText}`);
-      }
-      const diffJson = await diffRes.json().catch(() => { throw new Error('Risposta compute-diffs non valida'); });
+      const data = await response.json().catch(() => { throw new Error('Risposta non valida dal server'); });
 
       // Successo
       updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 100, file.name);
-      showUploaderStatus(uploaderStatusDiv, 'Analisi completata!', false);
+      showUploaderStatus(uploaderStatusDiv, 'File elaborato con successo!', false);
+
       onUploadSuccess?.(
-        diffJson.comparisonTableItems || [],
-        diffJson.productsToUpdateOrCreate || [],
-        diffJson.metrics || {}
+        data.comparisonTableItems || [],
+        data.productsToUpdateOrCreate || [],
+        data.metrics || {}
       );
     } catch (err) {
-      console.error('[UPLOADER] Errore processo upload:', err);
+      console.error('[UPLOADER] Errore elaborazione:', err);
       showUploaderStatus(uploaderStatusDiv, `Errore: ${err.message}`, true);
       updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 0);
     } finally {
