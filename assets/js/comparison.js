@@ -171,6 +171,14 @@ export function renderComparisonTable(fileProducts, shopifyProducts, metrics) {
         } else {
             status = 'nuovo';
         }
+
+        // --- GESTIONE STATUS "NON IMPORTABILE (MINSAN 0)" per la Tabella ---
+        // Questo flag viene dal parsing iniziale (isMinsanStartingWithZero)
+        if (fileProd.isMinsanStartingWithZero) { 
+             status = 'non-importabile'; // Forze lo status per la tabella di confronto
+             hasChanges = false; // Non è una "modifica" da approvare nel senso tradizionale
+        }
+
         allComparisonProducts.push({
             type: 'product', // Indica che è un prodotto reale
             fileData: fileProd,
@@ -247,13 +255,13 @@ function applyFiltersAndSearch() {
         }
 
         // Filtra per ricerca (si applica solo ai prodotti reali, non al summary)
-        const minsan = normalizeMinsan(item.fileData?.Minsan || item.shopifyData?.minsan); // Normalizza per la ricerca
+        const minsan = normalizeMinsan(item.fileData?.Minsan || item.shopifyData?.minsan);
         const description = String(item.fileData?.Descrizione || item.shopifyData?.title || '').toLowerCase();
         const ditta = String(item.fileData?.Ditta || item.shopifyData?.vendor || '').toLowerCase();
         const ean = String(item.fileData?.EAN || item.shopifyData?.variants?.[0]?.barcode || '').toLowerCase();
         const iva = String(item.fileData?.IVA || item.shopifyData?.IVA || '').toLowerCase();
 
-        return minsan.includes(searchTerm) || // Ricerca per Minsan normalizzato
+        return minsan.includes(searchTerm) ||
                description.includes(searchTerm) ||
                ditta.includes(searchTerm) ||
                ean.includes(searchTerm) ||
@@ -319,7 +327,7 @@ function renderFilteredComparisonTable() {
     const nonImportableSummaryItem = filteredComparisonProducts.find(item => item.type === 'non-importable-summary');
     let itemsToRender = filteredComparisonProducts.slice(startIndex, endIndex);
 
-    if (nonImportableSummaryItem && !itemsToRender.some(item => item.type === 'non-importable-summary')) { // Se il summary non è già nella slice
+    if (nonImportableSummaryItem && !itemsToRender.some(item => item.type === 'non-importable-summary')) {
         // Se il summary esiste e la pagina corrente è l'ultima (o dovrebbe mostrare il summary)
         if (currentPage === totalPages) { // Solo se siamo all'ultima pagina
             itemsToRender.push(nonImportableSummaryItem);
@@ -389,24 +397,24 @@ function renderFilteredComparisonTable() {
         let scadenzaShopify = '-';
         let dittaFile = '-';
         let ivaFile = '-';
-        let dittaShopify = '-';
-        let ivaShopify = '-';
+        let dittaShopify = '-'; // Per confronto
+        let ivaShopify = '-'; // Per confronto
 
 
         if (fileProd) {
             giacenzaFile = fileProd.Giacenza;
             prezzoBdFile = fileProd.PrezzoBD;
             scadenzaFile = fileProd.Scadenza || '-';
-            dittaFile = fileProd.Ditta || '-';
-            ivaFile = fileProd.IVA || '-';
+            dittaFile = fileProd.Ditta || '-'; // Ditta dal file
+            ivaFile = fileProd.IVA || '-';     // IVA dal file
         }
 
         if (shopifyProd) {
             giacenzaShopify = shopifyProd.variants[0]?.inventory_quantity ?? 0;
             prezzoBdShopify = parseFloat(shopifyProd.variants[0]?.price ?? 0).toFixed(2);
             scadenzaShopify = shopifyProd.Scadenza || '-';
-            dittaShopify = shopifyProd.vendor || '-';
-            ivaShopify = shopifyProd.IVA || '-';
+            dittaShopify = shopifyProd.vendor || '-'; // Ditta da Shopify
+            ivaShopify = shopifyProd.IVA || '-';     // IVA da Shopify (se recuperata)
         }
 
         const giacenzaDiffDisplay = (fileProd && shopifyProd && fileProd.Giacenza !== giacenzaShopify) ?
@@ -490,8 +498,8 @@ function handleTableActions(e) {
     }
 
     if (e.target.classList.contains('btn-preview')) {
-        const minsan = e.target.dataset.minsan;
-        const item = allComparisonProducts.find(p => normalizeMinsan(p.fileData?.Minsan || p.shopifyData?.minsan) === normalizeMinsan(minsan));
+        const minsan = normalizeMinsan(e.target.dataset.minsan); // Normalizza il Minsan dal dataset
+        const item = allComparisonProducts.find(p => normalizeMinsan(p.fileData?.Minsan || p.shopifyData?.minsan) === minsan);
         
         if (item && item.type === 'product') { // Assicurati che sia un prodotto reale
             showProductPreviewModal(item.fileData?.Minsan || item.shopifyData?.minsan, item.fileData, item.shopifyData, item.status);
@@ -499,7 +507,7 @@ function handleTableActions(e) {
             showUploaderStatus(uploaderStatusDiv, `Dati anteprima non trovati per Minsan: ${minsan}`, true);
         }
     } else if (e.target.classList.contains('btn-approve-single')) {
-        const minsan = e.target.dataset.minsan;
+        const minsan = normalizeMinsan(e.target.dataset.minsan); // Normalizza il Minsan
         const action = e.target.dataset.action;
         showUploaderStatus(uploaderStatusDiv, `Richiesta di approvazione per Minsan: ${minsan} (Azione: ${action}) - Da implementare`, 'info');
         console.log('Approva singolo Minsan:', minsan, 'Azione:', action);
@@ -513,7 +521,7 @@ function handleTableActions(e) {
 function handleApproveSelected() {
     const uploaderStatusDiv = document.getElementById('uploader-status');
     const selectedMinsans = Array.from(document.querySelectorAll('.product-checkbox:checked:not(:disabled)'))
-                            .map(cb => cb.closest('tr').dataset.minsan);
+                            .map(cb => normalizeMinsan(cb.closest('tr').dataset.minsan)); // Normalizza Minsan selezionati
     if (selectedMinsans.length > 0) {
         showUploaderStatus(uploaderStatusDiv, `Approva selezionati (${selectedMinsans.length}) - Da implementare`, 'info');
         console.log('Approva selezionati:', selectedMinsans);
@@ -531,7 +539,7 @@ function handleApproveAll() {
     // Filtra solo i prodotti che richiedono approvazione e non sono il riassunto
     const allPendingMinsans = filteredComparisonProducts
                                 .filter(item => item.hasChanges && item.type === 'product')
-                                .map(item => item.fileData?.Minsan || item.shopifyData?.minsan);
+                                .map(item => normalizeMinsan(item.fileData?.Minsan || item.shopifyData?.minsan)); // Normalizza Minsan
 
     if (allPendingMinsans.length > 0) {
         showUploaderStatus(uploaderStatusDiv, `Approva tutti i ${allPendingMinsans.length} prodotti in attesa - Da implementare`, 'info');
