@@ -4,7 +4,7 @@
   "description": "Applicazione per sincronizzare l'inventario da un file Excel a Shopify.",
   "main": "index.js",
   "scripts": {
-    "build": "tsc"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
