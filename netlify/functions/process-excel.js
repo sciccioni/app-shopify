@@ -50,7 +50,7 @@ exports.handler = async function(event, context) {
     });
 
     // Chiamate Shopify in parallelo
-    const shopifyResult = await getShopifyProducts(minsans);
+    const shopifyResult = await shopifyApi.getShopifyProducts(minsans);
     const shopifyMap = new Map();
     shopifyResult.products.forEach(p => shopifyMap.set(p.minsan, p));
 
