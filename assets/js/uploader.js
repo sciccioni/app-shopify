@@ -1,4 +1,4 @@
-// assets/js/uploader.js - COMPLETO E CORRETTO (Passaggio Metrice a onUploadSuccess)
+// assets/js/uploader.js - COMPLETO E CORRETTO (Passaggio Metrice a onUploadSuccess) + DEBUG
 
 import { showUploaderStatus, updateUploaderProgress, toggleLoader } from './ui.js';
 
@@ -75,27 +75,61 @@ export function initializeFileUploader({
 
         try {
             toggleLoader(true); // Mostra loader globale
+            console.log('[UPLOADER] Invio richiesta a /.netlify/functions/process-excel');
+            
             const response = await fetch('/.netlify/functions/process-excel', {
                 method: 'POST',
                 body: formData
             });
 
+            console.log('[UPLOADER] Risposta ricevuta. Status:', response.status, 'OK:', response.ok);
+
             if (!response.ok) {
                 const errorData = await response.json();
+                console.error('[UPLOADER] Errore dalla Netlify Function:', errorData);
                 throw new Error(errorData.message || 'Errore durante l\'elaborazione del file.');
             }
 
             const data = await response.json();
+            console.log('[UPLOADER] Dati ricevuti dalla Netlify Function:', {
+                data: data,
+                dataType: typeof data,
+                dataKeys: data ? Object.keys(data) : 'N/A',
+                processedProducts: data?.processedProducts,
+                processedProductsType: typeof data?.processedProducts,
+                processedProductsIsArray: Array.isArray(data?.processedProducts),
+                processedProductsLength: data?.processedProducts?.length,
+                shopifyProducts: data?.shopifyProducts,
+                shopifyProductsType: typeof data?.shopifyProducts,
+                shopifyProductsIsArray: Array.isArray(data?.shopifyProducts),
+                shopifyProductsLength: data?.shopifyProducts?.length,
+                metrics: data?.metrics,
+                metricsType: typeof data?.metrics,
+                metricsKeys: data?.metrics ? Object.keys(data.metrics) : 'N/A'
+            });
+
             updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 100, file.name);
             showUploaderStatus(uploaderStatusDiv, 'File elaborato con successo! Dati caricati per il confronto.', false);
 
             if (onUploadSuccess) {
+                console.log('[UPLOADER] Chiamando onUploadSuccess con parametri:');
+                console.log('[UPLOADER] - processedProducts:', data.processedProducts);
+                console.log('[UPLOADER] - shopifyProducts:', data.shopifyProducts);
+                console.log('[UPLOADER] - metrics:', data.metrics);
+                
                 // *** MODIFICA QUI: Passa metrics alla callback ***
-                onUploadSuccess(data.processedProducts, data.shopifyProducts, data.metrics);
+                try {
+                    onUploadSuccess(data.processedProducts, data.shopifyProducts, data.metrics);
+                    console.log('[UPLOADER] onUploadSuccess chiamata con successo');
+                } catch (callbackError) {
+                    console.error('[UPLOADER] Errore durante la chiamata di onUploadSuccess:', callbackError);
+                }
+            } else {
+                console.warn('[UPLOADER] onUploadSuccess callback non definita');
             }
 
         } catch (error) {
-            console.error('Errore durante l\'upload o l\'elaborazione:', error);
+            console.error('[UPLOADER] Errore durante l\'upload o l\'elaborazione:', error);
             showUploaderStatus(uploaderStatusDiv, `Errore: ${error.message}`, true);
             updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 0); // Resetta la progress bar
         } finally {

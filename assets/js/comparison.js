@@ -94,27 +94,25 @@ function setupComparisonTableUI() {
 
 /**
  * Renderizza la tabella di confronto tra prodotti File Excel e Shopify.
+ * Usa parametri di default ES6 per gestire automaticamente valori undefined/null
  */
-export function renderComparisonTable(fileProducts, shopifyProducts, metrics) {
+export function renderComparisonTable(fileProducts = [], shopifyProducts = [], metrics = {}) {
     // Debug - Log dei parametri ricevuti
     console.log('[COMPARE] renderComparisonTable called with:', {
         fileProducts: fileProducts,
-        fileProductsType: typeof fileProducts,
-        fileProductsIsArray: Array.isArray(fileProducts),
+        fileProductsLength: fileProducts?.length || 0,
         shopifyProducts: shopifyProducts,
-        shopifyProductsType: typeof shopifyProducts,
-        shopifyProductsIsArray: Array.isArray(shopifyProducts),
-        metrics: metrics,
-        metricsType: typeof metrics
+        shopifyProductsLength: shopifyProducts?.length || 0,
+        metrics: metrics
     });
 
-    // Validazione e normalizzazione dei parametri
-    if (!fileProducts || !Array.isArray(fileProducts)) {
-        console.warn('[COMPARE] fileProducts non è un array valido, uso array vuoto');
+    // Validazione aggiuntiva per sicurezza (in caso di valori null passati esplicitamente)
+    if (!Array.isArray(fileProducts)) {
+        console.warn('[COMPARE] fileProducts non è un array, conversione in array vuoto');
         fileProducts = [];
     }
-    if (!shopifyProducts || !Array.isArray(shopifyProducts)) {
-        console.warn('[COMPARE] shopifyProducts non è un array valido, uso array vuoto');
+    if (!Array.isArray(shopifyProducts)) {
+        console.warn('[COMPARE] shopifyProducts non è un array, conversione in array vuoto');
         shopifyProducts = [];
     }
     if (!metrics || typeof metrics !== 'object') {

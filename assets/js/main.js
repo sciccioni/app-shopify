@@ -1,4 +1,4 @@
-// assets/js/main.js - COMPLETO E CORRETTO (Passaggio Metrice a renderComparisonTable)
+// assets/js/main.js - COMPLETO E CORRETTO (Passaggio Metrice a renderComparisonTable) + DEBUG
 
 import { loadComponent, initializeTabNavigation } from './ui.js';
 import { initializeFileUploader } from './uploader.js';
@@ -46,10 +46,43 @@ async function initializeImportUpdateTab() {
             fileNameSpan: fileNameSpan,
             // *** MODIFICA QUI: Aggiungi metrics come argomento della callback ***
             onUploadSuccess: async (processedProducts, shopifyProducts, metrics) => {
-                window.currentFileProducts = processedProducts;
-                window.currentShopifyProducts = shopifyProducts;
+                console.log('[MAIN] onUploadSuccess chiamata con parametri:', {
+                    processedProducts: processedProducts,
+                    processedProductsType: typeof processedProducts,
+                    processedProductsIsArray: Array.isArray(processedProducts),
+                    processedProductsLength: processedProducts?.length,
+                    shopifyProducts: shopifyProducts,
+                    shopifyProductsType: typeof shopifyProducts,
+                    shopifyProductsIsArray: Array.isArray(shopifyProducts),
+                    shopifyProductsLength: shopifyProducts?.length,
+                    metrics: metrics,
+                    metricsType: typeof metrics,
+                    metricsKeys: metrics ? Object.keys(metrics) : 'N/A'
+                });
+
+                // Validazione e normalizzazione dei parametri prima di passarli
+                const validProcessedProducts = Array.isArray(processedProducts) ? processedProducts : [];
+                const validShopifyProducts = Array.isArray(shopifyProducts) ? shopifyProducts : [];
+                const validMetrics = (metrics && typeof metrics === 'object') ? metrics : {};
+
+                console.log('[MAIN] Parametri validati:', {
+                    validProcessedProducts: validProcessedProducts.length,
+                    validShopifyProducts: validShopifyProducts.length,
+                    validMetrics: Object.keys(validMetrics)
+                });
+
+                // Aggiorna le variabili globali
+                window.currentFileProducts = validProcessedProducts;
+                window.currentShopifyProducts = validShopifyProducts;
+                
                 // *** MODIFICA QUI: Passa metrics a renderComparisonTable ***
-                renderComparisonTable(processedProducts, shopifyProducts, metrics); 
+                console.log('[MAIN] Chiamando renderComparisonTable...');
+                try {
+                    renderComparisonTable(validProcessedProducts, validShopifyProducts, validMetrics);
+                    console.log('[MAIN] renderComparisonTable chiamata con successo');
+                } catch (error) {
+                    console.error('[MAIN] Errore durante la chiamata di renderComparisonTable:', error);
+                }
             }
         });
         console.log("[MAIN] Uploader inizializzato con successo in initializeImportUpdateTab.");
@@ -60,7 +93,6 @@ async function initializeImportUpdateTab() {
     }
 }
 
-
 document.addEventListener('DOMContentLoaded', async () => {
     console.log("[MAIN] DOMContentLoaded avviato.");
     // 1. Ottieni i riferimenti ai contenitori principali (devono esistere in index.html)
@@ -69,7 +101,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const modalContainer = document.getElementById('modal-container');
     const shopifyProductsTabContent = document.getElementById('shopify-products-tab');
     const companyManagerTabContent = document.getElementById('company-manager-tab');
-
 
     // Verifica che i contenitori esistano prima di procedere
     if (!fileUploaderSection || !comparisonTableSection || !modalContainer || !shopifyProductsTabContent || !companyManagerTabContent) {
