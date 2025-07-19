@@ -1,110 +1,122 @@
 import { showUploaderStatus, updateUploaderProgress, toggleLoader } from './ui.js';
 
 /**
- * Inizializza l'interfaccia di caricamento file e gestisce l'invio alla Netlify Function.
- * Accetta direttamente tutti gli elementi DOM necessari e la callback.
+ * Upload function via XMLHttpRequest with detailed error handling
  */
 export function initializeFileUploader({
-    dropArea, fileInput, selectFileBtn,
-    uploaderStatusDiv, progressBarContainer, progressBar, progressText, fileNameSpan,
-    onUploadSuccess
+  dropArea,
+  fileInput,
+  selectFileBtn,
+  uploaderStatusDiv,
+  progressBarContainer,
+  progressBar,
+  progressText,
+  fileNameSpan,
+  onUploadSuccess,
+  uploadTimeout = 120000
 }) {
-    // Stato iniziale
-    showUploaderStatus(uploaderStatusDiv, '', false);
-    updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 0);
+  // Initial state
+  showUploaderStatus(uploaderStatusDiv, '', false);
+  updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 0);
 
-    // Configura Drag & Drop
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        dropArea.addEventListener(eventName, preventDefaults);
+  // Drag & Drop setup
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+    dropArea.addEventListener(evt, e => {
+      e.preventDefault();
+      e.stopPropagation();
     });
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropArea.addEventListener(eventName, () => dropArea.classList.add('highlight'));
-    });
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropArea.addEventListener(eventName, () => dropArea.classList.remove('highlight'));
-    });
-    dropArea.addEventListener('drop', handleDrop);
+  });
+  ['dragenter', 'dragover'].forEach(evt => dropArea.addEventListener(evt, () => dropArea.classList.add('highlight')));
+  ['dragleave', 'drop'].forEach(evt => dropArea.addEventListener(evt, () => dropArea.classList.remove('highlight')));
+  dropArea.addEventListener('drop', handleFiles);
 
-    // Selezione file
-    selectFileBtn.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', e => handleFiles(e.target.files));
+  // File input setup
+  selectFileBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', e => handleFiles(e.target.files));
 
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
+  function handleFiles(fileListOrEvent) {
+    const files = fileListOrEvent instanceof Event ? fileListOrEvent.dataTransfer.files : fileListOrEvent;
+    if (!files || files.length === 0) {
+      showUploaderStatus(uploaderStatusDiv, 'Nessun file selezionato.', true);
+      return;
+    }
+    upload(files[0]);
+  }
+
+  function upload(file) {
+    const ext = file.name.toLowerCase().slice(-5);
+    if (!ext.endsWith('.xls') && !ext.endsWith('xlsx')) {
+      showUploaderStatus(uploaderStatusDiv, 'Formato non supportato. Usa .xls o .xlsx.', true);
+      return;
     }
 
-    async function handleDrop(e) {
-        const files = e.dataTransfer.files;
-        await handleFiles(files);
-    }
+    showUploaderStatus(uploaderStatusDiv, 'Caricamento in corso...', false);
+    updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 0, file.name);
+    toggleLoader(true);
 
-    async function handleFiles(files) {
-        if (!files.length) {
-            showUploaderStatus(uploaderStatusDiv, 'Nessun file selezionato.', true);
-            return;
-        }
-        const file = files[0];
-        const ext = file.name.slice(-5).toLowerCase();
-        if (!ext.endsWith('.xls') && !ext.endsWith('xlsx')) {
-            showUploaderStatus(uploaderStatusDiv, 'Formato file non supportato. Carica un file .xls o .xlsx.', true);
-            return;
-        }
+    const formData = new FormData();
+    formData.append('excelFile', file);
 
-        showUploaderStatus(uploaderStatusDiv, 'Caricamento ed elaborazione in corso...', false);
-        updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 10, file.name);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/.netlify/functions/process-excel', true);
+    xhr.timeout = uploadTimeout;
 
-        const formData = new FormData();
-        formData.append('excelFile', file);
+    xhr.upload.onprogress = event => {
+      if (event.lengthComputable) {
+        const percent = Math.round((event.loaded / event.total) * 100);
+        updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, percent, file.name);
+      }
+    };
 
+    xhr.onload = () => {
+      console.log('[UPLOADER] Response status:', xhr.status);
+      let message = `Errore server: ${xhr.status}`;
+      let responseObj;
+      if (xhr.status >= 200 && xhr.status < 300) {
         try {
-            toggleLoader(true);
-            console.log('[UPLOADER] Invio richiesta a /.netlify/functions/process-excel');
-            const response = await fetch('/.netlify/functions/process-excel', { method: 'POST', body: formData });
-
-            console.log('[UPLOADER] Risposta ricevuta. Status:', response.status);
-            if (!response.ok) {
-                // Gestione errori di rete e di status
-                let errorMsg = `Errore server: ${response.status}`;
-                try {
-                    const errData = await response.json();
-                    errorMsg = errData.message || errorMsg;
-                    console.error('[UPLOADER] Dettagli errore:', errData);
-                } catch (jsonErr) {
-                    console.error('[UPLOADER] JSON non valido nella risposta di errore');
-                }
-                throw new Error(errorMsg);
-            }
-
-            let data;
-            try {
-                data = await response.json();
-            } catch (parseErr) {
-                console.error('[UPLOADER] Errore parsing JSON:', parseErr);
-                throw new Error('Risposta non valida dal server. Riprova più tardi.');
-            }
-            console.log('[UPLOADER] Dati ricevuti:', data);
-
-            updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 100, file.name);
-            showUploaderStatus(uploaderStatusDiv, 'File elaborato con successo! Dati caricati per il confronto.', false);
-
-            if (typeof onUploadSuccess === 'function') {
-                try {
-                    onUploadSuccess(
-                        data.comparisonTableItems || [],
-                        data.productsToUpdateOrCreate || [],
-                        data.metrics || {}
-                    );
-                } catch (cbErr) {
-                    console.error('[UPLOADER] Errore in onUploadSuccess:', cbErr);
-                }
-            }
-        } catch (err) {
-            console.error('[UPLOADER] Errore upload/elaborazione:', err);
-            showUploaderStatus(uploaderStatusDiv, `Errore: ${err.message}`, true);
-            updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 0);
-        } finally {
-            toggleLoader(false);
+          responseObj = JSON.parse(xhr.responseText);
+        } catch (e) {
+          console.error('[UPLOADER] JSON parsing error:', e, 'Raw response:', xhr.responseText);
+          showUploaderStatus(uploaderStatusDiv, 'Risposta non valida dal server.', true);
+          toggleLoader(false);
+          return;
         }
-    }
+        console.log('[UPLOADER] Dati ricevuti:', responseObj);
+        updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 100, file.name);
+        showUploaderStatus(uploaderStatusDiv, 'File elaborato con successo!', false);
+        onUploadSuccess?.(
+          responseObj.comparisonTableItems || [],
+          responseObj.productsToUpdateOrCreate || [],
+          responseObj.metrics || {}
+        );
+      } else {
+        // Error status
+        if (xhr.responseText) {
+          try {
+            responseObj = JSON.parse(xhr.responseText);
+            message = responseObj.message || message;
+            console.error('[UPLOADER] Dettaglio errore:', responseObj);
+          } catch {
+            console.error('[UPLOADER] Raw error response:', xhr.responseText);
+          }
+        }
+        showUploaderStatus(uploaderStatusDiv, message, true);
+      }
+      toggleLoader(false);
+    };
+
+    xhr.ontimeout = () => {
+      console.error('[UPLOADER] Timeout exceeded');
+      showUploaderStatus(uploaderStatusDiv, 'Timeout di caricamento superato. Riprova.', true);
+      toggleLoader(false);
+    };
+
+    xhr.onerror = () => {
+      console.error('[UPLOADER] Network error');
+      showUploaderStatus(uploaderStatusDiv, 'Errore di rete durante l'upload.', true);
+      toggleLoader(false);
+    };
+
+    xhr.send(formData);
+  }
 }
