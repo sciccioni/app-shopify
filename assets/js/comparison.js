@@ -153,35 +153,48 @@ export function renderComparisonTable(fileProducts, shopifyProducts, metrics) {
 function applyFiltersAndSearch() {
     const searchTerm = document.getElementById('comparisonProductSearch').value.toLowerCase();
     const statusFilter = document.getElementById('comparisonStatusFilter').value;
-    const companiesTableBody = document.getElementById('companiesTableBody'); // Riferimento corretto al tbody per le ditte
     
-    // Filtra per stato
     let tempFilteredProducts = allComparisonProducts.filter(item => {
-        if (statusFilter === 'all') return true;
-        if (statusFilter === 'non-importable' && item.type === 'non-importable-summary') return true;
-        return item.status === statusFilter;
-    });
+        // Filtra per stato
+        if (statusFilter !== 'all') {
+            if (statusFilter === 'non-importable' && item.type === 'non-importable-summary') return true;
+            if (item.status !== statusFilter) return false;
+        }
 
-    // Filtra per ricerca
-    tempFilteredProducts = tempFilteredProducts.filter(item => {
-        if (item.type === 'non-importable-summary') return true; // Mostra sempre il riassunto se il filtro lo permette
+        // Filtra per ricerca (si applica solo ai prodotti reali, non al summary)
+        if (item.type === 'non-importable-summary') { // Il riassunto appare solo se il filtro lo permette
+            return true;
+        }
+
         const minsan = String(item.fileData?.Minsan || item.shopifyData?.minsan || '').toLowerCase();
         const description = String(item.fileData?.Descrizione || item.shopifyData?.title || '').toLowerCase();
         const ditta = String(item.fileData?.Ditta || item.shopifyData?.vendor || '').toLowerCase();
         const ean = String(item.fileData?.EAN || item.shopifyData?.variants?.[0]?.barcode || '').toLowerCase();
+        const iva = String(item.fileData?.IVA || item.shopifyData?.IVA || '').toLowerCase(); // Includi IVA nella ricerca
 
         return minsan.includes(searchTerm) ||
                description.includes(searchTerm) ||
-               ditta.includes(searchTerm) ||
-               ean.includes(searchTerm);
+               ditta.includes(searchTerm) || // Ricerca per Ditta
+               ean.includes(searchTerm) ||
+               iva.includes(searchTerm); // Ricerca per IVA
     });
 
+    // Se il filtro non è su "non-importable" e il count è > 0, aggiungiamo la riga summary
+    if (statusFilter !== 'non-importable') {
+        const nonImportableSummary = allComparisonProducts.find(item => item.type === 'non-importable-summary');
+        if (nonImportableSummary) {
+            // Aggiungi il summary solo se non già presente e il filtro attuale non lo esclude esplicitamente
+            if (!tempFilteredProducts.some(item => item.type === 'non-importable-summary')) {
+                 tempFilteredProducts.push(nonImportableSummary);
+                 // Ordina per mettere il summary alla fine
+                 tempFilteredProducts.sort((a,b) => (a.type === 'non-importable-summary') ? 1 : (b.type === 'non-importable-summary' ? -1 : 0));
+            }
+        }
+    }
+
     filteredComparisonProducts = tempFilteredProducts; // Aggiorna i prodotti filtrati globalmente
-
-    // Renderizza la tabella con i prodotti filtrati/cercati
-    renderFilteredComparisonTable();
+    renderFilteredComparisonTable(); // Ri-renderizza la tabella
 }
-
 
 /**
  * Renderizza solo i prodotti attualmente filtrati e cercati.
@@ -207,7 +220,9 @@ function renderFilteredComparisonTable() {
                     <th><input type="checkbox" id="selectAllProducts"></th>
                     <th>Minsan</th>
                     <th>Descrizione</th>
-                    <th>Ditta</th> <th>IVA</th> <th>Giacenza (File)</th>
+                    <th>Ditta</th> 
+                    <th>IVA</th> 
+                    <th>Giacenza (File)</th>
                     <th>Giacenza (Shopify)</th>
                     <th>Prezzo BD (File)</th>
                     <th>Prezzo BD (Shopify)</th>
@@ -253,7 +268,6 @@ function renderFilteredComparisonTable() {
         let dittaShopify = '-'; // Per confronto
         let ivaShopify = '-'; // Per confronto
 
-
         if (fileProd) {
             giacenzaFile = fileProd.Giacenza;
             prezzoBdFile = fileProd.PrezzoBD;
@@ -282,7 +296,6 @@ function renderFilteredComparisonTable() {
 
         const ivaDiffDisplay = (fileProd && shopifyProd && Math.abs(fileProd.IVA - parseFloat(ivaShopify)) > 0.001) ? `<span class="text-warning"> (!)</span>` : '';
 
-
         html += `
             <tr data-minsan="${fileProd?.Minsan || shopifyProd?.minsan || ''}"
                 data-status="${status}"
@@ -290,7 +303,9 @@ function renderFilteredComparisonTable() {
                 <td><input type="checkbox" class="product-checkbox" ${needsApproval ? '' : 'disabled'}></td>
                 <td>${fileProd?.Minsan || shopifyProd?.minsan || '-'}</td>
                 <td>${fileProd?.Descrizione || shopifyProd?.title || '-'}</td>
-                <td>${fileProd?.Ditta || shopifyProd?.vendor || '-'} ${dittaDiffDisplay}</td> <td>${fileProd?.IVA || shopifyProd?.IVA || '-'} ${ivaDiffDisplay}</td> <td>${giacenzaFile} ${giacenzaDiffDisplay}</td>
+                <td>${fileProd?.Ditta || shopifyProd?.vendor || '-'} ${dittaDiffDisplay}</td> 
+                <td>${fileProd?.IVA || shopifyProd?.IVA || '-'} ${ivaDiffDisplay}</td> 
+                <td>${giacenzaFile} ${giacenzaDiffDisplay}</td>
                 <td>${giacenzaShopify}</td>
                 <td>${prezzoBdFile} ${prezzoBdDiffDisplay}</td>
                 <td>${prezzoBdShopify}</td>
@@ -304,7 +319,6 @@ function renderFilteredComparisonTable() {
             </tr>
         `;
     });
-
 
     html += `
             </tbody>
@@ -326,6 +340,7 @@ function renderFilteredComparisonTable() {
     }
 
     // Aggiungi listener per i bottoni "Anteprima" e "Approva" (delegazione)
+    const comparisonTableContainer = document.getElementById('comparison-table-container');
     comparisonTableContainer.removeEventListener('click', handleTableActions);
     comparisonTableContainer.addEventListener('click', handleTableActions);
 
@@ -336,58 +351,6 @@ function renderFilteredComparisonTable() {
     approveAllBtn.removeEventListener('click', handleApproveAll);
     approveAllBtn.addEventListener('click', handleApproveAll);
 }
-
-/**
- * Applica i filtri e la ricerca ai prodotti e renderizza la tabella.
- * Questa funzione verrà chiamata su input di ricerca e cambio filtro.
- */
-function applyFiltersAndSearch() {
-    const searchTerm = document.getElementById('comparisonProductSearch').value.toLowerCase();
-    const statusFilter = document.getElementById('comparisonStatusFilter').value;
-    
-    let tempFilteredProducts = allComparisonProducts.filter(item => {
-        // Filtra per stato
-        if (statusFilter !== 'all') {
-            if (statusFilter === 'non-importable' && item.type === 'non-importable-summary') return true;
-            if (item.status !== statusFilter) return false;
-        }
-
-        // Filtra per ricerca (si applica solo ai prodotti reali, non al summary)
-        if (item.type === 'non-importable-summary') { // Il riassunto appare solo se il filtro lo permette
-            return true;
-        }
-
-        const minsan = String(item.fileData?.Minsan || item.shopifyData?.minsan || '').toLowerCase();
-        const description = String(item.fileData?.Descrizione || item.shopifyData?.title || '').toLowerCase();
-        const ditta = String(item.fileData?.Ditta || item.shopifyData?.vendor || '').toLowerCase();
-        const ean = String(item.fileData?.EAN || item.shopifyData?.variants?.[0]?.barcode || '').toLowerCase();
-        const iva = String(item.fileData?.IVA || item.shopifyData?.IVA || '').toLowerCase(); // Includi IVA nella ricerca
-
-        return minsan.includes(searchTerm) ||
-               description.includes(searchTerm) ||
-               ditta.includes(searchTerm) || // Ricerca per Ditta
-               ean.includes(searchTerm) ||
-               iva.includes(searchTerm); // Ricerca per IVA
-    });
-
-    // Se il filtro non è su "non-importable" e il count è > 0, aggiungiamo la riga summary
-    if (statusFilter !== 'non-importable') {
-        const nonImportableSummary = allComparisonProducts.find(item => item.type === 'non-importable-summary');
-        if (nonImportableSummary) {
-            // Aggiungi il summary solo se non già presente e il filtro attuale non lo esclude esplicitamente
-            if (!tempFilteredProducts.some(item => item.type === 'non-importable-summary')) {
-                 tempFilteredProducts.push(nonImportableSummary);
-                 // Ordina per mettere il summary alla fine
-                 tempFilteredProducts.sort((a,b) => (a.type === 'non-importable-summary') ? 1 : (b.type === 'non-importable-summary' ? -1 : 0));
-            }
-        }
-    }
-
-
-    filteredComparisonProducts = tempFilteredProducts; // Aggiorna i prodotti filtrati globalmente
-    renderFilteredComparisonTable(); // Ri-renderizza la tabella
-}
-
 
 function handleSelectAll(e) {
     document.querySelectorAll('.product-checkbox').forEach(checkbox => {
@@ -453,7 +416,6 @@ function handleApproveAll() {
     }
 }
 
-
 /**
  * Mostra la modal di anteprima "Prima vs Dopo" per un prodotto.
  * Questa funzione è ora più robusta e cerca i dati da `allComparisonProducts`.
@@ -481,12 +443,10 @@ export function showProductPreviewModal(minsan, fileProduct, shopifyProduct, sta
     document.getElementById('preview-modal-close-btn')?.addEventListener('click', () => hideModal('preview-modal-overlay'));
     document.getElementById('preview-modal-cancel-btn')?.addEventListener('click', () => hideModal('preview-modal-overlay'));
 
-
     let productTitle = fileProduct?.Descrizione || shopifyProduct?.title || 'Prodotto Sconosciuto';
     modalTitle.textContent = `Anteprima Modifiche per ${minsan} - "${productTitle}"`;
 
     diffTbody.innerHTML = ''; // Pulisce il contenuto precedente della tabella di confronto
-
 
     if (status === 'shopify-only') {
         const currentGiacenza = shopifyProduct?.variants[0]?.inventory_quantity ?? 0;
@@ -494,7 +454,6 @@ export function showProductPreviewModal(minsan, fileProduct, shopifyProduct, sta
         const currentScadenza = shopifyProduct?.Scadenza || '-';
         const currentDitta = shopifyProduct?.vendor || '-';
         const currentIVA = shopifyProduct?.IVA || '-'; // IVA da Shopify
-
 
         diffTbody.innerHTML = `
             <tr><td>Descrizione</td><td>${shopifyProduct?.title || '-'}</td><td>(Nessuna modifica)</td></tr>
@@ -521,7 +480,7 @@ export function showProductPreviewModal(minsan, fileProduct, shopifyProduct, sta
         newApproveBtn.dataset.action = 'zero-inventory';
         newApproveBtn.dataset.minsan = minsan;
 
-    } else if (fileProd) { // Per 'nuovo' e 'modificato'
+    } else if (fileProduct) { // Per 'nuovo' e 'modificato'
         const currentShopifyGiacenza = shopifyProduct?.variants[0]?.inventory_quantity ?? 0;
         const currentShopifyPrice = parseFloat(shopifyProduct?.variants[0]?.price ?? 0).toFixed(2);
         const currentShopifyScadenza = shopifyProduct?.Scadenza || '-';
@@ -531,52 +490,51 @@ export function showProductPreviewModal(minsan, fileProduct, shopifyProduct, sta
         let giacenzaRow = `
             <td>Giacenza</td>
             <td>${shopifyProduct ? `<span class="diff-original">${currentShopifyGiacenza}</span>` : 'N.D.'}</td>
-            <td><span class="diff-new">${fileProd.Giacenza}</span></td>
+            <td><span class="diff-new">${fileProduct.Giacenza}</span></td>
         `;
-        if (shopifyProduct && fileProd.Giacenza === currentShopifyGiacenza) {
-            giacenzaRow = `<td>Giacenza</td><td colspan="2">${fileProd.Giacenza}</td>`;
+        if (shopifyProduct && fileProduct.Giacenza === currentShopifyGiacenza) {
+            giacenzaRow = `<td>Giacenza</td><td colspan="2">${fileProduct.Giacenza}</td>`;
         }
 
         let prezzoRow = `
             <td>Prezzo BD</td>
             <td>${shopifyProduct ? `<span class="diff-original">${currentShopifyPrice}</span>` : 'N.D.'}</td>
-            <td><span class="diff-new">${fileProd.PrezzoBD}</span></td>
+            <td><span class="diff-new">${fileProduct.PrezzoBD}</span></td>
         `;
-        if (shopifyProduct && Math.abs(fileProd.PrezzoBD - parseFloat(currentShopifyPrice)) < 0.001) {
-            prezzoRow = `<td>Prezzo BD</td><td colspan="2">${fileProd.PrezzoBD}</td>`;
+        if (shopifyProduct && Math.abs(fileProduct.PrezzoBD - parseFloat(currentShopifyPrice)) < 0.001) {
+            prezzoRow = `<td>Prezzo BD</td><td colspan="2">${fileProduct.PrezzoBD}</td>`;
         }
 
         let scadenzaRow = `
             <td>Scadenza</td>
             <td>${shopifyProduct ? `<span class="diff-original">${currentShopifyScadenza || '-'}</span>` : 'N.D.'}</td>
-            <td><span class="diff-new">${fileProd.Scadenza || '-'}</span></td>
+            <td><span class="diff-new">${fileProduct.Scadenza || '-'}</span></td>
         `;
-        if (shopifyProduct && (fileProd.Scadenza || '') === (currentShopifyScadenza || '')) {
-            scadenzaRow = `<td>Scadenza</td><td colspan="2">${fileProd.Scadenza || '-'}</td>`;
+        if (shopifyProduct && (fileProduct.Scadenza || '') === (currentShopifyScadenza || '')) {
+            scadenzaRow = `<td>Scadenza</td><td colspan="2">${fileProduct.Scadenza || '-'}</td>`;
         }
         
         let dittaRow = `
             <td>Ditta</td>
             <td>${shopifyProduct ? `<span class="diff-original">${currentShopifyDitta}</span>` : 'N.D.'}</td>
-            <td><span class="diff-new">${fileProd.Ditta}</span></td>
+            <td><span class="diff-new">${fileProduct.Ditta}</span></td>
         `;
-        if (shopifyProduct && (fileProd.Ditta || '') === (currentShopifyDitta || '')) {
-            dittaRow = `<td>Ditta</td><td colspan="2">${fileProd.Ditta}</td>`;
+        if (shopifyProduct && (fileProduct.Ditta || '') === (currentShopifyDitta || '')) {
+            dittaRow = `<td>Ditta</td><td colspan="2">${fileProduct.Ditta}</td>`;
         }
 
         let ivaRow = `
             <td>IVA</td>
             <td>${shopifyProduct ? `<span class="diff-original">${currentShopifyIVA}</span>` : 'N.D.'}</td>
-            <td><span class="diff-new">${fileProd.IVA}</span></td>
+            <td><span class="diff-new">${fileProduct.IVA}</span></td>
         `;
-        if (shopifyProduct && Math.abs(fileProd.IVA - parseFloat(currentShopifyIVA)) < 0.001) {
-            ivaRow = `<td>IVA</td><td colspan="2">${fileProd.IVA}</td>`;
+        if (shopifyProduct && Math.abs(fileProduct.IVA - parseFloat(currentShopifyIVA)) < 0.001) {
+            ivaRow = `<td>IVA</td><td colspan="2">${fileProduct.IVA}</td>`;
         }
 
-
         diffTbody.innerHTML = `
-            <tr><td>EAN</td><td colspan="2">${fileProd.EAN || '-'}</td></tr>
-            <tr><td>Descrizione</td><td colspan="2">${fileProd.Descrizione}</td></tr>
+            <tr><td>EAN</td><td colspan="2">${fileProduct.EAN || '-'}</td></tr>
+            <tr><td>Descrizione</td><td colspan="2">${fileProduct.Descrizione}</td></tr>
             <tr>${dittaRow}</tr>
             <tr>${ivaRow}</tr>
             <tr>${giacenzaRow}</tr>
