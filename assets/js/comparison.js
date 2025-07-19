@@ -26,6 +26,19 @@ let comparisonTableContainer; // Anche questo per i listener globali
 
 
 /**
+ * Normalizza un codice Minsan rimuovendo caratteri non alfanumerici e convertendo a maiuscolo.
+ * Questa è una copia della funzione nel backend per coerenza lato frontend.
+ * @param {string} minsan - Il codice Minsan da normalizzare.
+ * @returns {string} Il codice Minsan normalizzato.
+ */
+function normalizeMinsan(minsan) {
+    if (!minsan) return '';
+    // Rimuove tutti i caratteri che non sono lettere o numeri, e converte a maiuscolo
+    return String(minsan).replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim();
+}
+
+
+/**
  * Inizializza i riferimenti agli elementi UI e i listener per la tabella di confronto.
  * Chiamato una volta dopo che il componente HTML è stato appeso.
  */
@@ -126,11 +139,12 @@ export function renderComparisonTable(fileProducts, shopifyProducts, metrics) {
 
     // --- Prepara allComparisonProducts (struttura dati unificata per filtri/ricerca) ---
     allComparisonProducts = [];
-    const shopifyProductsMap = new Map(shopifyProductsArray.map(p => [String(p.minsan).trim(), p]));
+    // Mappa i prodotti Shopify usando il Minsan normalizzato come chiave
+    const shopifyProductsMap = new Map(shopifyProductsArray.map(p => [normalizeMinsan(p.minsan), p]));
 
     // Aggiungi prodotti dal file (con status)
     fileProducts.forEach(fileProd => {
-        const minsan = String(fileProd.Minsan).trim();
+        const minsan = normalizeMinsan(fileProd.Minsan); // Normalizza il Minsan dal file
         const shopifyProd = shopifyProductsMap.get(minsan);
         let status = 'sincronizzato'; // Default
         let hasChanges = false;
@@ -146,7 +160,7 @@ export function renderComparisonTable(fileProducts, shopifyProducts, metrics) {
             hasChanges = (fileProd.Giacenza !== currentGiacenza ||
                           Math.abs(fileProd.PrezzoBD - currentPrice) > 0.001 ||
                           (fileProd.Scadenza || '') !== currentScadenza ||
-                          (fileProd.Ditta || '') !== currentVendor ||
+                          (fileProd.Ditta || '') !== currentVendor || // Questa è la riga che può causare "modificato"
                           Math.abs(fileProd.CostoMedio - currentCostoMedio) > 0.001 ||
                           Math.abs(fileProd.IVA - currentIVA) > 0.001);
 
@@ -221,9 +235,9 @@ function applyFiltersAndSearch() {
     let tempFilteredProducts = allComparisonProducts.filter(item => {
         // Filtra per stato
         if (statusFilter !== 'all') {
-            // Gestisce il caso del riassunto non importabile
-            if (statusFilter === 'non-importabile' && item.type === 'non-importable-summary') return true;
-            // Filtra per lo stato effettivo del prodotto
+            // Se l'elemento è il riassunto non importabile, includilo solo se il filtro è 'non-importabile'
+            if (item.type === 'non-importable-summary' && statusFilter === 'non-importabile') return true;
+            // Altrimenti, filtra per lo stato effettivo del prodotto
             if (item.status !== statusFilter) return false;
         }
 
@@ -233,13 +247,13 @@ function applyFiltersAndSearch() {
         }
 
         // Filtra per ricerca (si applica solo ai prodotti reali, non al summary)
-        const minsan = String(item.fileData?.Minsan || item.shopifyData?.minsan || '').toLowerCase();
+        const minsan = normalizeMinsan(item.fileData?.Minsan || item.shopifyData?.minsan); // Normalizza per la ricerca
         const description = String(item.fileData?.Descrizione || item.shopifyData?.title || '').toLowerCase();
         const ditta = String(item.fileData?.Ditta || item.shopifyData?.vendor || '').toLowerCase();
         const ean = String(item.fileData?.EAN || item.shopifyData?.variants?.[0]?.barcode || '').toLowerCase();
         const iva = String(item.fileData?.IVA || item.shopifyData?.IVA || '').toLowerCase();
 
-        return minsan.includes(searchTerm) ||
+        return minsan.includes(searchTerm) || // Ricerca per Minsan normalizzato
                description.includes(searchTerm) ||
                ditta.includes(searchTerm) ||
                ean.includes(searchTerm) ||
@@ -302,20 +316,18 @@ function renderFilteredComparisonTable() {
     let endIndex = startIndex + ITEMS_PER_PAGE;
     
     // Per gestire il summary item che deve stare sempre in fondo e non deve essere paginato via
+    const nonImportableSummaryItem = filteredComparisonProducts.find(item => item.type === 'non-importable-summary');
     let itemsToRender = filteredComparisonProducts.slice(startIndex, endIndex);
 
-    const nonImportableSummaryItem = filteredComparisonProducts.find(item => item.type === 'non-importable-summary');
-    if (nonImportableSummaryItem && !itemsToRender.includes(nonImportableSummaryItem)) {
-        // Se il summary esiste e non è nella fetta corrente, ma dovrebbe essere visibile, aggiungilo
-        // Questo lo mette in fondo all'ultima pagina anche se ITEMS_PER_PAGE non lo include.
-        // Se il summary è l'unico elemento filtrato, sarà l'unico mostrato.
-        if (filteredComparisonProducts[filteredComparisonProducts.length -1].type === 'non-importable-summary' &&
-            currentPage === totalPages) { // Solo se siamo all'ultima pagina e il summary è l'ultimo
-            if (itemsToRender.length === 0 || itemsToRender[itemsToRender.length -1].type !== 'non-importable-summary') { // Evita duplicati
-                 itemsToRender.push(nonImportableSummaryItem);
-            }
+    if (nonImportableSummaryItem && !itemsToRender.some(item => item.type === 'non-importable-summary')) { // Se il summary non è già nella slice
+        // Se il summary esiste e la pagina corrente è l'ultima (o dovrebbe mostrare il summary)
+        if (currentPage === totalPages) { // Solo se siamo all'ultima pagina
+            itemsToRender.push(nonImportableSummaryItem);
+            // Riordina per assicurarti che il summary sia l'ultimo elemento
+            itemsToRender.sort((a,b) => (a.type === 'non-importable-summary') ? 1 : (b.type === 'non-importable-summary' ? -1 : 0));
         }
     }
+
 
     if (itemsToRender.length === 0) {
         tableContentPlaceholder.innerHTML = '<p>Nessun prodotto corrisponde ai criteri di ricerca/filtro per questa pagina.</p>';
@@ -365,7 +377,7 @@ function renderFilteredComparisonTable() {
         const fileProd = item.fileData;
         const shopifyProd = item.shopifyData;
         const status = item.status;
-        const needsApproval = item.hasChanges;
+        const needsApproval = item.hasChanges; // Flag per abilitare/disabilitare checkbox e bottoni
 
         if (needsApproval) productsRequiringApprovalInView++;
 
@@ -479,7 +491,7 @@ function handleTableActions(e) {
 
     if (e.target.classList.contains('btn-preview')) {
         const minsan = e.target.dataset.minsan;
-        const item = allComparisonProducts.find(p => (String(p.fileData?.Minsan || '').trim() === minsan || String(p.shopifyData?.minsan || '').trim() === minsan));
+        const item = allComparisonProducts.find(p => normalizeMinsan(p.fileData?.Minsan || p.shopifyData?.minsan) === normalizeMinsan(minsan));
         
         if (item && item.type === 'product') { // Assicurati che sia un prodotto reale
             showProductPreviewModal(item.fileData?.Minsan || item.shopifyData?.minsan, item.fileData, item.shopifyData, item.status);

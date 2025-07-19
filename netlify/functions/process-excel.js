@@ -1,6 +1,7 @@
 const XLSX = require('xlsx');
 const multipart = require('parse-multipart-data');
-const { getShopifyProducts, callShopifyAdminApi } = require('../functions/shopify-api');
+// Importa normalizeMinsan da shopify-api.js
+const { getShopifyProducts, callShopifyAdminApi, normalizeMinsan } = require('../functions/shopify-api');
 
 exports.handler = async (event, context) => {
     // --- Metriche di Riepilogo ---
@@ -84,20 +85,23 @@ exports.handler = async (event, context) => {
                 rowObj[normalizedHeader] = rowData[index];
             });
 
+            // --- MODIFICA QUI: Normalizza il Minsan letto dal file Excel ---
+            const rawMinsanFromFile = String(getColumnValue(rowObj, columnMapping.Minsan) || '').trim();
+            const minsan = normalizeMinsan(rawMinsanFromFile);
 
-            const minsan = String(getColumnValue(rowObj, columnMapping.Minsan) || '').trim();
-
+            // --- NUOVA LOGICA DI FILTRO MINSAN ---
             if (!minsan || minsan.length < 9) {
-                console.warn(`[PROCESS_EXCEL] Minsan non valido o troppo corto saltato (min 9 cifre): ${minsan}`);
-                continue;
+                console.warn(`[PROCESS_EXCEL] Minsan non valido o troppo corto saltato (min 9 cifre): ${rawMinsanFromFile}`);
+                continue; // Salta la riga
             }
             if (minsan.startsWith('0')) {
                 nonImportableMinsanZeroCount++;
                 console.warn(`[PROCESS_EXCEL] Prodotto non importabile: Minsan inizia per 0 (${minsan})`);
-                continue;
+                continue; // Salta la riga
             }
+            // --- FINE NUOVA LOGICA DI FILTRO ---
 
-            minsanListFromFile.add(minsan); // Aggiungi il Minsan alla lista per la query Shopify (solo validi)
+            minsanListFromFile.add(minsan); // Aggiungi il Minsan normalizzato alla lista per la query Shopify
 
             const giacenzaRaw = getColumnValue(rowObj, columnMapping.Giacenza);
             const giacenza = parseFloat(giacenzaRaw || 0);
@@ -124,7 +128,7 @@ exports.handler = async (event, context) => {
             if (!processedProductsMap.has(minsan)) {
                 processedProductsMap.set(minsan, {
                     Ditta: String(getColumnValue(rowObj, columnMapping.Ditta) || '').trim(),
-                    Minsan: minsan,
+                    Minsan: minsan, // Salva il Minsan normalizzato
                     EAN: String(getColumnValue(rowObj, columnMapping.EAN) || '').trim(),
                     Descrizione: String(getColumnValue(rowObj, columnMapping.Descrizione) || '').trim(),
                     Giacenza: 0,
@@ -156,7 +160,7 @@ exports.handler = async (event, context) => {
         const processedProducts = Array.from(processedProductsMap.values());
         console.log(`[PROCESS_EXCEL] Elaborati ${processedProducts.length} prodotti unici dal file Excel (Minsan validi).`);
         console.log(`[PROCESS_EXCEL] Minsan totali validi dal file per query Shopify: ${minsanListFromFile.size}`);
-        // console.log(`[PROCESS_EXCEL] Lista Minsan dal file:`, Array.from(minsanListFromFile)); // Logga la lista completa se necessario
+        // console.log(`[PROCESS_EXCEL] Lista Minsan normalizzati dal file:`, Array.from(minsanListFromFile)); // Logga la lista completa se necessario
 
         const shopifyApiResult = await getShopifyProducts(Array.from(minsanListFromFile));
         const shopifyProducts = shopifyApiResult.products;
@@ -166,7 +170,7 @@ exports.handler = async (event, context) => {
 
         // --- Calcolo Metriche: Prodotti Nuovi e Da Modificare ---
         for (const fileProd of processedProducts) {
-            const minsan = String(fileProd.Minsan).trim();
+            const minsan = String(fileProd.Minsan).trim(); // Minsan già normalizzato dal file
             const shopifyProd = shopifyProductsMap.get(minsan);
             
             const metafields = [
@@ -179,16 +183,18 @@ exports.handler = async (event, context) => {
             if (shopifyProd) {
                 // Prodotto esistente: confronta per vedere se è da modificare
                 const currentGiacenza = shopifyProd.variants[0]?.inventory_quantity ?? 0;
-                const currentPrice = parseFloat(shopifyProd.variants[0]?.price ?? 0);
+                const currentPrice = parseFloat(shopifyProd.variants[0]?.price ?? 0); // Prezzo numerico per confronto
                 const currentScadenza = shopifyProd.Scadenza || '';
-                const currentVendor = shopifyProd.vendor || '';
+                const currentVendor = shopifyProd.vendor || ''; // Vendor già normalizzato
                 const currentCostoMedio = shopifyProd.CostoMedio || 0;
                 const currentIVA = shopifyProd.IVA || 0;
 
                 const hasChanges = (fileProd.Giacenza !== currentGiacenza ||
                                     Math.abs(fileProd.PrezzoBD - currentPrice) > 0.001 ||
                                     (fileProd.Scadenza || '') !== currentScadenza ||
-                                    (fileProd.Ditta || '') !== currentVendor ||
+                                    // Non consideriamo il cambio Ditta/Vendor come motivo per creare un NUOVO prodotto,
+                                    // ma solo come una MODIFICA. Quindi, se il Minsan matcha, è una modifica.
+                                    (fileProd.Ditta || '') !== currentVendor || // Questo contribuisce ad 'hasChanges' per 'modificato'
                                     Math.abs(fileProd.CostoMedio - currentCostoMedio) > 0.001 ||
                                     Math.abs(fileProd.IVA - currentIVA) > 0.001);
 
@@ -198,20 +204,20 @@ exports.handler = async (event, context) => {
 
                 const updatedProduct = {
                     id: shopifyProd.id,
-                    vendor: fileProd.Ditta,
+                    vendor: fileProd.Ditta, // Aggiorna anche il vendor/ditta se presente
                     variants: [{
                         id: shopifyProd.variants[0].id,
-                        price: String(fileProd.PrezzoBD),
+                        price: String(fileProd.PrezzoBD), // Prezzo di base dal file
                         inventory_quantity: fileProd.Giacenza,
-                        sku: fileProd.Minsan,
-                        barcode: fileProd.EAN || ''
+                        sku: fileProd.Minsan, // Assumiamo Minsan come SKU
+                        barcode: fileProd.EAN || '' // Aggiorna EAN
                     }],
                     metafields: metafields
                 };
                 productsToUpdateOrCreate.push({ type: 'update', product: updatedProduct, status: hasChanges ? 'modificato' : 'sincronizzato' });
 
             } else {
-                // Nuovo prodotto
+                // Nuovo prodotto (Minsan dal file non trovato su Shopify dopo normalizzazione)
                 newProductsCount++;
                 const newProduct = {
                     title: fileProd.Descrizione,

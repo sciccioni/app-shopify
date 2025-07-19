@@ -3,6 +3,17 @@ const SHOPIFY_ADMIN_API_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
 const SHOPIFY_API_VERSION = '2024-07';
 
 /**
+ * Normalizza un codice Minsan rimuovendo caratteri non alfanumerici e convertendo a maiuscolo.
+ * @param {string} minsan - Il codice Minsan da normalizzare.
+ * @returns {string} Il codice Minsan normalizzato.
+ */
+function normalizeMinsan(minsan) {
+    if (!minsan) return '';
+    // Rimuove tutti i caratteri che non sono lettere o numeri, e converte a maiuscolo
+    return String(minsan).replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim();
+}
+
+/**
  * Funzione per effettuare richieste all'Admin API di Shopify.
  * @param {string} endpoint - L'endpoint dell'API (es. 'products.json', 'products/{id}.json')
  * @param {string} method - Metodo HTTP (GET, POST, PUT, DELETE)
@@ -29,7 +40,7 @@ async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
         options.body = JSON.stringify(body);
     }
 
-    // console.log(`Shopify API Call: ${method} ${url}`); // Manteniamo questo per vedere le URL chiamate
+    console.log(`Shopify API Call: ${method} ${url}`);
     try {
         const response = await fetch(url, options);
         if (!response.ok) {
@@ -101,11 +112,11 @@ async function getShopifyProducts(skusToFetch = [], pageInfo = null, limit = 20)
             const costoMedioMetafield = product.metafields?.find(m => m.key === 'costo_medio' && m.namespace === 'custom_fields');
             const ivaMetafield = product.metafields?.find(m => m.key === 'iva' && m.namespace === 'custom_fields');
 
-            const normalizedMinsan = minsanMetafield?.value ? String(minsanMetafield.value).trim() : (variant.sku ? String(variant.sku).trim() : String(product.id).trim());
+            // --- MODIFICA QUI: Normalizza il Minsan estratto da Shopify ---
+            const normalizedMinsan = normalizeMinsan(minsanMetafield?.value || variant.sku || String(product.id));
 
-            // --- DEBUG QUI: Logga il Minsan estratto per ogni prodotto Shopify ---
             console.log(`[SHOPIFY_API] Prodotto Shopify: ${product.title} (ID: ${product.id}) -> Minsan estratto: "${normalizedMinsan}" (da Metafield: ${!!minsanMetafield}, da SKU: ${!!variant.sku})`);
-            // --- FINE DEBUG ---
+            // --- FINE MODIFICA ---
 
             return {
                 id: product.id,
@@ -124,7 +135,7 @@ async function getShopifyProducts(skusToFetch = [], pageInfo = null, limit = 20)
         });
 
         if (skusToFetch.length > 0) {
-            const skusSet = new Set(skusToFetch.map(s => String(s).trim()));
+            const skusSet = new Set(skusToFetch.map(s => normalizeMinsan(s))); // Normalizza anche gli SKU da cercare
             const filtered = normalizedProducts.filter(p => skusSet.has(p.minsan));
             console.log(`[SHOPIFY_API] Filtro applicato: da ${normalizedProducts.length} a ${filtered.length} prodotti per SKUs specifici.`);
             return {
@@ -148,5 +159,6 @@ async function getShopifyProducts(skusToFetch = [], pageInfo = null, limit = 20)
 
 module.exports = {
     callShopifyAdminApi,
-    getShopifyProducts
+    getShopifyProducts,
+    normalizeMinsan // Esporta la funzione per usarla anche in process-excel.js
 };
