@@ -1,5 +1,5 @@
 // process-excel.js (CommonJS)
-// Netlify Function: elabora Excel e confronta con Shopify utilizzando il fetch globale di Node 18+
+// Netlify Function: elabora Excel e confronta con Shopify usando GraphQL per prestazioni migliori
 
 const XLSX = require('xlsx');
 const multipart = require('parse-multipart-data');
@@ -9,84 +9,75 @@ const SHOPIFY_STORE_NAME = process.env.SHOPIFY_STORE_NAME;
 const SHOPIFY_ADMIN_API_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
 const SHOPIFY_API_VERSION = '2024-07';
 
-// Utility per normalizzare Minsan (rimuove caratteri non alfanumerici, uppercase)
+// Utility per normalizzare Minsan
 function normalizeMinsan(minsan) {
-  if (!minsan) return '';
-  return String(minsan).replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim();
+  return String(minsan || '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toUpperCase()
+    .trim();
 }
 
-// Effettua chiamata all'Admin API di Shopify usando fetch globale
-async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
-  if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN) {
-    throw new Error('Shopify environment variables non configurate');
-  }
-  const url = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/${endpoint.replace(/^\//, '')}`;
-  const options = {
-    method,
+// Esegue una chiamata GraphQL all'Admin API di Shopify
+async function callShopifyGraphQL(query, variables = {}) {
+  const url = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
+  const response = await fetch(url, {
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN
-    }
-  };
-  if (body) options.body = JSON.stringify(body);
-
-  const res = await fetch(url, options);
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(`Shopify API error ${res.status}: ${JSON.stringify(data)}`);
+    },
+    body: JSON.stringify({ query, variables })
+  });
+  const result = await response.json();
+  if (result.errors) {
+    throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
   }
-  return { data, headers: res.headers };
+  return result.data;
 }
 
-// Recupera prodotti Shopify per lista di Minsan in parallelo
-// Recupera prodotti Shopify per lista di Minsan in parallelo con throttling
-async function getShopifyProducts(minsans, limit = 20) {
-  let products = [];
-  let nextPageInfo;
-  let endpoint = `products.json?fields=id,title,variants,metafields&limit=${limit}`;
-  const skuSet = new Set(minsans.map(normalizeMinsan));
-
-  // Funzione sleep per throttling
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-  do {
-    // Effettuiamo massimo 1 chiamata ogni 600ms per non superare 2/sec
-    await sleep(600);
-    let response;
-    try {
-      response = await callShopifyAdminApi(endpoint);
-    } catch (err) {
-      if (/429/.test(err.message)) {
-        // Se rate limit, aspettiamo e ritentiamo
-        console.warn('Shopify rate limit exceeded, retrying after 1000ms');
-        await sleep(1000);
-        response = await callShopifyAdminApi(endpoint);
-      } else {
-        throw err;
+// Recupera prodotti Shopify via GraphQL filtrando per SKU/Minsan in un'unica chiamata
+async function getShopifyProducts(minsans) {
+  // Costruiamo query OR di SKU
+  const normalizedSkus = minsans.map(normalizeMinsan);
+  const queryStrings = normalizedSkus.map(sku => `sku:${sku}`).join(' OR ');
+  const graphQLQuery = `
+    query fetchBySkus($query: String!) {
+      products(first: ${normalizedSkus.length}, query: $query) {
+        edges {
+          node {
+            variants(first:1) {
+              edges {
+                node {
+                  sku
+                  price
+                  inventoryQuantity
+                }
+              }
+            }
+          }
+        }
       }
     }
-    const { data, headers } = response;
-    products = products.concat(data.products || []);
-    const link = headers.get('link') || headers.get('Link') || '';
-    const match = link.match(/page_info=([^&>]+)/);
-    nextPageInfo = match && match[1];
-    endpoint = nextPageInfo ? `products.json?fields=id,title,variants,metafields&limit=${limit}&page_info=${nextPageInfo}` : null;
-  } while (endpoint);
+  `;
 
-  // Normalizza e filtra solo gli Minsan richiesti
-  return products.map(prod => {
-    const mf = (prod.metafields || []).find(m => m.namespace==='custom_fields' && m.key==='minsan');
-    let sku = mf?.value || (prod.variants[0]||{}).sku || '';
-    sku = normalizeMinsan(sku);
-    const variant = prod.variants.find(v=>normalizeMinsan(v.sku)===sku) || prod.variants[0] || {};
-    return { minsan: sku, Giacenza: variant.inventory_quantity||0, PrezzoBD: parseFloat(variant.price||0) };
-  }).filter(item => skuSet.has(item.minsan));
+  const data = await callShopifyGraphQL(graphQLQuery, { query: queryStrings });
+  const products = data.products.edges.map(edge => {
+    const variant = edge.node.variants.edges[0]?.node || {};
+    const skuNorm = normalizeMinsan(variant.sku);
+    return {
+      minsan: skuNorm,
+      Giacenza: variant.inventoryQuantity || 0,
+      PrezzoBD: parseFloat(variant.price) || 0
+    };
+  });
+  return products;
 }
 
 exports.handler = async function(event) {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
+
   try {
     // Parsing multipart/form-data
     const contentType = event.headers['content-type'] || event.headers['Content-Type'];
@@ -97,7 +88,7 @@ exports.handler = async function(event) {
       return { statusCode: 400, body: JSON.stringify({ message: 'Excel mancante nella richiesta.' }) };
     }
 
-    // Lettura Excel
+    // Lettura Excel in memoria
     const workbook = XLSX.read(filePart.data, { type: 'buffer' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
@@ -108,11 +99,11 @@ exports.handler = async function(event) {
     const idx = {};
     headers.forEach((h, i) => { idx[String(h).trim()] = i; });
 
-    // Estrazione Minsan
+    // Estrazione Minsan e preparazione righe
     const items = [];
     const minsans = [];
     rows.forEach(r => {
-      const rawM = String(r[idx['Minsan']] || '');
+      const rawM = r[idx['Minsan']];
       const m = normalizeMinsan(rawM);
       if (m && !m.startsWith('0')) {
         minsans.push(m);
@@ -120,11 +111,11 @@ exports.handler = async function(event) {
       }
     });
 
-    // Fetch Shopify
+    // Fetch Shopify in un'unica chiamata GraphQL
     const shopifyArr = await getShopifyProducts(minsans);
     const shopifyMap = new Map(shopifyArr.map(o => [o.minsan, o]));
 
-    // Costruzione risposta
+    // Costruzione confronto
     const comparison = items.map(({ row, minsan }) => {
       const prod = shopifyMap.get(minsan) || {};
       return {
@@ -136,11 +127,16 @@ exports.handler = async function(event) {
       };
     });
 
+    // Risposta
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ comparisonTableItems: comparison, metrics: { totalRows: rows.length, recordsMatched: comparison.length } })
+      body: JSON.stringify({
+        comparisonTableItems: comparison,
+        metrics: { totalRows: rows.length, recordsMatched: comparison.length }
+      })
     };
+
   } catch (err) {
     console.error('Error process-excel:', err);
     return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: err.message }) };

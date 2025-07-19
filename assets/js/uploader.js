@@ -1,7 +1,7 @@
 import { showUploaderStatus, updateUploaderProgress, toggleLoader } from './ui.js';
 
 /**
- * Upload function via XMLHttpRequest with detailed error handling
+ * Upload multi-stage per Excel e confronto Shopify
  */
 export function initializeFileUploader({
   dropArea,
@@ -12,118 +12,90 @@ export function initializeFileUploader({
   progressBar,
   progressText,
   fileNameSpan,
-  onUploadSuccess,
-  uploadTimeout = 120000
+  onUploadSuccess
 }) {
-  // Ensure upload button is visible and hide native file input
-  if (selectFileBtn) {
-    selectFileBtn.style.display = '';
-  }
-  if (fileInput) {
-    fileInput.style.display = 'none';
-  }
+  // Mostra il pulsante e nasconde l'input nativo
+  if (selectFileBtn) selectFileBtn.style.display = '';
+  if (fileInput) fileInput.style.display = 'none';
 
-  // Initial state
+  // Stato iniziale UI
   showUploaderStatus(uploaderStatusDiv, '', false);
   updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 0);
 
-  // Drag & Drop setup
-  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
-    dropArea.addEventListener(evt, e => {
-      e.preventDefault();
-      e.stopPropagation();
-    });
-  });
-  ['dragenter', 'dragover'].forEach(evt => dropArea.addEventListener(evt, () => dropArea.classList.add('highlight')));
-  ['dragleave', 'drop'].forEach(evt => dropArea.addEventListener(evt, () => dropArea.classList.remove('highlight')));
-  dropArea.addEventListener('drop', handleFiles);
-
-  // File input setup
+  // Eventi Drag & Drop e click
   selectFileBtn.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', e => handleFiles(e.target.files));
+  ['dragenter','dragover','dragleave','drop'].forEach(evt => {
+    dropArea.addEventListener(evt, e => {
+      e.preventDefault(); e.stopPropagation();
+      if (evt === 'drop') handleFiles(e.dataTransfer.files);
+    });
+  });
 
-  function handleFiles(fileListOrEvent) {
-    const files = fileListOrEvent instanceof Event ? fileListOrEvent.dataTransfer.files : fileListOrEvent;
+  async function handleFiles(files) {
     if (!files || files.length === 0) {
       showUploaderStatus(uploaderStatusDiv, 'Nessun file selezionato.', true);
       return;
     }
-    upload(files[0]);
-  }
-
-  function upload(file) {
+    const file = files[0];
     const ext = file.name.toLowerCase().slice(-5);
     if (!ext.endsWith('.xls') && !ext.endsWith('xlsx')) {
       showUploaderStatus(uploaderStatusDiv, 'Formato non supportato. Usa .xls o .xlsx.', true);
       return;
     }
+    await processFile(file);
+  }
 
-    showUploaderStatus(uploaderStatusDiv, 'Caricamento in corso...', false);
-    updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 0, file.name);
-    toggleLoader(true);
+  async function processFile(file) {
+    try {
+      toggleLoader(true);
 
-    const formData = new FormData();
-    formData.append('excelFile', file);
+      // Step 1: upload file
+      showUploaderStatus(uploaderStatusDiv, 'Caricamento file...', false);
+      updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 10, file.name);
+      const formData = new FormData();
+      formData.append('excelFile', file);
+      const importRes = await fetch('/api/import-excel', { method: 'POST', body: formData });
+      const importJson = await importRes.json();
+      if (!importRes.ok) throw new Error(importJson.error || 'Errore importazione');
+      const importId = importJson.importId;
 
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/.netlify/functions/process-excel', true);
-    xhr.timeout = uploadTimeout;
+      // Step 2: normalize
+      showUploaderStatus(uploaderStatusDiv, 'Normalizzazione dati...', false);
+      updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 40, file.name);
+      const normRes = await fetch('/api/normalize-products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ importId })
+      });
+      const normJson = await normRes.json();
+      if (!normRes.ok) throw new Error(normJson.error || 'Errore normalizzazione');
 
-    xhr.upload.onprogress = event => {
-      if (event.lengthComputable) {
-        const percent = Math.round((event.loaded / event.total) * 100);
-        updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, percent, file.name);
-      }
-    };
+      // Step 3: compute diffs
+      showUploaderStatus(uploaderStatusDiv, 'Confronto con Shopify...', false);
+      updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 70, file.name);
+      const diffRes = await fetch('/api/compute-diffs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ importId })
+      });
+      const diffJson = await diffRes.json();
+      if (!diffRes.ok) throw new Error(diffJson.error || 'Errore differenze');
 
-    xhr.onload = () => {
-      console.log('[UPLOADER] Response status:', xhr.status);
-      let message = `Errore server: ${xhr.status}`;
-      let responseObj;
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          responseObj = JSON.parse(xhr.responseText);
-        } catch (e) {
-          console.error('[UPLOADER] JSON parsing error:', e, 'Raw response:', xhr.responseText);
-          showUploaderStatus(uploaderStatusDiv, 'Risposta non valida dal server.', true);
-          toggleLoader(false);
-          return;
-        }
-        console.log('[UPLOADER] Dati ricevuti:', responseObj);
-        updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 100, file.name);
-        showUploaderStatus(uploaderStatusDiv, 'File elaborato con successo!', false);
-        onUploadSuccess?.(
-          responseObj.comparisonTableItems || [],
-          responseObj.productsToUpdateOrCreate || [],
-          responseObj.metrics || {}
-        );
-      } else {
-        if (xhr.responseText) {
-          try {
-            responseObj = JSON.parse(xhr.responseText);
-            message = responseObj.message || message;
-            console.error('[UPLOADER] Dettaglio errore:', responseObj);
-          } catch {
-            console.error('[UPLOADER] Raw error response:', xhr.responseText);
-          }
-        }
-        showUploaderStatus(uploaderStatusDiv, message, true);
-      }
+      // Successo
+      updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 100, file.name);
+      showUploaderStatus(uploaderStatusDiv, 'Analisi completata!', false);
+      onUploadSuccess?.(
+        diffJson.comparisonTableItems || [],
+        diffJson.productsToUpdateOrCreate || [],
+        diffJson.metrics || {}
+      );
+    } catch (err) {
+      console.error('[UPLOADER] Errore:', err);
+      showUploaderStatus(uploaderStatusDiv, `Errore: ${err.message}`, true);
+      updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 0);
+    } finally {
       toggleLoader(false);
-    };
-
-    xhr.ontimeout = () => {
-      console.error('[UPLOADER] Timeout exceeded');
-      showUploaderStatus(uploaderStatusDiv, 'Timeout di caricamento superato. Riprova.', true);
-      toggleLoader(false);
-    };
-
-    xhr.onerror = () => {
-      console.error('[UPLOADER] Network error');
-      showUploaderStatus(uploaderStatusDiv, 'Errore di rete durante l\'upload.', true);
-      toggleLoader(false);
-    };
-
-    xhr.send(formData);
+    }
   }
 }
