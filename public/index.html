@@ -228,7 +228,8 @@
                 
                 if (this.id === 'tab-upload') {
                     // Se torna alla tab di upload, pulisce l'URL e resetta lo stato
-                    window.history.pushState({}, '', '/app.html');
+                    // --- CORREZIONE QUI ---
+                    window.history.pushState({}, '', '/');
                     importId = null;
                     switchTab('#tab-upload');
                     $('#tab-reviews, #tab-markups, #tab-logs').addClass('opacity-50 pointer-events-none');
@@ -290,7 +291,8 @@
                     
                     // Reindirizza alla pagina di revisione dopo un breve ritardo
                     window.setTimeout(() => {
-                        window.location.href = `?import_id=${newImportId}`;
+                        // --- CORREZIONE QUI ---
+                        window.location.href = `/?import_id=${newImportId}`;
                     }, 1000);
 
                 } catch (error) {
