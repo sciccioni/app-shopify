@@ -3,7 +3,7 @@
 
 const XLSX = require('xlsx');
 const multipart = require('parse-multipart-data');
-const { getShopifyProducts } = require('./shopify-api');
+const shopifyApi = require('./shopify-api');
 
 // Utility per normalizzare Minsan (rimuove caratteri non alfanumerici, uppercase)
 function normalizeMinsan(minsan) {
