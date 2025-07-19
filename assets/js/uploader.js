@@ -91,21 +91,25 @@ export function initializeFileUploader({
             }
 
             const data = await response.json();
-            console.log('[UPLOADER] Dati ricevuti dalla Netlify Function:', {
+            console.log('[UPLOADER] Dati ricevuti dalla Netlify Function (STRUTTURA COMPLETA):', data);
+            console.log('[UPLOADER] Chiavi del data object:', Object.keys(data));
+            console.log('[UPLOADER] Analisi dettagliata:', {
                 data: data,
                 dataType: typeof data,
                 dataKeys: data ? Object.keys(data) : 'N/A',
+                // Controlla diverse possibili strutture
                 processedProducts: data?.processedProducts,
-                processedProductsType: typeof data?.processedProducts,
-                processedProductsIsArray: Array.isArray(data?.processedProducts),
-                processedProductsLength: data?.processedProducts?.length,
+                products: data?.products,
+                fileProducts: data?.fileProducts,
+                validProducts: data?.validProducts,
+                // Per shopify
                 shopifyProducts: data?.shopifyProducts,
-                shopifyProductsType: typeof data?.shopifyProducts,
-                shopifyProductsIsArray: Array.isArray(data?.shopifyProducts),
-                shopifyProductsLength: data?.shopifyProducts?.length,
+                shopify: data?.shopify,
+                existingProducts: data?.existingProducts,
+                // Metrics
                 metrics: data?.metrics,
-                metricsType: typeof data?.metrics,
-                metricsKeys: data?.metrics ? Object.keys(data.metrics) : 'N/A'
+                statistics: data?.statistics,
+                stats: data?.stats
             });
 
             updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 100, file.name);
@@ -113,13 +117,20 @@ export function initializeFileUploader({
 
             if (onUploadSuccess) {
                 console.log('[UPLOADER] Chiamando onUploadSuccess con parametri:');
-                console.log('[UPLOADER] - processedProducts:', data.processedProducts);
-                console.log('[UPLOADER] - shopifyProducts:', data.shopifyProducts);
-                console.log('[UPLOADER] - metrics:', data.metrics);
+                
+                // Prova diverse strutture dati comuni
+                const processedProducts = data.processedProducts || data.products || data.fileProducts || data.validProducts || [];
+                const shopifyProducts = data.shopifyProducts || data.shopify || data.existingProducts || [];
+                const metrics = data.metrics || data.statistics || data.stats || {};
+                
+                console.log('[UPLOADER] Parametri estratti per onUploadSuccess:');
+                console.log('[UPLOADER] - processedProducts:', processedProducts, '(length:', processedProducts?.length, ')');
+                console.log('[UPLOADER] - shopifyProducts:', shopifyProducts, '(length:', shopifyProducts?.length, ')');
+                console.log('[UPLOADER] - metrics:', metrics);
                 
                 // *** MODIFICA QUI: Passa metrics alla callback ***
                 try {
-                    onUploadSuccess(data.processedProducts, data.shopifyProducts, data.metrics);
+                    onUploadSuccess(processedProducts, shopifyProducts, metrics);
                     console.log('[UPLOADER] onUploadSuccess chiamata con successo');
                 } catch (callbackError) {
                     console.error('[UPLOADER] Errore durante la chiamata di onUploadSuccess:', callbackError);
