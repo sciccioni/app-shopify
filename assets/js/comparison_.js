@@ -1,117 +1,43 @@
-// assets/js/comparison.js - COMPLETISSIMO E CORRETTO (Paginazione, Ricerca, Filtro, Metriche)
+// assets/js/comparison.js - COMPLETO E CORRETTO (Metrice, Filtri, Ricerca, Colonne IVA/Ditta)
 
 import { showModal, hideModal, showUploaderStatus } from './ui.js';
 
 // Variabili globali per i dati originali e filtrati/cercati della tabella
-let allComparisonProducts = []; // Tutti i prodotti da visualizzare (file + shopify, anche non importabili dal file)
+let allComparisonProducts = []; // Tutti i prodotti da visualizzare (file + shopify, anche non importabili)
 let filteredComparisonProducts = []; // Prodotti attualmente visualizzati dopo filtri/ricerca
-
-// Stato di paginazione per la tabella di confronto
-let currentPage = 1;
-const ITEMS_PER_PAGE = 20; // Numero di prodotti da mostrare per pagina
-let totalPages = 1;
-
-// Riferimenti agli elementi UI per i filtri e la paginazione (accessibili globalmente nel modulo)
-let comparisonProductSearch;
-let comparisonStatusFilter;
-let comparisonPrevPageBtn;
-let comparisonNextPageBtn;
-let comparisonPageInfo;
-let metricTotalRowsImported;
-let metricNewProducts;
-let metricProductsToModify;
-let metricShopifyOnly;
-let metricNonImportable;
-let comparisonTableContainer; // Anche questo per i listener globali
-
-
-/**
- * Inizializza i riferimenti agli elementi UI e i listener per la tabella di confronto.
- * Chiamato una volta dopo che il componente HTML è stato appeso.
- */
-function setupComparisonTableUI() {
-    comparisonProductSearch = document.getElementById('comparisonProductSearch');
-    comparisonStatusFilter = document.getElementById('comparisonStatusFilter');
-    comparisonPrevPageBtn = document.getElementById('comparisonPrevPageBtn');
-    comparisonNextPageBtn = document.getElementById('comparisonNextPageBtn');
-    comparisonPageInfo = document.getElementById('comparisonPageInfo');
-    metricTotalRowsImported = document.getElementById('metricTotalRowsImported');
-    metricNewProducts = document.getElementById('metricNewProducts');
-    metricProductsToModify = document.getElementById('metricProductsToModify');
-    metricShopifyOnly = document.getElementById('metricShopifyOnly');
-    metricNonImportable = document.getElementById('metricNonImportable');
-    comparisonTableContainer = document.getElementById('comparison-table-container');
-
-    // Assicurati che tutti gli elementi siano stati trovati prima di aggiungere i listener
-    if (!comparisonProductSearch || !comparisonStatusFilter || !comparisonPrevPageBtn || !comparisonNextPageBtn ||
-        !comparisonPageInfo || !metricTotalRowsImported || !metricNewProducts || !metricProductsToModify ||
-        !metricShopifyOnly || !metricNonImportable || !comparisonTableContainer) {
-        console.error("[COMPARE] Alcuni elementi UI della tabella di confronto non sono stati trovati.");
-        return false;
-    }
-
-    // --- Setup Listener per Ricerca e Filtro ---
-    comparisonProductSearch.addEventListener('input', () => {
-        currentPage = 1; // Resetta la paginazione ad ogni nuova ricerca/filtro
-        applyFiltersAndSearch();
-    });
-    comparisonStatusFilter.addEventListener('change', () => {
-        currentPage = 1; // Resetta la paginazione ad ogni nuova ricerca/filtro
-        applyFiltersAndSearch();
-    });
-
-    // --- Setup Listener per Paginazione ---
-    comparisonPrevPageBtn.addEventListener('click', () => {
-        if (currentPage > 1) {
-            currentPage--;
-            renderFilteredComparisonTable();
-            updatePaginationControls();
-        }
-    });
-    comparisonNextPageBtn.addEventListener('click', () => {
-        if (currentPage < totalPages) {
-            currentPage++;
-            renderFilteredComparisonTable();
-            updatePaginationControls();
-        }
-    });
-
-    // --- Setup Listener per Anteprima/Approva (delegazione) ---
-    // Rimuovi e riaggiungi per evitare duplicati se la funzione renderComparisonTable viene chiamata più volte
-    comparisonTableContainer.removeEventListener('click', handleTableActions);
-    comparisonTableContainer.addEventListener('click', handleTableActions);
-
-    // Gestori eventi per i bottoni di approvazione bulk
-    const approveSelectedBtn = document.getElementById('approve-selected-btn');
-    const approveAllBtn = document.getElementById('approve-all-btn');
-    if (approveSelectedBtn && approveAllBtn) {
-        approveSelectedBtn.removeEventListener('click', handleApproveSelected);
-        approveSelectedBtn.addEventListener('click', handleApproveSelected);
-        approveAllBtn.removeEventListener('click', handleApproveAll);
-        approveAllBtn.addEventListener('click', handleApproveAll);
-    }
-    
-    return true; // UI setup riuscito
-}
-
 
 /**
  * Renderizza la tabella di confronto tra prodotti Excel e Shopify.
- * Questa è la funzione principale che riceve i dati elaborati.
  * @param {Array<object>} fileProducts - Prodotti elaborati dal file Excel (Minsan validi e non inizianti per 0).
- * @param {Array<object>} shopifyProducts - Prodotti recuperati da Shopify (garantito array).
+ * @param {Array<object>} shopifyProducts - Prodotti recuperati da Shopify.
  * @param {object} metrics - Oggetto con le metriche di riepilogo (da process-excel.js).
  */
 export function renderComparisonTable(fileProducts, shopifyProducts, metrics) {
-    // Assicurati che l'UI sia stata inizializzata una volta
-    if (!comparisonTableContainer || !comparisonProductSearch) { // Controllo rapido se setupComparisonTableUI è già stato chiamato
-        if (!setupComparisonTableUI()) {
-            console.error("[COMPARE] Impossibile inizializzare la tabella di confronto: setup UI fallito.");
-            return;
-        }
+    const comparisonTableContainer = document.getElementById('comparison-table-container');
+    const tableContentPlaceholder = document.getElementById('table-content-placeholder');
+    const approveSelectedBtn = document.getElementById('approve-selected-btn');
+    const approveAllBtn = document.getElementById('approve-all-btn');
+
+    // Elementi Metriche
+    const metricTotalRowsImported = document.getElementById('metricTotalRowsImported');
+    const metricNewProducts = document.getElementById('metricNewProducts');
+    const metricProductsToModify = document.getElementById('metricProductsToModify');
+    const metricShopifyOnly = document.getElementById('metricShopifyOnly');
+    const metricNonImportable = document.getElementById('metricNonImportable');
+
+    // Elementi Filtri
+    const comparisonProductSearch = document.getElementById('comparisonProductSearch');
+    const comparisonStatusFilter = document.getElementById('comparisonStatusFilter');
+
+    if (!comparisonTableContainer || !tableContentPlaceholder || !approveSelectedBtn || !approveAllBtn ||
+        !metricTotalRowsImported || !metricNewProducts || !metricProductsToModify ||
+        !metricShopifyOnly || !metricNonImportable || !comparisonProductSearch || !comparisonStatusFilter) {
+        console.error("Contenitori della tabella di confronto, bottoni, metriche o filtri non trovati. Assicurarsi che 'comparison-table.html' sia caricato correttamente.");
+        return;
     }
 
-    comparisonTableContainer.classList.remove('hidden'); // Mostra il container della tabella
+    comparisonTableContainer.classList.remove('hidden');
+    tableContentPlaceholder.innerHTML = ''; // Pulisce il contenuto precedente
 
     // --- Aggiorna Metriche ---
     if (metrics) {
@@ -122,17 +48,22 @@ export function renderComparisonTable(fileProducts, shopifyProducts, metrics) {
         metricNonImportable.textContent = metrics.nonImportableMinsanZero;
     }
 
-    const shopifyProductsArray = Array.isArray(shopifyProducts) ? shopifyProducts : [];
+    if (fileProducts.length === 0 && shopifyProducts.length === 0 && metrics.nonImportableMinsanZero === 0) {
+        tableContentPlaceholder.innerHTML = '<p>Nessun dato da confrontare.</p>';
+        approveSelectedBtn.disabled = true;
+        approveAllBtn.disabled = true;
+        return;
+    }
 
-    // --- Prepara allComparisonProducts (struttura dati unificata per filtri/ricerca) ---
+    // --- Prepara allComparisonProducts (include anche i non importabili per le metriche) ---
     allComparisonProducts = [];
-    const shopifyProductsMap = new Map(shopifyProductsArray.map(p => [String(p.minsan).trim(), p]));
+    const shopifyProductsMap = new Map(shopifyProducts.map(p => [String(p.minsan).trim(), p]));
 
     // Aggiungi prodotti dal file (con status)
     fileProducts.forEach(fileProd => {
         const minsan = String(fileProd.Minsan).trim();
         const shopifyProd = shopifyProductsMap.get(minsan);
-        let status = 'sincronizzato'; // Default
+        let status = 'sincronizzato';
         let hasChanges = false;
 
         if (shopifyProd) {
@@ -153,14 +84,15 @@ export function renderComparisonTable(fileProducts, shopifyProducts, metrics) {
             if (hasChanges) {
                 status = 'modificato';
             }
-            shopifyProductsMap.delete(minsan); // Rimuovi dalla mappa Shopify per identificare i "Solo Shopify" dopo
+            // Rimuovi dalla mappa Shopify per identificare i "Solo Shopify" dopo
+            shopifyProductsMap.delete(minsan);
         } else {
             status = 'nuovo';
         }
         allComparisonProducts.push({
-            type: 'product', // Indica che è un prodotto reale
+            type: 'file_product', // Indica che deriva dal file
             fileData: fileProd,
-            shopifyData: shopifyProd, // Potrebbe essere null se nuovo
+            shopifyData: shopifyProd,
             status: status,
             hasChanges: hasChanges
         });
@@ -170,7 +102,7 @@ export function renderComparisonTable(fileProducts, shopifyProducts, metrics) {
     shopifyProductsMap.forEach(shopifyProd => {
         if ((shopifyProd.variants[0]?.inventory_quantity ?? 0) > 0) { // Solo se giacenza > 0
             allComparisonProducts.push({
-                type: 'product',
+                type: 'shopify_only', // Indica che è solo su Shopify
                 fileData: null,
                 shopifyData: shopifyProd,
                 status: 'shopify-only',
@@ -179,7 +111,7 @@ export function renderComparisonTable(fileProducts, shopifyProducts, metrics) {
         } else {
             // Se giacenza 0, consideralo sincronizzato (non richiede azione)
              allComparisonProducts.push({
-                type: 'product',
+                type: 'shopify_only_zero',
                 fileData: null,
                 shopifyData: shopifyProd,
                 status: 'sincronizzato (giacenza 0)',
@@ -188,107 +120,84 @@ export function renderComparisonTable(fileProducts, shopifyProducts, metrics) {
         }
     });
 
-    // Aggiungi placeholder per i Minsan non importabili (per le metriche e il filtro)
+    // Aggiungi placeholder per i Minsan non importabili (per le metriche)
+    // Non abbiamo i dati completi qui, solo il conteggio, ma possiamo aggiungerne una riga riassuntiva
     if (metrics.nonImportableMinsanZero > 0) {
         allComparisonProducts.push({
-            type: 'non-importable-summary', // Tipo speciale per la riga di riepilogo
-            status: 'non-importabile', // Coerenza con il value del filtro
-            hasChanges: false,
-            count: metrics.nonImportableMinsanZero
+            type: 'non-importable-summary',
+            status: 'non-importable',
+            hasChanges: false, // Non è una modifica da applicare
+            count: metrics.nonImportableMinsanZero // Numero di elementi non importabili
         });
     }
 
-    // --- Esegui il primo filtro e renderizzazione con paginazione ---
-    currentPage = 1; // Resetta la pagina corrente
-    applyFiltersAndSearch(); // Applica i filtri iniziali e triggera il rendering
+    // --- Setup Listener per Ricerca e Filtro ---
+    // Rimuovi vecchi listener per evitare duplicati
+    comparisonProductSearch.removeEventListener('input', applyFiltersAndSearch);
+    comparisonStatusFilter.removeEventListener('change', applyFiltersAndSearch);
 
+    // Aggiungi nuovi listener
+    comparisonProductSearch.addEventListener('input', applyFiltersAndSearch);
+    comparisonStatusFilter.addEventListener('change', applyFiltersAndSearch);
 
-    // Disabilita i bottoni di approvazione se non ci sono prodotti che richiedono azione
-    // Questo verrà aggiornato in renderFilteredComparisonTable
+    // Esegui la prima applicazione di filtri e ricerca
+    applyFiltersAndSearch();
+
+    // Abilita/Disabilita i bottoni di approvazione (basato su filteredProducts dopo il filtro iniziale)
+    // Questo verrà gestito da applyFiltersAndSearch
 }
 
-
 /**
- * Applica i filtri e la ricerca ai prodotti (dall'allComparisonProducts)
- * e aggiorna filteredComparisonProducts.
- * Questa funzione verrà chiamata su input di ricerca e cambio filtro.
+ * Applica i filtri e la ricerca ai prodotti e renderizza la tabella.
  */
 function applyFiltersAndSearch() {
-    // Recupera i valori correnti dai campi UI
-    const searchTerm = comparisonProductSearch.value.toLowerCase();
-    const statusFilter = comparisonStatusFilter.value;
+    const searchTerm = document.getElementById('comparisonProductSearch').value.toLowerCase();
+    const statusFilter = document.getElementById('comparisonStatusFilter').value;
     
     let tempFilteredProducts = allComparisonProducts.filter(item => {
         // Filtra per stato
         if (statusFilter !== 'all') {
-            // Gestisce il caso del riassunto non importabile
-            if (statusFilter === 'non-importabile' && item.type === 'non-importable-summary') return true;
-            // Filtra per lo stato effettivo del prodotto
+            if (statusFilter === 'non-importable' && item.type === 'non-importable-summary') return true;
             if (item.status !== statusFilter) return false;
         }
 
-        // Se è un elemento di riepilogo, mostralo se non filtrato via dallo stato
-        if (item.type === 'non-importable-summary') {
+        // Filtra per ricerca (si applica solo ai prodotti reali, non al summary)
+        if (item.type === 'non-importable-summary') { // Il riassunto appare solo se il filtro lo permette
             return true;
         }
 
-        // Filtra per ricerca (si applica solo ai prodotti reali, non al summary)
         const minsan = String(item.fileData?.Minsan || item.shopifyData?.minsan || '').toLowerCase();
         const description = String(item.fileData?.Descrizione || item.shopifyData?.title || '').toLowerCase();
         const ditta = String(item.fileData?.Ditta || item.shopifyData?.vendor || '').toLowerCase();
         const ean = String(item.fileData?.EAN || item.shopifyData?.variants?.[0]?.barcode || '').toLowerCase();
-        const iva = String(item.fileData?.IVA || item.shopifyData?.IVA || '').toLowerCase();
+        const iva = String(item.fileData?.IVA || item.shopifyData?.IVA || '').toLowerCase(); // Includi IVA nella ricerca
 
         return minsan.includes(searchTerm) ||
                description.includes(searchTerm) ||
-               ditta.includes(searchTerm) ||
+               ditta.includes(searchTerm) || // Ricerca per Ditta
                ean.includes(searchTerm) ||
-               iva.includes(searchTerm);
+               iva.includes(searchTerm); // Ricerca per IVA
     });
 
-    // Assicurati che l'elemento di riepilogo "non importabile" sia presente o rimosso correttamente
-    const nonImportableSummaryItem = allComparisonProducts.find(item => item.type === 'non-importable-summary');
-    if (nonImportableSummaryItem) {
-        const isSummaryIncluded = tempFilteredProducts.some(item => item.type === 'non-importable-summary');
-        const shouldBeIncludedByFilter = (statusFilter === 'all' || statusFilter === 'non-importabile');
-
-        if (!isSummaryIncluded && shouldBeIncludedByFilter) {
-            tempFilteredProducts.push(nonImportableSummaryItem);
-        } else if (isSummaryIncluded && !shouldBeIncludedByFilter) {
-            // Rimuovi se non dovrebbe essere incluso dal filtro di stato
-            tempFilteredProducts = tempFilteredProducts.filter(item => item.type !== 'non-importable-summary');
+    // Se il filtro non è su "non-importable" e il count è > 0, aggiungiamo la riga summary
+    if (statusFilter !== 'non-importable') {
+        const nonImportableSummary = allComparisonProducts.find(item => item.type === 'non-importable-summary');
+        if (nonImportableSummary) {
+            // Aggiungi il summary solo se non già presente e il filtro attuale non lo esclude esplicitamente
+            if (!tempFilteredProducts.some(item => item.type === 'non-importable-summary')) {
+                 tempFilteredProducts.push(nonImportableSummary);
+                 // Ordina per mettere il summary alla fine
+                 tempFilteredProducts.sort((a,b) => (a.type === 'non-importable-summary') ? 1 : (b.type === 'non-importable-summary' ? -1 : 0));
+            }
         }
     }
 
-
-    // Riordina per mettere il summary alla fine se presente
-    tempFilteredProducts.sort((a,b) => {
-        if (a.type === 'non-importable-summary') return 1;
-        if (b.type === 'non-importable-summary') return -1;
-        return 0;
-    });
-
-
     filteredComparisonProducts = tempFilteredProducts; // Aggiorna i prodotti filtrati globalmente
-    totalPages = Math.ceil(filteredComparisonProducts.length / ITEMS_PER_PAGE);
-    if (totalPages === 0) totalPages = 1; // Almeno 1 pagina anche se vuota
-    
-    updatePaginationControls(); // Aggiorna i bottoni di paginazione
     renderFilteredComparisonTable(); // Ri-renderizza la tabella
 }
 
 /**
- * Aggiorna lo stato dei bottoni e del testo di paginazione.
- */
-function updatePaginationControls() {
-    comparisonPageInfo.textContent = `Pagina ${currentPage} di ${totalPages} (Totale: ${filteredComparisonProducts.length})`;
-    comparisonPrevPageBtn.disabled = currentPage === 1;
-    comparisonNextPageBtn.disabled = currentPage === totalPages;
-}
-
-
-/**
- * Renderizza solo i prodotti attualmente filtrati e cercati per la pagina corrente.
+ * Renderizza solo i prodotti attualmente filtrati e cercati.
  */
 function renderFilteredComparisonTable() {
     const tableContentPlaceholder = document.getElementById('table-content-placeholder');
@@ -297,28 +206,8 @@ function renderFilteredComparisonTable() {
 
     if (!tableContentPlaceholder || !approveSelectedBtn || !approveAllBtn) return; // Doppia verifica
 
-    // Calcola gli elementi da mostrare per la pagina corrente
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    let endIndex = startIndex + ITEMS_PER_PAGE;
-    
-    // Per gestire il summary item che deve stare sempre in fondo e non deve essere paginato via
-    let itemsToRender = filteredComparisonProducts.slice(startIndex, endIndex);
-
-    const nonImportableSummaryItem = filteredComparisonProducts.find(item => item.type === 'non-importable-summary');
-    if (nonImportableSummaryItem && !itemsToRender.includes(nonImportableSummaryItem)) {
-        // Se il summary esiste e non è nella fetta corrente, ma dovrebbe essere visibile, aggiungilo
-        // Questo lo mette in fondo all'ultima pagina anche se ITEMS_PER_PAGE non lo include.
-        // Se il summary è l'unico elemento filtrato, sarà l'unico mostrato.
-        if (filteredComparisonProducts[filteredComparisonProducts.length -1].type === 'non-importable-summary' &&
-            currentPage === totalPages) { // Solo se siamo all'ultima pagina e il summary è l'ultimo
-            if (itemsToRender.length === 0 || itemsToRender[itemsToRender.length -1].type !== 'non-importable-summary') { // Evita duplicati
-                 itemsToRender.push(nonImportableSummaryItem);
-            }
-        }
-    }
-
-    if (itemsToRender.length === 0) {
-        tableContentPlaceholder.innerHTML = '<p>Nessun prodotto corrisponde ai criteri di ricerca/filtro per questa pagina.</p>';
+    if (filteredComparisonProducts.length === 0) {
+        tableContentPlaceholder.innerHTML = '<p>Nessun prodotto corrisponde ai criteri di ricerca/filtro.</p>';
         approveSelectedBtn.disabled = true;
         approveAllBtn.disabled = true;
         return;
@@ -331,8 +220,8 @@ function renderFilteredComparisonTable() {
                     <th><input type="checkbox" id="selectAllProducts"></th>
                     <th>Minsan</th>
                     <th>Descrizione</th>
-                    <th>Ditta</th>
-                    <th>IVA</th>
+                    <th>Ditta</th> 
+                    <th>IVA</th> 
                     <th>Giacenza (File)</th>
                     <th>Giacenza (Shopify)</th>
                     <th>Prezzo BD (File)</th>
@@ -348,13 +237,12 @@ function renderFilteredComparisonTable() {
 
     let productsRequiringApprovalInView = 0;
 
-    itemsToRender.forEach(item => {
-        // Gestione riga di riepilogo "Non Importabile"
+    filteredComparisonProducts.forEach(item => {
         if (item.type === 'non-importable-summary') {
             html += `
                 <tr class="row-non-importable">
                     <td></td>
-                    <td colspan="10" style="text-align: center; font-style: italic;">${item.count} prodotti non importabili (Minsan inizia per 0)</td>
+                    <td colspan="10" style="text-align: center;">${item.count} prodotti non importabili (Minsan inizia per 0)</td>
                     <td><span class="status-indicator error">Non Importabile</span></td>
                     <td></td>
                 </tr>
@@ -365,7 +253,7 @@ function renderFilteredComparisonTable() {
         const fileProd = item.fileData;
         const shopifyProd = item.shopifyData;
         const status = item.status;
-        const needsApproval = item.hasChanges;
+        const needsApproval = item.hasChanges; // Flag per abilitare/disabilitare checkbox e bottoni
 
         if (needsApproval) productsRequiringApprovalInView++;
 
@@ -377,24 +265,23 @@ function renderFilteredComparisonTable() {
         let scadenzaShopify = '-';
         let dittaFile = '-';
         let ivaFile = '-';
-        let dittaShopify = '-';
-        let ivaShopify = '-';
-
+        let dittaShopify = '-'; // Per confronto
+        let ivaShopify = '-'; // Per confronto
 
         if (fileProd) {
             giacenzaFile = fileProd.Giacenza;
             prezzoBdFile = fileProd.PrezzoBD;
             scadenzaFile = fileProd.Scadenza || '-';
-            dittaFile = fileProd.Ditta || '-';
-            ivaFile = fileProd.IVA || '-';
+            dittaFile = fileProd.Ditta || '-'; // Ditta dal file
+            ivaFile = fileProd.IVA || '-';     // IVA dal file
         }
 
         if (shopifyProd) {
             giacenzaShopify = shopifyProd.variants[0]?.inventory_quantity ?? 0;
             prezzoBdShopify = parseFloat(shopifyProd.variants[0]?.price ?? 0).toFixed(2);
             scadenzaShopify = shopifyProd.Scadenza || '-';
-            dittaShopify = shopifyProd.vendor || '-';
-            ivaShopify = shopifyProd.IVA || '-';
+            dittaShopify = shopifyProd.vendor || '-'; // Ditta da Shopify
+            ivaShopify = shopifyProd.IVA || '-';     // IVA da Shopify (se recuperata)
         }
 
         const giacenzaDiffDisplay = (fileProd && shopifyProd && fileProd.Giacenza !== giacenzaShopify) ?
@@ -409,16 +296,15 @@ function renderFilteredComparisonTable() {
 
         const ivaDiffDisplay = (fileProd && shopifyProd && Math.abs(fileProd.IVA - parseFloat(ivaShopify)) > 0.001) ? `<span class="text-warning"> (!)</span>` : '';
 
-
         html += `
             <tr data-minsan="${fileProd?.Minsan || shopifyProd?.minsan || ''}"
                 data-status="${status}"
                 class="${status === 'sincronizzato' || status === 'sincronizzato (giacenza 0)' ? '' : status.replace(' ', '-')}">
-                <td><input type="checkbox" id="checkbox-${fileProd?.Minsan || shopifyProd?.minsan}" class="product-checkbox" ${needsApproval ? '' : 'disabled'}></td>
+                <td><input type="checkbox" class="product-checkbox" ${needsApproval ? '' : 'disabled'}></td>
                 <td>${fileProd?.Minsan || shopifyProd?.minsan || '-'}</td>
                 <td>${fileProd?.Descrizione || shopifyProd?.title || '-'}</td>
-                <td>${fileProd?.Ditta || shopifyProd?.vendor || '-'} ${dittaDiffDisplay}</td>
-                <td>${fileProd?.IVA || shopifyProd?.IVA || '-'} ${ivaDiffDisplay}</td>
+                <td>${fileProd?.Ditta || shopifyProd?.vendor || '-'} ${dittaDiffDisplay}</td> 
+                <td>${fileProd?.IVA || shopifyProd?.IVA || '-'} ${ivaDiffDisplay}</td> 
                 <td>${giacenzaFile} ${giacenzaDiffDisplay}</td>
                 <td>${giacenzaShopify}</td>
                 <td>${prezzoBdFile} ${prezzoBdDiffDisplay}</td>
@@ -434,7 +320,6 @@ function renderFilteredComparisonTable() {
         `;
     });
 
-
     html += `
             </tbody>
         </table>
@@ -442,10 +327,9 @@ function renderFilteredComparisonTable() {
     `;
     tableContentPlaceholder.innerHTML = html;
 
-    // Abilita/Disabilita i bottoni di approvazione (solo se ci sono prodotti che richiedono approvazione nella vista corrente)
-    const hasPendingChangesInView = productsRequiringApprovalInView > 0;
-    approveSelectedBtn.disabled = !hasPendingChangesInView;
-    approveAllBtn.disabled = !hasPendingChangesInView;
+    // Abilita/Disabilita i bottoni di approvazione (basato su ciò che è visibile e richiede approvazione)
+    approveSelectedBtn.disabled = productsRequiringApprovalInView === 0;
+    approveAllBtn.disabled = productsRequiringApprovalInView === 0;
 
     // Aggiungi listener per checkbox "seleziona tutto"
     const selectAllCheckbox = document.getElementById('selectAllProducts');
@@ -454,11 +338,20 @@ function renderFilteredComparisonTable() {
         selectAllCheckbox.removeEventListener('change', handleSelectAll);
         selectAllCheckbox.addEventListener('change', handleSelectAll);
     }
+
+    // Aggiungi listener per i bottoni "Anteprima" e "Approva" (delegazione)
+    const comparisonTableContainer = document.getElementById('comparison-table-container');
+    comparisonTableContainer.removeEventListener('click', handleTableActions);
+    comparisonTableContainer.addEventListener('click', handleTableActions);
+
+    // Gestori eventi per i bottoni di approvazione bulk
+    approveSelectedBtn.removeEventListener('click', handleApproveSelected);
+    approveSelectedBtn.addEventListener('click', handleApproveSelected);
+
+    approveAllBtn.removeEventListener('click', handleApproveAll);
+    approveAllBtn.addEventListener('click', handleApproveAll);
 }
 
-/**
- * Gestione evento per checkbox "seleziona tutto".
- */
 function handleSelectAll(e) {
     document.querySelectorAll('.product-checkbox').forEach(checkbox => {
         if (!checkbox.disabled) {
@@ -467,10 +360,8 @@ function handleSelectAll(e) {
     });
 }
 
-/**
- * Gestione eventi per i bottoni "Anteprima" e "Approva" (delegazione sul container principale).
- */
 function handleTableActions(e) {
+    // Ottieni il div di stato dell'uploader che sarà presente nella stessa tab
     const uploaderStatusDiv = document.getElementById('uploader-status');
     if (!uploaderStatusDiv) {
         console.error("Elemento 'uploader-status' non trovato per mostrare lo stato.");
@@ -479,25 +370,23 @@ function handleTableActions(e) {
 
     if (e.target.classList.contains('btn-preview')) {
         const minsan = e.target.dataset.minsan;
+        const type = e.target.dataset.type; // 'new-product', 'modified-product', 'shopify-only'
         const item = allComparisonProducts.find(p => (String(p.fileData?.Minsan || '').trim() === minsan || String(p.shopifyData?.minsan || '').trim() === minsan));
         
-        if (item && item.type === 'product') { // Assicurati che sia un prodotto reale
+        if (item) {
             showProductPreviewModal(item.fileData?.Minsan || item.shopifyData?.minsan, item.fileData, item.shopifyData, item.status);
         } else {
             showUploaderStatus(uploaderStatusDiv, `Dati anteprima non trovati per Minsan: ${minsan}`, true);
         }
     } else if (e.target.classList.contains('btn-approve-single')) {
         const minsan = e.target.dataset.minsan;
-        const action = e.target.dataset.action;
+        const action = e.target.dataset.action; // 'add', 'update', 'zero-inventory'
         showUploaderStatus(uploaderStatusDiv, `Richiesta di approvazione per Minsan: ${minsan} (Azione: ${action}) - Da implementare`, 'info');
         console.log('Approva singolo Minsan:', minsan, 'Azione:', action);
-        // Qui la logica per l'approvazione singola via API
+        // Qui dovrai chiamare la Netlify Function appropriata per l'approvazione singola
     }
 }
 
-/**
- * Gestione evento per l'approvazione dei prodotti selezionati.
- */
 function handleApproveSelected() {
     const uploaderStatusDiv = document.getElementById('uploader-status');
     const selectedMinsans = Array.from(document.querySelectorAll('.product-checkbox:checked:not(:disabled)'))
@@ -505,31 +394,27 @@ function handleApproveSelected() {
     if (selectedMinsans.length > 0) {
         showUploaderStatus(uploaderStatusDiv, `Approva selezionati (${selectedMinsans.length}) - Da implementare`, 'info');
         console.log('Approva selezionati:', selectedMinsans);
-        // Qui la logica per l'approvazione bulk dei selezionati via API
+        // Qui la logica per l'approvazione bulk dei selezionati
     } else {
         showUploaderStatus(uploaderStatusDiv, 'Nessun prodotto selezionato per l\'approvazione.', true);
     }
 }
 
-/**
- * Gestione evento per l'approvazione di tutte le modifiche.
- */
 function handleApproveAll() {
     const uploaderStatusDiv = document.getElementById('uploader-status');
-    // Filtra solo i prodotti che richiedono approvazione e non sono il riassunto
+    // Filtra solo i prodotti che richiedono approvazione (non sincronizzati e non il riassunto)
     const allPendingMinsans = filteredComparisonProducts
-                                .filter(item => item.hasChanges && item.type === 'product')
+                                .filter(item => item.hasChanges && item.type !== 'non-importable-summary')
                                 .map(item => item.fileData?.Minsan || item.shopifyData?.minsan);
 
     if (allPendingMinsans.length > 0) {
         showUploaderStatus(uploaderStatusDiv, `Approva tutti i ${allPendingMinsans.length} prodotti in attesa - Da implementare`, 'info');
         console.log('Approva tutto:', allPendingMinsans);
-        // Qui la logica per l'approvazione bulk di tutti i prodotti in attesa via API
+        // Qui la logica per l'approvazione bulk di tutti i prodotti in attesa
     } else {
         showUploaderStatus(uploaderStatusDiv, 'Nessun prodotto in attesa di approvazione.', true);
     }
 }
-
 
 /**
  * Mostra la modal di anteprima "Prima vs Dopo" per un prodotto.
@@ -558,23 +443,20 @@ export function showProductPreviewModal(minsan, fileProduct, shopifyProduct, sta
     document.getElementById('preview-modal-close-btn')?.addEventListener('click', () => hideModal('preview-modal-overlay'));
     document.getElementById('preview-modal-cancel-btn')?.addEventListener('click', () => hideModal('preview-modal-overlay'));
 
-
     let productTitle = fileProduct?.Descrizione || shopifyProduct?.title || 'Prodotto Sconosciuto';
     modalTitle.textContent = `Anteprima Modifiche per ${minsan} - "${productTitle}"`;
 
-    diffTbody.innerHTML = '';
-
+    diffTbody.innerHTML = ''; // Pulisce il contenuto precedente della tabella di confronto
 
     if (status === 'shopify-only') {
-        const currentGiacenza = shopifyProd.variants[0]?.inventory_quantity ?? 0;
-        const currentPrice = parseFloat(shopifyProd.variants[0]?.price ?? 0).toFixed(2);
-        const currentScadenza = shopifyProd.Scadenza || '-';
-        const currentDitta = shopifyProd.vendor || '-';
-        const currentIVA = shopifyProd.IVA || '-';
-
+        const currentGiacenza = shopifyProduct?.variants[0]?.inventory_quantity ?? 0;
+        const currentPrice = parseFloat(shopifyProduct?.variants[0]?.price ?? 0).toFixed(2);
+        const currentScadenza = shopifyProduct?.Scadenza || '-';
+        const currentDitta = shopifyProduct?.vendor || '-';
+        const currentIVA = shopifyProduct?.IVA || '-'; // IVA da Shopify
 
         diffTbody.innerHTML = `
-            <tr><td>Descrizione</td><td>${shopifyProd.title || '-'}</td><td>(Nessuna modifica)</td></tr>
+            <tr><td>Descrizione</td><td>${shopifyProduct?.title || '-'}</td><td>(Nessuna modifica)</td></tr>
             <tr><td>Ditta</td><td>${currentDitta}</td><td>(Nessuna modifica)</td></tr>
             <tr><td>IVA</td><td>${currentIVA}</td><td>(Nessuna modifica)</td></tr>
             <tr>
@@ -598,79 +480,78 @@ export function showProductPreviewModal(minsan, fileProduct, shopifyProduct, sta
         newApproveBtn.dataset.action = 'zero-inventory';
         newApproveBtn.dataset.minsan = minsan;
 
-    } else if (fileProd) { // Per 'nuovo' e 'modificato'
-        const currentShopifyGiacenza = shopifyProd?.variants[0]?.inventory_quantity ?? 0;
-        const currentShopifyPrice = parseFloat(shopifyProd?.variants[0]?.price ?? 0).toFixed(2);
-        const currentShopifyScadenza = shopifyProd?.Scadenza || '-';
-        const currentShopifyDitta = shopifyProd?.vendor || '-';
-        const currentShopifyIVA = shopifyProd?.IVA || '-';
+    } else if (fileProduct) { // Per 'nuovo' e 'modificato'
+        const currentShopifyGiacenza = shopifyProduct?.variants[0]?.inventory_quantity ?? 0;
+        const currentShopifyPrice = parseFloat(shopifyProduct?.variants[0]?.price ?? 0).toFixed(2);
+        const currentShopifyScadenza = shopifyProduct?.Scadenza || '-';
+        const currentShopifyDitta = shopifyProduct?.vendor || '-';
+        const currentShopifyIVA = shopifyProduct?.IVA || '-';
 
         let giacenzaRow = `
             <td>Giacenza</td>
-            <td>${shopifyProd ? `<span class="diff-original">${currentShopifyGiacenza}</span>` : 'N.D.'}</td>
-            <td><span class="diff-new">${fileProd.Giacenza}</span></td>
+            <td>${shopifyProduct ? `<span class="diff-original">${currentShopifyGiacenza}</span>` : 'N.D.'}</td>
+            <td><span class="diff-new">${fileProduct.Giacenza}</span></td>
         `;
-        if (shopifyProd && fileProd.Giacenza === currentShopifyGiacenza) {
-            giacenzaRow = `<td>Giacenza</td><td colspan="2">${fileProd.Giacenza}</td>`;
+        if (shopifyProduct && fileProduct.Giacenza === currentShopifyGiacenza) {
+            giacenzaRow = `<td>Giacenza</td><td colspan="2">${fileProduct.Giacenza}</td>`;
         }
 
         let prezzoRow = `
             <td>Prezzo BD</td>
-            <td>${shopifyProd ? `<span class="diff-original">${currentShopifyPrice}</span>` : 'N.D.'}</td>
-            <td><span class="diff-new">${fileProd.PrezzoBD}</span></td>
+            <td>${shopifyProduct ? `<span class="diff-original">${currentShopifyPrice}</span>` : 'N.D.'}</td>
+            <td><span class="diff-new">${fileProduct.PrezzoBD}</span></td>
         `;
-        if (shopifyProd && Math.abs(fileProd.PrezzoBD - parseFloat(currentShopifyPrice)) < 0.001) {
-            prezzoRow = `<td>Prezzo BD</td><td colspan="2">${fileProd.PrezzoBD}</td>`;
+        if (shopifyProduct && Math.abs(fileProduct.PrezzoBD - parseFloat(currentShopifyPrice)) < 0.001) {
+            prezzoRow = `<td>Prezzo BD</td><td colspan="2">${fileProduct.PrezzoBD}</td>`;
         }
 
         let scadenzaRow = `
             <td>Scadenza</td>
-            <td>${shopifyProd ? `<span class="diff-original">${currentShopifyScadenza || '-'}</span>` : 'N.D.'}</td>
-            <td><span class="diff-new">${fileProd.Scadenza || '-'}</span></td>
+            <td>${shopifyProduct ? `<span class="diff-original">${currentShopifyScadenza || '-'}</span>` : 'N.D.'}</td>
+            <td><span class="diff-new">${fileProduct.Scadenza || '-'}</span></td>
         `;
-        if (shopifyProd && (fileProd.Scadenza || '') === (currentShopifyScadenza || '')) {
-            scadenzaRow = `<td>Scadenza</td><td colspan="2">${fileProd.Scadenza || '-'}</td>`;
+        if (shopifyProduct && (fileProduct.Scadenza || '') === (currentShopifyScadenza || '')) {
+            scadenzaRow = `<td>Scadenza</td><td colspan="2">${fileProduct.Scadenza || '-'}</td>`;
         }
         
         let dittaRow = `
             <td>Ditta</td>
-            <td>${shopifyProd ? `<span class="diff-original">${currentShopifyDitta}</span>` : 'N.D.'}</td>
-            <td><span class="diff-new">${fileProd.Ditta}</span></td>
+            <td>${shopifyProduct ? `<span class="diff-original">${currentShopifyDitta}</span>` : 'N.D.'}</td>
+            <td><span class="diff-new">${fileProduct.Ditta}</span></td>
         `;
-        if (shopifyProd && (fileProd.Ditta || '') === (currentShopifyDitta || '')) {
-            dittaRow = `<td>Ditta</td><td colspan="2">${fileProd.Ditta}</td>`;
+        if (shopifyProduct && (fileProduct.Ditta || '') === (currentShopifyDitta || '')) {
+            dittaRow = `<td>Ditta</td><td colspan="2">${fileProduct.Ditta}</td>`;
         }
 
         let ivaRow = `
             <td>IVA</td>
-            <td>${shopifyProd ? `<span class="diff-original">${currentShopifyIVA}</span>` : 'N.D.'}</td>
-            <td><span class="diff-new">${fileProd.IVA}</span></td>
+            <td>${shopifyProduct ? `<span class="diff-original">${currentShopifyIVA}</span>` : 'N.D.'}</td>
+            <td><span class="diff-new">${fileProduct.IVA}</span></td>
         `;
-        if (shopifyProd && Math.abs(fileProd.IVA - parseFloat(currentShopifyIVA)) < 0.001) {
-            ivaRow = `<td>IVA</td><td colspan="2">${fileProd.IVA}</td>`;
+        if (shopifyProduct && Math.abs(fileProduct.IVA - parseFloat(currentShopifyIVA)) < 0.001) {
+            ivaRow = `<td>IVA</td><td colspan="2">${fileProduct.IVA}</td>`;
         }
 
-
         diffTbody.innerHTML = `
-            <tr><td>EAN</td><td colspan="2">${fileProd.EAN || '-'}</td></tr>
-            <tr><td>Descrizione</td><td colspan="2">${fileProd.Descrizione}</td></tr>
+            <tr><td>EAN</td><td colspan="2">${fileProduct.EAN || '-'}</td></tr>
+            <tr><td>Descrizione</td><td colspan="2">${fileProduct.Descrizione}</td></tr>
             <tr>${dittaRow}</tr>
             <tr>${ivaRow}</tr>
             <tr>${giacenzaRow}</tr>
             <tr>${prezzoRow}</tr>
             <tr>${scadenzaRow}</tr>
             <tr><td colspan="3" style="font-style: italic;">
-                ${shopifyProd ?
+                ${shopifyProduct ?
                     (status === 'modificato' ? 'Verranno applicate le modifiche ai campi evidenziati su Shopify.' : '') :
                     'Questo prodotto è nuovo e verrà creato su Shopify.'
                 }
             </td></tr>
         `;
-        newApproveBtn.textContent = shopifyProd ? 'Approva Aggiornamento' : 'Crea Prodotto';
-        newApproveBtn.dataset.action = shopifyProd ? 'update' : 'add';
+        newApproveBtn.textContent = shopifyProduct ? 'Approva Aggiornamento' : 'Crea Prodotto';
+        newApproveBtn.dataset.action = shopifyProduct ? 'update' : 'add';
         newApproveBtn.dataset.minsan = minsan;
 
-    } else {
+    } else { // Dovrebbe essere coperto dai casi sopra, ma per sicurezza
         diffTbody.innerHTML = '<tr><td colspan="3">Dati non disponibili per l\'anteprima.</td></tr>';
         newApproveBtn.disabled = true;
     }
