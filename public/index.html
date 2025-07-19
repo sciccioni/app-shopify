@@ -228,7 +228,6 @@
                 
                 if (this.id === 'tab-upload') {
                     // Se torna alla tab di upload, pulisce l'URL e resetta lo stato
-                    // --- CORREZIONE QUI ---
                     window.history.pushState({}, '', '/');
                     importId = null;
                     switchTab('#tab-upload');
@@ -291,7 +290,6 @@
                     
                     // Reindirizza alla pagina di revisione dopo un breve ritardo
                     window.setTimeout(() => {
-                        // --- CORREZIONE QUI ---
                         window.location.href = `/?import_id=${newImportId}`;
                     }, 1000);
 
@@ -380,15 +378,23 @@
                 container.hide();
 
                 $.ajax({
-                    url: `/api/get-import-stats?import_id=${id}`, // Endpoint da creare
+                    url: `/api/get-import-stats?import_id=${id}`,
                     method: 'GET',
                     success: function(data) {
                         loader.hide();
-                        container.show();
-                        $('#stats-total-rows').text(data.stats.totalRows);
-                        $('#stats-unique-products').text(data.stats.uniqueProductCount);
-                        $('#stats-products-to-update').text(data.stats.productsToUpdate);
-                        $('#stats-new-companies').text(data.stats.newCompanies.length);
+                        
+                        // Aggiungo un controllo di sicurezza sulla risposta dell'API
+                        if (data && data.stats) {
+                            container.show();
+                            $('#stats-total-rows').text(data.stats.totalRows);
+                            $('#stats-unique-products').text(data.stats.uniqueProductCount);
+                            $('#stats-products-to-update').text(data.stats.productsToUpdate);
+                            $('#stats-new-companies').text(data.stats.newCompanies.length);
+                        } else {
+                            // Se i dati non sono nel formato atteso, mostro un errore
+                            loader.show().html(`<p class="text-red-500">Errore: La risposta dall'API per le statistiche non è valida.</p>`);
+                            console.error("Dati statistici ricevuti non validi:", data);
+                        }
                     },
                     error: (xhr) => loader.html(`<p class="text-red-500">Errore caricamento statistiche.</p>`)
                 });
