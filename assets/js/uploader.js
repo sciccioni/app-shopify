@@ -15,6 +15,14 @@ export function initializeFileUploader({
   onUploadSuccess,
   uploadTimeout = 120000
 }) {
+  // Ensure upload button is visible and hide native file input
+  if (selectFileBtn) {
+    selectFileBtn.style.display = '';
+  }
+  if (fileInput) {
+    fileInput.style.display = 'none';
+  }
+
   // Initial state
   showUploaderStatus(uploaderStatusDiv, '', false);
   updateUploaderProgress(progressBarContainer, progressBar, progressText, fileNameSpan, 0);
@@ -90,7 +98,6 @@ export function initializeFileUploader({
           responseObj.metrics || {}
         );
       } else {
-        // Error status
         if (xhr.responseText) {
           try {
             responseObj = JSON.parse(xhr.responseText);
@@ -113,7 +120,7 @@ export function initializeFileUploader({
 
     xhr.onerror = () => {
       console.error('[UPLOADER] Network error');
-      showUploaderStatus(uploaderStatusDiv, 'Errore di rete durante l'upload.', true);
+      showUploaderStatus(uploaderStatusDiv, 'Errore di rete durante l\'upload.', true);
       toggleLoader(false);
     };
 
