@@ -32,20 +32,33 @@ const handler: Handler = async (event) => {
     try {
         // Esegue tutte le query in parallelo per efficienza
         const [
-            { count: totalRows },
-            { count: uniqueProductCount },
-            { count: productsToUpdate },
-            { data: importedProducts, error: pError },
-            { data: markups, error: mError }
+            rawProductsResult,
+            productsResult,
+            pendingUpdatesResult,
+            importedProductsResult,
+            markupsResult
         ] = await Promise.all([
             supabase.from('raw_products').select('*', { count: 'exact', head: true }).eq('import_id', importId),
             supabase.from('products').select('*', { count: 'exact', head: true }).eq('import_id', importId),
-            supabase.from('pending_updates').select('*', { count: 'exact', head: true }).eq('import_id', importId),
+            // Query modificata: invece di contare, recuperiamo gli ID per essere sicuri.
+            supabase.from('pending_updates').select('id').eq('import_id', importId),
             supabase.from('products').select('ditta').eq('import_id', importId),
             supabase.from('company_markups').select('ditta')
         ]);
 
-        if (pError || mError) throw pError || mError;
+        // Controlla gli errori in modo più robusto
+        const firstError = rawProductsResult.error || productsResult.error || pendingUpdatesResult.error || importedProductsResult.error || markupsResult.error;
+        if (firstError) {
+            throw firstError;
+        }
+
+        // Estrae i dati in modo più sicuro
+        const totalRows = rawProductsResult.count ?? 0;
+        const uniqueProductCount = productsResult.count ?? 0;
+        const productsToUpdate = pendingUpdatesResult.data?.length ?? 0; // Calcola il numero dalla lunghezza dell'array
+        const importedProducts = importedProductsResult.data;
+        const markups = markupsResult.data;
+
 
         // Calcola le ditte nuove (presenti nell'import ma non nei markup)
         const importedDitte = new Set(importedProducts?.map(p => p.ditta).filter(d => d)); // Aggiunto .filter(d => d) per escludere ditte vuote
@@ -53,16 +66,14 @@ const handler: Handler = async (event) => {
         const newCompanies = [...importedDitte].filter(ditta => !markupDitte.has(ditta as string));
 
         const stats = {
-            totalRows: totalRows ?? 0,
-            uniqueProductCount: uniqueProductCount ?? 0,
-            productsToUpdate: productsToUpdate ?? 0,
+            totalRows: totalRows,
+            uniqueProductCount: uniqueProductCount,
+            productsToUpdate: productsToUpdate,
             newCompanies: newCompanies
         };
 
         return {
             statusCode: 200,
-            // --- CORREZIONE CHIAVE ---
-            // Aggiungo l'header per dire al browser che questa è una risposta JSON
             headers: {
                 'Content-Type': 'application/json'
             },
