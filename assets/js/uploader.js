@@ -118,19 +118,25 @@ export function initializeFileUploader({
             if (onUploadSuccess) {
                 console.log('[UPLOADER] Chiamando onUploadSuccess con parametri:');
                 
-                // Prova diverse strutture dati comuni
-                const processedProducts = data.processedProducts || data.products || data.fileProducts || data.validProducts || [];
-                const shopifyProducts = data.shopifyProducts || data.shopify || data.existingProducts || [];
-                const metrics = data.metrics || data.statistics || data.stats || {};
+                // La Netlify Function restituisce dati già elaborati:
+                // - comparisonTableItems: elementi pronti per la tabella (con status, hasChanges, fileData, shopifyData)
+                // - productsToUpdateOrCreate: prodotti preparati per API Shopify  
+                // - metrics: statistiche corrette
                 
-                console.log('[UPLOADER] Parametri estratti per onUploadSuccess:');
-                console.log('[UPLOADER] - processedProducts:', processedProducts, '(length:', processedProducts?.length, ')');
-                console.log('[UPLOADER] - shopifyProducts:', shopifyProducts, '(length:', shopifyProducts?.length, ')');
+                const comparisonTableItems = data.comparisonTableItems || [];
+                const productsForAPI = data.productsToUpdateOrCreate || [];
+                const metrics = data.metrics || {};
+                
+                console.log('[UPLOADER] Dati elaborati dalla Netlify Function:');
+                console.log('[UPLOADER] - comparisonTableItems:', comparisonTableItems?.length, 'elementi');
+                console.log('[UPLOADER] - productsToUpdateOrCreate:', productsForAPI?.length, 'elementi');
                 console.log('[UPLOADER] - metrics:', metrics);
                 
-                // *** MODIFICA QUI: Passa metrics alla callback ***
+                // Passiamo i comparisonTableItems direttamente come primo parametro
+                // La funzione renderComparisonTable dovrà essere adattata per gestirli
                 try {
-                    onUploadSuccess(processedProducts, shopifyProducts, metrics);
+                    // Chiamiamo con una signature speciale per indicare che i dati sono già elaborati
+                    onUploadSuccess(comparisonTableItems, productsForAPI, metrics);
                     console.log('[UPLOADER] onUploadSuccess chiamata con successo');
                 } catch (callbackError) {
                     console.error('[UPLOADER] Errore durante la chiamata di onUploadSuccess:', callbackError);

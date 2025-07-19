@@ -95,6 +95,7 @@ function setupComparisonTableUI() {
 /**
  * Renderizza la tabella di confronto tra prodotti File Excel e Shopify.
  * Usa parametri di default ES6 per gestire automaticamente valori undefined/null
+ * Supporta sia dati grezzi che dati già elaborati dalla Netlify Function
  */
 export function renderComparisonTable(fileProducts = [], shopifyProducts = [], metrics = {}) {
     // Debug - Log dei parametri ricevuti
@@ -105,6 +106,48 @@ export function renderComparisonTable(fileProducts = [], shopifyProducts = [], m
         shopifyProductsLength: shopifyProducts?.length || 0,
         metrics: metrics
     });
+
+    // Verifica se stiamo ricevendo dati già elaborati dalla Netlify Function
+    // I dati elaborati hanno la struttura: { type, fileData, shopifyData, status, hasChanges }
+    const isPreProcessedData = fileProducts.length > 0 && 
+                              fileProducts[0] && 
+                              typeof fileProducts[0] === 'object' && 
+                              'type' in fileProducts[0] && 
+                              'status' in fileProducts[0] && 
+                              'hasChanges' in fileProducts[0];
+
+    console.log('[COMPARE] Tipo di dati ricevuti:', isPreProcessedData ? 'PRE-ELABORATI' : 'GREZZI');
+
+    if (isPreProcessedData) {
+        // Dati già elaborati dalla Netlify Function
+        console.log('[COMPARE] Usando dati pre-elaborati dalla Netlify Function');
+        allComparisonProducts = fileProducts; // Sono già comparisonTableItems
+        
+        // Aggiorna le metriche se fornite
+        if (metrics && typeof metrics === 'object') {
+            metricTotalRowsImported.textContent = metrics.totalRowsImported || 0;
+            metricNewProducts.textContent = metrics.newProducts || 0;
+            metricProductsToModify.textContent = metrics.productsToModify || 0;
+            metricShopifyOnly.textContent = metrics.shopifyOnly || 0;
+            metricNonImportable.textContent = metrics.nonImportableMinsanZero || 0;
+        }
+        
+        // Aggiungi summary per prodotti non importabili se necessario
+        const nonImportableCount = metrics.nonImportableMinsanZero || 0;
+        if (nonImportableCount > 0) {
+            allComparisonProducts.push({ 
+                type: 'non-importable-summary', 
+                status: 'non-importabile', 
+                hasChanges: false, 
+                count: nonImportableCount 
+            });
+        }
+        
+        console.log('[COMPARE] allComparisonProducts (pre-elaborati):', allComparisonProducts.length, 'elementi');
+        currentPage = 1;
+        applyFiltersAndSearch();
+        return;
+    }
 
     // Validazione aggiuntiva per sicurezza (in caso di valori null passati esplicitamente)
     if (!Array.isArray(fileProducts)) {

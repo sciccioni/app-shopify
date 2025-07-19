@@ -45,40 +45,41 @@ async function initializeImportUpdateTab() {
             progressText: progressText,
             fileNameSpan: fileNameSpan,
             // *** MODIFICA QUI: Aggiungi metrics come argomento della callback ***
-            onUploadSuccess: async (processedProducts, shopifyProducts, metrics) => {
+            onUploadSuccess: async (comparisonTableItems, productsForAPI, metrics) => {
                 console.log('[MAIN] onUploadSuccess chiamata con parametri:', {
-                    processedProducts: processedProducts,
-                    processedProductsType: typeof processedProducts,
-                    processedProductsIsArray: Array.isArray(processedProducts),
-                    processedProductsLength: processedProducts?.length,
-                    shopifyProducts: shopifyProducts,
-                    shopifyProductsType: typeof shopifyProducts,
-                    shopifyProductsIsArray: Array.isArray(shopifyProducts),
-                    shopifyProductsLength: shopifyProducts?.length,
+                    comparisonTableItems: comparisonTableItems,
+                    comparisonTableItemsType: typeof comparisonTableItems,
+                    comparisonTableItemsIsArray: Array.isArray(comparisonTableItems),
+                    comparisonTableItemsLength: comparisonTableItems?.length,
+                    productsForAPI: productsForAPI,
+                    productsForAPIType: typeof productsForAPI,
+                    productsForAPIIsArray: Array.isArray(productsForAPI),
+                    productsForAPILength: productsForAPI?.length,
                     metrics: metrics,
                     metricsType: typeof metrics,
                     metricsKeys: metrics ? Object.keys(metrics) : 'N/A'
                 });
 
                 // Validazione e normalizzazione dei parametri prima di passarli
-                const validProcessedProducts = Array.isArray(processedProducts) ? processedProducts : [];
-                const validShopifyProducts = Array.isArray(shopifyProducts) ? shopifyProducts : [];
+                const validComparisonItems = Array.isArray(comparisonTableItems) ? comparisonTableItems : [];
+                const validProductsForAPI = Array.isArray(productsForAPI) ? productsForAPI : [];
                 const validMetrics = (metrics && typeof metrics === 'object') ? metrics : {};
 
                 console.log('[MAIN] Parametri validati:', {
-                    validProcessedProducts: validProcessedProducts.length,
-                    validShopifyProducts: validShopifyProducts.length,
+                    validComparisonItems: validComparisonItems.length,
+                    validProductsForAPI: validProductsForAPI.length,
                     validMetrics: Object.keys(validMetrics)
                 });
 
                 // Aggiorna le variabili globali
-                window.currentFileProducts = validProcessedProducts;
-                window.currentShopifyProducts = validShopifyProducts;
+                window.currentFileProducts = validProductsForAPI; // Prodotti per API
+                window.currentShopifyProducts = validComparisonItems; // Items di confronto
                 
-                // *** MODIFICA QUI: Passa metrics a renderComparisonTable ***
+                // *** MODIFICA QUI: Passa i comparisonTableItems come primo parametro ***
                 console.log('[MAIN] Chiamando renderComparisonTable...');
                 try {
-                    renderComparisonTable(validProcessedProducts, validShopifyProducts, validMetrics);
+                    // Passiamo i dati già elaborati - renderComparisonTable li riconoscerà automaticamente
+                    renderComparisonTable(validComparisonItems, validProductsForAPI, validMetrics);
                     console.log('[MAIN] renderComparisonTable chiamata con successo');
                 } catch (error) {
                     console.error('[MAIN] Errore durante la chiamata di renderComparisonTable:', error);
