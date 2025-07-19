@@ -121,15 +121,26 @@ export function renderComparisonTable(fileProducts = [], shopifyProducts = [], m
     if (isPreProcessedData) {
         // Dati già elaborati dalla Netlify Function
         console.log('[COMPARE] Usando dati pre-elaborati dalla Netlify Function');
+        
+        // Inizializza UI se necessario
+        if (!comparisonTableContainer || !comparisonProductSearch) {
+            if (!setupComparisonTableUI()) {
+                console.error("[COMPARE] Impossibile inizializzare la tabella di confronto.");
+                return;
+            }
+        }
+        
+        comparisonTableContainer.classList.remove('hidden');
+        
         allComparisonProducts = fileProducts; // Sono già comparisonTableItems
         
         // Aggiorna le metriche se fornite
         if (metrics && typeof metrics === 'object') {
-            metricTotalRowsImported.textContent = metrics.totalRowsImported || 0;
-            metricNewProducts.textContent = metrics.newProducts || 0;
-            metricProductsToModify.textContent = metrics.productsToModify || 0;
-            metricShopifyOnly.textContent = metrics.shopifyOnly || 0;
-            metricNonImportable.textContent = metrics.nonImportableMinsanZero || 0;
+            if (metricTotalRowsImported) metricTotalRowsImported.textContent = metrics.totalRowsImported || 0;
+            if (metricNewProducts) metricNewProducts.textContent = metrics.newProducts || 0;
+            if (metricProductsToModify) metricProductsToModify.textContent = metrics.productsToModify || 0;
+            if (metricShopifyOnly) metricShopifyOnly.textContent = metrics.shopifyOnly || 0;
+            if (metricNonImportable) metricNonImportable.textContent = metrics.nonImportableMinsanZero || 0;
         }
         
         // Aggiungi summary per prodotti non importabili se necessario
