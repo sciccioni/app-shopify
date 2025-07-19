@@ -1,83 +1,112 @@
 // process-excel.js (CommonJS)
-// Netlify Function: gestisce l'upload Excel e confronto con Shopify
+// Netlify Function: elabora Excel e confronta con Shopify senza dipendenze esterne
 
 const XLSX = require('xlsx');
 const multipart = require('parse-multipart-data');
-const shopifyApi = require('./shopify-api');
+const fetch = require('node-fetch');
 
-// Utility per normalizzare Minsan (rimuove caratteri non alfanumerici, uppercase)
+// Configurazione Shopify
+const SHOPIFY_STORE_NAME = process.env.SHOPIFY_STORE_NAME;
+const SHOPIFY_ADMIN_API_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
+const SHOPIFY_API_VERSION = '2024-07';
+
+// Utility per normalizzare Minsan
 function normalizeMinsan(minsan) {
   if (!minsan) return '';
   return String(minsan).replace(/[^a-zA-Z0-9]/g, '').toUpperCase().trim();
 }
 
-exports.handler = async function(event, context) {
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+// Effettua chiamata all'Admin API di Shopify
+async function callShopifyAdminApi(endpoint, method = 'GET', body = null) {
+  if (!SHOPIFY_STORE_NAME || !SHOPIFY_ADMIN_API_TOKEN) {
+    throw new Error('Shopify environment variables non configurate');
   }
+  const url = `https://${SHOPIFY_STORE_NAME}.myshopify.com/admin/api/${SHOPIFY_API_VERSION}/${endpoint.replace(/^\//, '')}`;
+  const options = { method, headers: {
+      'Content-Type': 'application/json',
+      'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN
+  }};
+  if (body) options.body = JSON.stringify(body);
+  const res = await fetch(url, options);
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Shopify API error ${res.status}: ${JSON.stringify(data)}`);
+  return { data, headers: res.headers };
+}
 
+// Recupera prodotti Shopify per lista di SKU/Minsan in parallelo
+async function getShopifyProducts(minsans, limit = 20) {
+  // Paginazione semplice: fetch tutti e poi filtra
+  let products = [];
+  let nextPageInfo;
+  let endpoint = `products.json?fields=id,title,variants,metafields&limit=${limit}`;
+  do {
+    const { data, headers } = await callShopifyAdminApi(endpoint);
+    products = products.concat(data.products || []);
+    const link = headers.get('link') || headers.get('Link') || '';
+    const match = link.match(/page_info=([^&>]+)/);
+    nextPageInfo = match && match[1];
+    endpoint = nextPageInfo ? `products.json?fields=id,title,variants,metafields&limit=${limit}&page_info=${nextPageInfo}` : null;
+  } while (endpoint);
+
+  // Normalizza e seleziona
+  const skuSet = new Set(minsans.map(normalizeMinsan));
+  const normalized = products.map(prod => {
+    // cerca metafield minsan
+    const mf = (prod.metafields || []).find(m => m.namespace==='custom_fields' && m.key==='minsan');
+    let sku = mf?.value || (prod.variants[0]||{}).sku || '';
+    sku = normalizeMinsan(sku);
+    const variant = prod.variants.find(v=>normalizeMinsan(v.sku)===sku) || prod.variants[0] || {};
+    return { minsan: sku, Giacenza: variant.inventory_quantity||0, PrezzoBD: parseFloat(variant.price||0) };
+  }).filter(item => skuSet.has(item.minsan));
+
+  return normalized;
+}
+
+exports.handler = async function(event) {
+  if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
   try {
-    // Parse multipart/form-data
+    // Parse multipart
     const contentType = event.headers['content-type'] || event.headers['Content-Type'];
     const boundary = multipart.getBoundary(contentType);
     const parts = multipart.parse(Buffer.from(event.body, 'base64'), boundary);
-    const filePart = parts.find(p => p.name === 'excelFile');
-    if (!filePart) {
-      return { statusCode: 400, body: JSON.stringify({ message: 'Nessun file Excel trovato.' }) };
-    }
+    const f = parts.find(p=>p.name==='excelFile');
+    if (!f) return { statusCode: 400, body: JSON.stringify({ message:'Excel mancante'}) };
 
-    // Leggi e parsifica Excel
-    const workbook = XLSX.read(filePart.data, { type: 'buffer' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
-    const headers = raw[0];
+    // Leggi Excel
+    const wb = XLSX.read(f.data, { type:'buffer' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(sheet,{header:1,raw:true});
+    const headers = raw[0]||[];
     const rows = raw.slice(1);
 
-    // Mappa header verso indice
-    const columnIndex = {};
-    headers.forEach((h, i) => { columnIndex[String(h).trim()] = i; });
-
-    // Estrai righe e Minsans
+    // Mappatura colonne
+    const idx = {}; headers.forEach((h,i)=>idx[String(h).trim()]=i);
     const items = [];
     const minsans = [];
-    rows.forEach(r => {
-      const rawM = String(r[columnIndex['Minsan']] || '');
-      const m = normalizeMinsan(rawM);
-      if (m && !m.startsWith('0')) {
-        minsans.push(m);
-        items.push({ row: r, minsan: m });
-      }
+    rows.forEach(r=>{
+      const m = normalizeMinsan(String(r[idx['Minsan']]||''));
+      if (m && !m.startsWith('0')) { minsans.push(m); items.push({ row:r, minsan:m }); }
     });
 
-    // Chiamate Shopify in parallelo
-    const shopifyResult = await shopifyApi.getShopifyProducts(minsans);
-    const shopifyMap = new Map();
-    shopifyResult.products.forEach(p => shopifyMap.set(p.minsan, p));
+    // Fetch Shopify
+    const shopifyArr = await getShopifyProducts(minsans);
+    const map = new Map(shopifyArr.map(o=>[o.minsan,o]));
 
-    // Costruisci risultato confronto
-    const comparison = items.map(({ row, minsan }) => {
-      const product = shopifyMap.get(minsan) || {};
-      return {
-        Minsan: minsan,
-        FileGiacenza: row[columnIndex['Giacenza']] || 0,
-        ShopifyGiacenza: product.Giacenza || 0,
-        FilePrezzo: row[columnIndex['PrezzoBD']] || 0,
-        ShopifyPrezzo: product.PrezzoBD || 0
-      };
-    });
+    // Costruisci risposta
+    const comparison = items.map(({row,minsan})=>({
+      Minsan: minsan,
+      FileGiacenza: row[idx['Giacenza']]||0,
+      ShopifyGiacenza: map.get(minsan)?.Giacenza||0,
+      FilePrezzo: row[idx['PrezzoBD']]||0,
+      ShopifyPrezzo: map.get(minsan)?.PrezzoBD||0
+    }));
 
-    // Ritorna JSON con dati e metriche
     return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        comparisonTableItems: comparison,
-        metrics: { totalRows: rows.length, recordsMatched: comparison.length }
-      })
+      statusCode:200,
+      body: JSON.stringify({comparisonTableItems:comparison, metrics:{totalRows:rows.length, recordsMatched:comparison.length}})
     };
-
-  } catch (err) {
-    console.error('process-excel error:', err);
-    return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: err.message }) };
+  } catch(e) {
+    console.error('Error process-excel:',e);
+    return { statusCode:500, body: JSON.stringify({message:e.message}) };
   }
 };
