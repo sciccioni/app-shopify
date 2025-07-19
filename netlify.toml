@@ -8,10 +8,22 @@
   # Directory che contiene le funzioni serverless.
   functions = "netlify/functions/"
   
-  # Directory che contiene i file del frontend (il tuo app.html).
+  # Directory che contiene i file del frontend (il tuo index.html).
   publish = "public/"
 
 [functions]
   # Specifica che le funzioni sono scritte in TypeScript e devono essere compilate.
   # L'opzione 'esbuild' è un bundler molto veloce che gestisce tutto automaticamente.
   node_bundler = "esbuild"
+
+# --- NUOVA REGOLA AGGIUNTA ---
+# Questa regola dice a Netlify come gestire le chiamate API.
+[[redirects]]
+  # Quando una richiesta arriva a un URL che inizia con /api/...
+  from = "/api/*"
+  # ... reindirizzala internamente al percorso reale della funzione.
+  # :splat è un segnaposto per qualsiasi cosa corrisponda al *
+  to = "/.netlify/functions/:splat"
+  # status = 200 significa che è una riscrittura (l'URL nel browser non cambia).
+  # Questo è essenziale per le chiamate API.
+  status = 200
